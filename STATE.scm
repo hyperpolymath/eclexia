@@ -1,22 +1,26 @@
-;;; STATE.scm — template-repo
+;;; STATE.scm — eclexia
 ;; SPDX-License-Identifier: AGPL-3.0-or-later
 ;; SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 (define metadata
-  '((version . "0.1.0") (updated . "2025-12-15") (project . "template-repo")))
+  '((version . "0.1.0") (updated . "2025-12-17") (project . "eclexia")))
 
 (define current-position
   '((phase . "v0.1 - Initial Setup")
-    (overall-completion . 25)
-    (components ((rsr-compliance ((status . "complete") (completion . 100)))))))
+    (overall-completion . 50)
+    (components ((rsr-compliance ((status . "complete") (completion . 100)))
+                 (security-docs ((status . "complete") (completion . 100)))
+                 (scm-files ((status . "complete") (completion . 100)))))))
 
 (define blockers-and-issues '((critical ()) (high-priority ())))
 
 (define critical-next-actions
-  '((immediate (("Verify CI/CD" . high))) (this-week (("Expand tests" . medium)))))
+  '((immediate (("Define project scope" . high)))
+    (this-week (("Add core functionality" . medium) ("Expand tests" . medium)))))
 
 (define session-history
-  '((snapshots ((date . "2025-12-15") (session . "initial") (notes . "SCM files added")))))
+  '((snapshots ((date . "2025-12-15") (session . "initial") (notes . "SCM files added"))
+               ((date . "2025-12-17") (session . "security-review") (notes . "Fixed placeholders in SECURITY.md, CODE_OF_CONDUCT.md, CONTRIBUTING.md; updated SCM files")))))
 
 (define state-summary
-  '((project . "template-repo") (completion . 25) (blockers . 0) (updated . "2025-12-15")))
+  '((project . "eclexia") (completion . 50) (blockers . 0) (updated . "2025-12-17")))
