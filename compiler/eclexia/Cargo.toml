@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+
+[package]
+name = "eclexia"
+description = "Eclexia compiler and toolchain"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "eclexia"
+path = "src/main.rs"
+
+[dependencies]
+eclexia-ast = { path = "../eclexia-ast" }
+eclexia-lexer = { path = "../eclexia-lexer" }
+eclexia-parser = { path = "../eclexia-parser" }
+eclexia-typeck = { path = "../eclexia-typeck" }
+eclexia-hir = { path = "../eclexia-hir" }
+eclexia-mir = { path = "../eclexia-mir" }
+eclexia-codegen = { path = "../eclexia-codegen" }
+eclexia-runtime = { path = "../../runtime/eclexia-runtime" }
+
+clap = { workspace = true }
+miette = { workspace = true }
+rustyline = { workspace = true }
+smol_str = { workspace = true }

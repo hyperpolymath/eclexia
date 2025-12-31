@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+
+[package]
+name = "eclexia-lexer"
+description = "Lexer for the Eclexia programming language"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+logos = { workspace = true }
+smol_str = { workspace = true }
+eclexia-ast = { path = "../eclexia-ast" }
+
+[dev-dependencies]
