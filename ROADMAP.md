@@ -2,11 +2,13 @@
 
 This document outlines the development roadmap for Eclexia, tracking progress and planned milestones.
 
+For detailed technical implementation plans, see [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md).
+
 ## Current Status
 
 **Phase**: v0.1 - Initial Setup
-**Overall Completion**: 50%
-**Last Updated**: 2025-12-17
+**Overall Completion**: 80%
+**Last Updated**: 2025-12-31
 
 ---
 
@@ -23,6 +25,18 @@ This document outlines the development roadmap for Eclexia, tracking progress an
 - [x] License setup (MIT OR AGPL-3.0-or-later dual license)
 - [x] GitHub workflows (CodeQL, Dependabot)
 - [x] Issue templates (bug report, feature request, documentation, question)
+
+### v0.1.1 - Academic Documentation (Complete)
+
+- [x] White Paper (WHITEPAPER.md) - Economics-as-Code paradigm
+- [x] Formal Proofs (PROOFS.md) - Type safety, resource safety, optimality
+- [x] Extended Proofs (EXTENDED_PROOFS.md) - Complete academic proofs
+- [x] Language Specification (SPECIFICATION.md) - EBNF grammar, typing rules
+- [x] Formal Verification (FORMAL_VERIFICATION.md) - Coq/Lean/Agda formalization
+- [x] Type Theory (THEORY.md) - Categorical semantics, graded monads
+- [x] Algorithms (ALGORITHMS.md) - Complexity analysis, competitive ratios
+- [x] Bibliography (BIBLIOGRAPHY.md) - 100+ academic references
+- [x] Implementation Roadmap (IMPLEMENTATION_ROADMAP.md) - Full technology stack
 
 ---
 
@@ -111,4 +125,4 @@ Have ideas for features or improvements?
 
 This roadmap is updated as the project evolves. See [STATE.scm](STATE.scm) for machine-readable project state.
 
-*Last reviewed: 2025-12-17*
+*Last reviewed: 2025-12-31*
