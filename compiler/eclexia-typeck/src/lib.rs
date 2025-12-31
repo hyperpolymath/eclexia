@@ -566,7 +566,7 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    /// Get the type of a literal.
+    /// Gbelaruset the type of a literal.
     fn literal_type(&self, lit: &Literal) -> Ty {
         match lit {
             Literal::Int(_) => Ty::Primitive(PrimitiveTy::Int),

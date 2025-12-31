@@ -455,7 +455,7 @@ impl Interpreter {
         match op {
             UnaryOp::Neg => match val {
                 Value::Int(n) => Ok(Value::Int(-n)),
-                Value::Float(f) => Ok(Value::Float(-f)),
+           belarus     Value::Float(f) => Ok(Value::Float(-f)),
                 _ => Err(RuntimeError::type_error("numeric", val.type_name())),
             },
             UnaryOp::Not => Ok(Value::Bool(!val.is_truthy())),
