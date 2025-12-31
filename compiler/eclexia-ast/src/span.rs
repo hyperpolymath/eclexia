@@ -81,6 +81,71 @@ impl From<std::ops::Range<u32>> for Span {
     }
 }
 
+/// Line and column position in source code (1-indexed).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LineCol {
+    /// Line number (1-indexed)
+    pub line: u32,
+    /// Column number (1-indexed)
+    pub col: u32,
+}
+
+impl LineCol {
+    /// Create a new line:column position.
+    pub const fn new(line: u32, col: u32) -> Self {
+        Self { line, col }
+    }
+}
+
+impl std::fmt::Display for LineCol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.line, self.col)
+    }
+}
+
+impl Span {
+    /// Convert a byte offset to line:column position.
+    ///
+    /// Returns (1,1) for position 0, and properly handles newlines.
+    pub fn offset_to_linecol(source: &str, offset: u32) -> LineCol {
+        let offset = offset as usize;
+        let mut line = 1u32;
+        let mut col = 1u32;
+        let mut pos = 0;
+
+        for ch in source.chars() {
+            if pos >= offset {
+                break;
+            }
+            if ch == '\n' {
+                line += 1;
+                col = 1;
+            } else {
+                col += 1;
+            }
+            pos += ch.len_utf8();
+        }
+
+        LineCol::new(line, col)
+    }
+
+    /// Get the line:column of the start of this span.
+    pub fn start_linecol(&self, source: &str) -> LineCol {
+        Self::offset_to_linecol(source, self.start)
+    }
+
+    /// Get the line:column of the end of this span.
+    pub fn end_linecol(&self, source: &str) -> LineCol {
+        Self::offset_to_linecol(source, self.end)
+    }
+
+    /// Format this span as "line:col" for the start position.
+    pub fn format_location(&self, source: &str) -> String {
+        let lc = self.start_linecol(source);
+        format!("{}:{}", lc.line, lc.col)
+    }
+}
+
 /// A value with an associated source span.
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
