@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+
+[package]
+name = "eclexia-codegen"
+description = "Code generation for the Eclexia compiler"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+eclexia-ast = { path = "../eclexia-ast" }
+eclexia-mir = { path = "../eclexia-mir" }
