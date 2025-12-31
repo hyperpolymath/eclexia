@@ -4,6 +4,7 @@
 //! Runtime values for the Eclexia interpreter.
 
 use eclexia_ast::dimension::Dimension;
+use eclexia_ast::ExprId;
 use smol_str::SmolStr;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -57,10 +58,17 @@ pub struct Function {
 }
 
 /// Function body reference.
-#[derive(Debug, Clone)]
-pub struct FunctionBody {
-    pub file_idx: usize,
-    pub block_idx: usize,
+#[derive(Debug, Clone, Copy)]
+pub enum FunctionBody {
+    /// Reference to a block in the AST (for named functions)
+    Block {
+        file_idx: usize,
+        block_idx: usize,
+    },
+    /// Reference to an expression (for lambdas)
+    Lambda {
+        expr_id: ExprId,
+    },
 }
 
 /// An adaptive function with multiple solutions.
@@ -76,7 +84,7 @@ pub struct AdaptiveFunction {
 #[derive(Debug, Clone)]
 pub struct Solution {
     pub name: SmolStr,
-    pub when_expr: Option<usize>,  // ExprId as index
+    pub when_expr: Option<ExprId>,
     pub provides: ResourceProvides,
     pub body: FunctionBody,
 }

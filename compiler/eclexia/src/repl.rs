@@ -38,7 +38,6 @@ pub fn run() -> miette::Result<()> {
                         CommandResult::Continue => continue,
                         CommandResult::Quit => break,
                     }
-                    continue;
                 }
 
                 // Parse and evaluate
@@ -119,13 +118,23 @@ fn handle_command(cmd: &str) -> CommandResult {
 }
 
 fn eval_line(line: &str) {
-    // Parse as expression
-    let source = format!("def __repl__() {{ {} }}", line);
+    // Wrap the expression in a main function for evaluation
+    let source = format!(
+        r#"def __repl_result__() -> _ {{
+    {}
+}}
+def main() -> Unit {{
+    let result = __repl_result__()
+    println(result)
+}}"#,
+        line
+    );
+
     let (file, errors) = eclexia_parser::parse(&source);
 
     if !errors.is_empty() {
         for err in &errors {
-            eprintln!("Error: {}", err);
+            eprintln!("Error: {}", err.format_with_source(&source));
         }
         return;
     }
@@ -134,13 +143,16 @@ fn eval_line(line: &str) {
     let type_errors = eclexia_typeck::check(&file);
     if !type_errors.is_empty() {
         for err in &type_errors {
-            eprintln!("Type error: {}", err);
+            eprintln!("Type error: {}", err.format_with_source(&source));
         }
         return;
     }
 
-    // TODO: Evaluate and print result
-    println!("(parsed {} items)", file.items.len());
+    // Evaluate
+    match eclexia_interp::run(&file) {
+        Ok(_) => {}
+        Err(e) => eprintln!("Runtime error: {}", e),
+    }
 }
 
 // Helper for finding data directories

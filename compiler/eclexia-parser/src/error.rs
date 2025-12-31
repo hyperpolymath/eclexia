@@ -83,4 +83,11 @@ impl ParseError {
             Self::Custom { span, .. } => *span,
         }
     }
+
+    /// Format this error with line:column information from source.
+    pub fn format_with_source(&self, source: &str) -> String {
+        let span = self.span();
+        let location = span.format_location(source);
+        format!("{}: {}", location, self)
+    }
 }

@@ -29,3 +29,4 @@ clap = { workspace = true }
 miette = { workspace = true }
 rustyline = { workspace = true }
 smol_str = { workspace = true }
+glob = { workspace = true }

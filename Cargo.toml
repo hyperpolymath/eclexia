@@ -52,6 +52,7 @@ serde_json = "1.0"
 # CLI
 clap = { version = "4", features = ["derive"] }
 rustyline = "14"
+glob = "0.3"
 
 # Async runtime (for runtime system)
 tokio = { version = "1.37", features = ["full"] }

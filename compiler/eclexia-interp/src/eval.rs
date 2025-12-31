@@ -89,7 +89,7 @@ impl Interpreter {
                 let value = Value::Function(Rc::new(Function {
                     name: func.name.clone(),
                     params: func.params.iter().map(|p| p.name.clone()).collect(),
-                    body: FunctionBody {
+                    body: FunctionBody::Block {
                         file_idx: 0, // Simplified: single file
                         block_idx: 0,
                     },
@@ -115,9 +115,9 @@ impl Interpreter {
                         }
                         Solution {
                             name: s.name.clone(),
-                            when_expr: None, // Simplified
+                            when_expr: s.when_clause,
                             provides,
-                            body: FunctionBody {
+                            body: FunctionBody::Block {
                                 file_idx: 0,
                                 block_idx: 0,
                             },
@@ -229,7 +229,7 @@ impl Interpreter {
                         if i < arr.len() {
                             Ok(arr[i].clone())
                         } else {
-                            Err(RuntimeError::IndexOutOfBounds { index: i, len: arr.len() })
+                            Err(RuntimeError::IndexOutOfBounds { index: i, len: arr.len(), span: None })
                         }
                     }
                     (Value::Tuple(t), Some(i)) => {
@@ -237,7 +237,7 @@ impl Interpreter {
                         if i < t.len() {
                             Ok(t[i].clone())
                         } else {
-                            Err(RuntimeError::IndexOutOfBounds { index: i, len: t.len() })
+                            Err(RuntimeError::IndexOutOfBounds { index: i, len: t.len(), span: None })
                         }
                     }
                     _ => Err(RuntimeError::type_error("array or tuple", arr.type_name())),
@@ -253,6 +253,7 @@ impl Interpreter {
                         .ok_or_else(|| RuntimeError::NoSuchField {
                             struct_name: name.to_string(),
                             field: field.to_string(),
+                            span: None,
                         }),
                     _ => Err(RuntimeError::type_error("struct", val.type_name())),
                 }
@@ -269,9 +270,8 @@ impl Interpreter {
                 Ok(Value::Function(Rc::new(Function {
                     name: SmolStr::new("<lambda>"),
                     params: param_names,
-                    body: FunctionBody {
-                        file_idx: 0,
-                        block_idx: 0,
+                    body: FunctionBody::Lambda {
+                        expr_id: *body,
                     },
                     closure: env.clone(),
                 })))
@@ -368,8 +368,8 @@ impl Interpreter {
                 _ => Err(RuntimeError::type_error("numeric", lhs.type_name())),
             },
             BinaryOp::Div => match (&lhs, &rhs) {
-                (_, Value::Int(0)) => Err(RuntimeError::DivisionByZero),
-                (_, Value::Float(f)) if *f == 0.0 => Err(RuntimeError::DivisionByZero),
+                (_, Value::Int(0)) => Err(RuntimeError::DivisionByZero { span: None }),
+                (_, Value::Float(f)) if *f == 0.0 => Err(RuntimeError::DivisionByZero { span: None }),
                 (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a / b)),
                 (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
                 (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 / b)),
@@ -455,7 +455,7 @@ impl Interpreter {
         match op {
             UnaryOp::Neg => match val {
                 Value::Int(n) => Ok(Value::Int(-n)),
-                Value::Float(f) => Ok(Value::Float(-f)),
+           belarus     Value::Float(f) => Ok(Value::Float(-f)),
                 _ => Err(RuntimeError::type_error("numeric", val.type_name())),
             },
             UnaryOp::Not => Ok(Value::Bool(!val.is_truthy())),
@@ -618,21 +618,31 @@ impl Interpreter {
                     call_env.define(param.clone(), arg.clone());
                 }
 
-                // Find the function body and execute it
-                for item in &file.items {
-                    if let Item::Function(f) = item {
-                        if f.name == func.name {
-                            match self.eval_block(&f.body, file, &call_env) {
-                                Ok(v) => return Ok(v),
-                                Err(RuntimeError::Return(v)) => return Ok(v),
-                                Err(e) => return Err(e),
-                            }
+                match &func.body {
+                    FunctionBody::Lambda { expr_id } => {
+                        // Lambda: evaluate the stored expression
+                        match self.eval_expr(*expr_id, file, &call_env) {
+                            Ok(v) => Ok(v),
+                            Err(RuntimeError::Return(v)) => Ok(v),
+                            Err(e) => Err(e),
                         }
                     }
+                    FunctionBody::Block { .. } => {
+                        // Named function: find body by name
+                        for item in &file.items {
+                            if let Item::Function(f) = item {
+                                if f.name == func.name {
+                                    match self.eval_block(&f.body, file, &call_env) {
+                                        Ok(v) => return Ok(v),
+                                        Err(RuntimeError::Return(v)) => return Ok(v),
+                                        Err(e) => return Err(e),
+                                    }
+                                }
+                            }
+                        }
+                        Ok(Value::Unit)
+                    }
                 }
-
-                // Lambda bodies are stored differently
-                Ok(Value::Unit)
             }
 
             Value::AdaptiveFunction(func) => {
@@ -643,20 +653,20 @@ impl Interpreter {
                     });
                 }
 
-                // Select the best solution based on shadow prices
-                let solution_idx = self.select_solution(&func.solutions)?;
+                // Create call environment with parameters bound (needed for @when evaluation)
+                let call_env = func.closure.child();
+                for (param, arg) in func.params.iter().zip(args.iter()) {
+                    call_env.define(param.clone(), arg.clone());
+                }
+
+                // Select the best solution based on shadow prices and @when clauses
+                let solution_idx = self.select_solution(&func.solutions, file, &call_env)?;
                 let solution = &func.solutions[solution_idx];
 
                 println!(
                     "  [adaptive] Selected solution '{}' for {}",
                     solution.name, func.name
                 );
-
-                // Execute the selected solution
-                let call_env = func.closure.child();
-                for (param, arg) in func.params.iter().zip(args.iter()) {
-                    call_env.define(param.clone(), arg.clone());
-                }
 
                 // Track resource usage
                 if let Some(energy) = solution.provides.energy {
@@ -692,12 +702,18 @@ impl Interpreter {
 
             _ => Err(RuntimeError::NotCallable {
                 ty: callee.type_name().to_string(),
+                span: None,
             }),
         }
     }
 
     /// Select the best solution for an adaptive function.
-    fn select_solution(&self, solutions: &[Solution]) -> RuntimeResult<usize> {
+    fn select_solution(
+        &mut self,
+        solutions: &[Solution],
+        file: &SourceFile,
+        env: &Environment,
+    ) -> RuntimeResult<usize> {
         if solutions.is_empty() {
             return Err(RuntimeError::custom("no solutions available"));
         }
@@ -708,6 +724,21 @@ impl Interpreter {
         let mut best_cost = f64::INFINITY;
 
         for (i, solution) in solutions.iter().enumerate() {
+            // Evaluate @when clause if present
+            if let Some(when_expr) = solution.when_expr {
+                match self.eval_expr(when_expr, file, env) {
+                    Ok(Value::Bool(false)) => continue, // Skip this solution
+                    Ok(Value::Bool(true)) => {}        // Proceed to check this solution
+                    Ok(v) => {
+                        return Err(RuntimeError::custom(format!(
+                            "@when clause must evaluate to Bool, got {}",
+                            v.type_name()
+                        )));
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+
             let energy = solution.provides.energy.unwrap_or(0.0);
             let latency = solution.provides.latency.unwrap_or(0.0);
             let carbon = solution.provides.carbon.unwrap_or(0.0);
