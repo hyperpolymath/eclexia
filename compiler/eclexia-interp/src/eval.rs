@@ -12,6 +12,12 @@ use smol_str::SmolStr;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+/// Maximum call depth to prevent stack overflow
+const MAX_CALL_DEPTH: usize = 1000;
+
+/// Maximum iterations per loop to prevent infinite loops
+const MAX_LOOP_ITERATIONS: u64 = 10_000_000;
+
 /// The Eclexia interpreter.
 pub struct Interpreter {
     /// Global environment
@@ -26,6 +32,8 @@ pub struct Interpreter {
     shadow_energy: f64,
     shadow_carbon: f64,
     shadow_latency: f64,
+    /// Current call depth for recursion limiting
+    call_depth: usize,
 }
 
 impl Interpreter {
@@ -45,6 +53,7 @@ impl Interpreter {
             shadow_energy: 1.0,
             shadow_carbon: 1.0,
             shadow_latency: 1.0,
+            call_depth: 0,
         }
     }
 
@@ -372,8 +381,14 @@ impl Interpreter {
                 _ => Err(RuntimeError::type_error("integer", lhs.type_name())),
             },
             BinaryOp::Pow => match (&lhs, &rhs) {
-                (Value::Int(a), Value::Int(b)) if *b >= 0 => {
-                    Ok(Value::Int(a.pow(*b as u32)))
+                (Value::Int(a), Value::Int(b)) if *b >= 0 && *b <= 63 => {
+                    // Use checked_pow to detect overflow
+                    a.checked_pow(*b as u32)
+                        .map(Value::Int)
+                        .ok_or_else(|| RuntimeError::custom("integer overflow in power operation"))
+                }
+                (Value::Int(_), Value::Int(b)) if *b > 63 => {
+                    Err(RuntimeError::custom("exponent too large for integer power"))
                 }
                 (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.powf(*b))),
                 (Value::Int(a), Value::Float(b)) => Ok(Value::Float((*a as f64).powf(*b))),
@@ -503,7 +518,17 @@ impl Interpreter {
                 Err(RuntimeError::Return(val))
             }
             StmtKind::While { condition, body } => {
+                let mut iterations: u64 = 0;
                 loop {
+                    // Check iteration limit to prevent infinite loops
+                    iterations += 1;
+                    if iterations > MAX_LOOP_ITERATIONS {
+                        return Err(RuntimeError::custom(format!(
+                            "maximum loop iterations ({}) exceeded",
+                            MAX_LOOP_ITERATIONS
+                        )));
+                    }
+
                     let cond = self.eval_expr(*condition, file, env)?;
                     if !cond.is_truthy() {
                         break;
@@ -554,6 +579,26 @@ impl Interpreter {
 
     /// Call a value as a function.
     fn call_value(
+        &mut self,
+        callee: &Value,
+        args: &[Value],
+        file: &SourceFile,
+    ) -> RuntimeResult<Value> {
+        // Check for recursion depth limit
+        if self.call_depth >= MAX_CALL_DEPTH {
+            return Err(RuntimeError::custom(format!(
+                "maximum call depth of {} exceeded (possible infinite recursion)",
+                MAX_CALL_DEPTH
+            )));
+        }
+        self.call_depth += 1;
+        let result = self.call_value_inner(callee, args, file);
+        self.call_depth -= 1;
+        result
+    }
+
+    /// Internal function call implementation.
+    fn call_value_inner(
         &mut self,
         callee: &Value,
         args: &[Value],
@@ -659,7 +704,7 @@ impl Interpreter {
 
         // Simple selection: choose the solution with minimum weighted cost
         // cost = λ_energy * energy + λ_latency * latency + λ_carbon * carbon
-        let mut best_idx = 0;
+        let mut best_idx: Option<usize> = None;
         let mut best_cost = f64::INFINITY;
 
         for (i, solution) in solutions.iter().enumerate() {
@@ -681,11 +726,18 @@ impl Interpreter {
 
             if cost < best_cost {
                 best_cost = cost;
-                best_idx = i;
+                best_idx = Some(i);
             }
         }
 
-        Ok(best_idx)
+        // Return error if no solution fits within budget
+        best_idx.ok_or_else(|| RuntimeError::ResourceViolation {
+            message: format!(
+                "no solution fits within budget (energy: {:.1}/{:.1}J, carbon: {:.1}/{:.1}gCO2e)",
+                self.energy_used, self.energy_budget,
+                self.carbon_used, self.carbon_budget
+            ),
+        })
     }
 
     /// Try to match a pattern against a value, returning bindings.

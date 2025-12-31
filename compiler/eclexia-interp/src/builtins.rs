@@ -297,6 +297,9 @@ fn builtin_ceil(args: &[Value]) -> RuntimeResult<Value> {
     }
 }
 
+/// Maximum range size to prevent memory exhaustion
+const MAX_RANGE_SIZE: i64 = 1_000_000;
+
 fn builtin_range(args: &[Value]) -> RuntimeResult<Value> {
     let (start, end) = match args.len() {
         1 => (0, args[0].as_int().ok_or_else(|| {
@@ -318,6 +321,19 @@ fn builtin_range(args: &[Value]) -> RuntimeResult<Value> {
             })
         }
     };
+
+    // Check range size limit to prevent memory exhaustion
+    let size = end.saturating_sub(start);
+    if size > MAX_RANGE_SIZE {
+        return Err(RuntimeError::custom(format!(
+            "range size {} exceeds maximum of {}",
+            size, MAX_RANGE_SIZE
+        )));
+    }
+    if size < 0 {
+        // Empty range for negative size
+        return Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(vec![]))));
+    }
 
     let values: Vec<Value> = (start..end).map(Value::Int).collect();
     Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(
