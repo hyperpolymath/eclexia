@@ -12,6 +12,7 @@ members = [
     "compiler/eclexia-hir",
     "compiler/eclexia-mir",
     "compiler/eclexia-codegen",
+    "compiler/eclexia-interp",
     "runtime/eclexia-runtime",
 ]
 

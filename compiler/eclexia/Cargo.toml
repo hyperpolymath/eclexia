@@ -22,6 +22,7 @@ eclexia-typeck = { path = "../eclexia-typeck" }
 eclexia-hir = { path = "../eclexia-hir" }
 eclexia-mir = { path = "../eclexia-mir" }
 eclexia-codegen = { path = "../eclexia-codegen" }
+eclexia-interp = { path = "../eclexia-interp" }
 eclexia-runtime = { path = "../../runtime/eclexia-runtime" }
 
 clap = { workspace = true }

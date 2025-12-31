@@ -184,6 +184,7 @@ dependencies = [
  "eclexia-ast",
  "eclexia-codegen",
  "eclexia-hir",
+ "eclexia-interp",
  "eclexia-lexer",
  "eclexia-mir",
  "eclexia-parser",
@@ -218,6 +219,16 @@ dependencies = [
  "eclexia-ast",
  "la-arena",
  "smol_str",
+]
+
+[[package]]
+name = "eclexia-interp"
+version = "0.1.0"
+dependencies = [
+ "eclexia-ast",
+ "rustc-hash",
+ "smol_str",
+ "thiserror",
 ]
 
 [[package]]

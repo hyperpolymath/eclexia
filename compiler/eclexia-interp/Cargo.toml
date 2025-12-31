@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+
+[package]
+name = "eclexia-interp"
+description = "Tree-walking interpreter for Eclexia"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+eclexia-ast = { path = "../eclexia-ast" }
+smol_str = { workspace = true }
+rustc-hash = { workspace = true }
+thiserror = { workspace = true }
