@@ -6,7 +6,7 @@
 use crate::builtins;
 use crate::env::Environment;
 use crate::error::{RuntimeError, RuntimeResult};
-use crate::value::{AdaptiveFunction, Function, FunctionBody, ResourceProvides, Solution, Value};
+use crate::value::{AdaptiveFunction, Function, FunctionBody, ResourceProvides, ResourceRequires, Solution, Value};
 use eclexia_ast::*;
 use smol_str::SmolStr;
 use std::collections::HashMap;
@@ -98,6 +98,23 @@ impl Interpreter {
                 self.global.define(func.name.clone(), value);
             }
             Item::AdaptiveFunction(func) => {
+                // Parse @requires constraints
+                let mut requires = ResourceRequires::default();
+                for constraint in &func.constraints {
+                    if let ConstraintKind::Resource { resource, op, amount } = &constraint.kind {
+                        // Only support < and <= for @requires
+                        if matches!(op, CompareOp::Lt | CompareOp::Le) {
+                            match resource.as_str() {
+                                "energy" => requires.energy = Some(amount.value),
+                                "latency" => requires.latency = Some(amount.value),
+                                "memory" => requires.memory = Some(amount.value),
+                                "carbon" => requires.carbon = Some(amount.value),
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+
                 let solutions: Vec<Solution> = func
                     .solutions
                     .iter()
@@ -129,6 +146,7 @@ impl Interpreter {
                     name: func.name.clone(),
                     params: func.params.iter().map(|p| p.name.clone()).collect(),
                     solutions,
+                    requires,
                     closure: self.global.clone(),
                 }));
                 self.global.define(func.name.clone(), value);
@@ -455,7 +473,7 @@ impl Interpreter {
         match op {
             UnaryOp::Neg => match val {
                 Value::Int(n) => Ok(Value::Int(-n)),
-           belarus     Value::Float(f) => Ok(Value::Float(-f)),
+                Value::Float(f) => Ok(Value::Float(-f)),
                 _ => Err(RuntimeError::type_error("numeric", val.type_name())),
             },
             UnaryOp::Not => Ok(Value::Bool(!val.is_truthy())),
@@ -659,8 +677,8 @@ impl Interpreter {
                     call_env.define(param.clone(), arg.clone());
                 }
 
-                // Select the best solution based on shadow prices and @when clauses
-                let solution_idx = self.select_solution(&func.solutions, file, &call_env)?;
+                // Select the best solution based on @requires constraints, shadow prices, and @when clauses
+                let solution_idx = self.select_solution(&func.solutions, &func.requires, file, &call_env)?;
                 let solution = &func.solutions[solution_idx];
 
                 println!(
@@ -711,12 +729,18 @@ impl Interpreter {
     fn select_solution(
         &mut self,
         solutions: &[Solution],
+        requires: &ResourceRequires,
         file: &SourceFile,
         env: &Environment,
     ) -> RuntimeResult<usize> {
         if solutions.is_empty() {
             return Err(RuntimeError::custom("no solutions available"));
         }
+
+        // Use function's @requires constraints, falling back to global budget
+        let energy_limit = requires.energy.unwrap_or(self.energy_budget);
+        let latency_limit = requires.latency.unwrap_or(f64::INFINITY);
+        let carbon_limit = requires.carbon.unwrap_or(self.carbon_budget);
 
         // Simple selection: choose the solution with minimum weighted cost
         // cost = λ_energy * energy + λ_latency * latency + λ_carbon * carbon
@@ -743,11 +767,14 @@ impl Interpreter {
             let latency = solution.provides.latency.unwrap_or(0.0);
             let carbon = solution.provides.carbon.unwrap_or(0.0);
 
-            // Check if within budget
-            if self.energy_used + energy > self.energy_budget {
+            // Check if solution satisfies @requires constraints
+            if energy > energy_limit {
                 continue;
             }
-            if self.carbon_used + carbon > self.carbon_budget {
+            if latency > latency_limit {
+                continue;
+            }
+            if carbon > carbon_limit {
                 continue;
             }
 
@@ -761,12 +788,11 @@ impl Interpreter {
             }
         }
 
-        // Return error if no solution fits within budget
+        // Return error if no solution satisfies constraints
         best_idx.ok_or_else(|| RuntimeError::ResourceViolation {
             message: format!(
-                "no solution fits within budget (energy: {:.1}/{:.1}J, carbon: {:.1}/{:.1}gCO2e)",
-                self.energy_used, self.energy_budget,
-                self.carbon_used, self.carbon_budget
+                "no solution satisfies constraints (@requires: energy < {:.1}J, latency < {:.1}ms, carbon < {:.1}gCO2e)",
+                energy_limit, latency_limit, carbon_limit
             ),
         })
     }

@@ -131,16 +131,19 @@ Quick Navigation
 
 Installation
 
+From this repository:
 
-# Clone the repository
-git clone https://gitlab.com/eclexia-lang/eclexia.git
-cd eclexia
+[source,bash]
+----
+# Build from source (requires Rust 1.75+)
+cargo build --release
 
-# Install using Rust (toolchain)
-cargo install eclexia
+# Verify the build works
+cargo test
+cargo run -- run examples/hello.ecl
+----
 
-# Or using Podman (containerized)
-podman pull registry.gitlab.com/eclexia-lang/eclexia:latest
+The compiler binary will be at `target/release/eclexia`.
 
 
 Hello World with Resources
@@ -178,7 +181,10 @@ adaptive def fibonacci(n: Int) -> Int
 
 Run it:
 
-eclexia run fibonacci.ecl
+[source,bash]
+----
+cargo run -- run examples/fibonacci.ecl
+----
 
 
 
