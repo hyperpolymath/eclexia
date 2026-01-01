@@ -77,7 +77,17 @@ pub struct AdaptiveFunction {
     pub name: SmolStr,
     pub params: Vec<SmolStr>,
     pub solutions: Vec<Solution>,
+    pub requires: ResourceRequires,
     pub closure: super::env::Environment,
+}
+
+/// Resource requirements/constraints from @requires.
+#[derive(Debug, Clone, Default)]
+pub struct ResourceRequires {
+    pub energy: Option<f64>,    // Max Joules
+    pub latency: Option<f64>,   // Max Milliseconds
+    pub memory: Option<f64>,    // Max Bytes
+    pub carbon: Option<f64>,    // Max gCO2e
 }
 
 /// A solution alternative.
