@@ -1,19 +1,15 @@
-Eclexia: Economics-as-Code
+image:https://img.shields.io/badge/License-MPL_2.0-blue.svg[MPL-2.0,link="https://opensource.org/licenses/MPL-2.0"]
+image:https://img.shields.io/badge/Philosophy-Palimpsest-purple.svg[Palimpsest,link="https://github.com/hyperpolymath/palimpsest-licence"]
 
+Eclexia: Economics-as-Code
 
 A programming language where economics is a first-class paradigm
 Making resource-efficient, carbon-aware software the default, not the exception.
-
-
-
-
-
 
 🌟 What is Eclexia?
 
 Eclexia introduces Economics-as-Code: a revolutionary programming paradigm where economic principles—scarcity, trade-offs, and optimization—are built into the language itself.
 Instead of treating performance and resource usage as afterthoughts, Eclexia makes them first-class concerns with:
-
 
 Resource types with dimensional analysis (energy, time, memory, carbon)
 
@@ -64,7 +60,6 @@ adaptive def matrix_multiply(A: Matrix, B: Matrix) -> Matrix
     }
 }
 
-
 The runtime automatically selects the best solution based on:
 
 Available resources (energy budget, CPU cores, GPU availability)
@@ -72,52 +67,37 @@ Current carbon intensity of the power grid
 Shadow prices that reflect the true cost of resources
 Your declared optimization objectives
 
-
-
 📚 Documentation
 
 Core Documents
-
-
-
 
 Document
 Description
 Audience
 
-
-
-
 White Paper
 Comprehensive introduction to Economics-as-Code
 All readers
-
 
 Formal Proofs
 Mathematical foundations and correctness proofs
 Researchers, PL theorists
 
-
 IP Claims
 Intellectual property analysis and strategy
 Legal, business
-
 
 Language Specification
 Complete language syntax and semantics
 Language implementers
 
-
 Tutorial
 Getting started guide with examples
 Developers
 
-
 API Reference
 Standard library documentation
 Developers
-
-
 
 Quick Navigation
 
@@ -125,7 +105,6 @@ Quick Navigation
 🔬 Want the theory? Read the Formal Proofs and Language Specification
 💼 Business/Legal interests? See IP Claims for patent strategy and commercialization
 👨‍💻 Ready to code? Check out Examples and Getting Started
-
 
 🚀 Quick Start
 
@@ -145,9 +124,7 @@ cargo run -- run examples/hello.ecl
 
 The compiler binary will be at `target/release/eclexia`.
 
-
 Hello World with Resources
-
 
 def main() -> Unit
     @requires: energy < 1J
@@ -155,9 +132,7 @@ def main() -> Unit
     println("Hello, Economics-as-Code!")
 }
 
-
 Your First Adaptive Function
-
 
 adaptive def fibonacci(n: Int) -> Int
     @requires: energy < 100J
@@ -178,16 +153,12 @@ adaptive def fibonacci(n: Int) -> Int
     }
 }
 
-
 Run it:
 
 [source,bash]
 ----
 cargo run -- run examples/fibonacci.ecl
 ----
-
-
-
 
 💡 Key Features
 
@@ -200,7 +171,6 @@ let time: Time = 5s
 let power: Power = energy / time  // ✓ Correctly typed as Watts
 
 // let invalid = energy + time  // ✗ Compile error: dimension mismatch!
-
 
 2. Adaptive Execution
 
@@ -221,7 +191,6 @@ adaptive def sort(arr: Array[Int]) -> Array[Int]
     { /* ... */ }
 }
 
-
 3. Shadow Prices
 
 The runtime computes shadow prices—the marginal value of each resource—to guide decisions:
@@ -238,7 +207,6 @@ def analyze() -> Unit
     // cost = λ_energy * energy + λ_time * time + λ_carbon * carbon
 }
 
-
 4. Carbon-Aware Scheduling
 
 Automatically defer work to low-carbon times:
@@ -252,7 +220,6 @@ async def train_model(data: Dataset) -> Model
     // Typical time: overnight or windy/sunny periods
     expensive_training(data)
 }
-
 
 5. Multi-Objective Optimization
 
@@ -268,45 +235,31 @@ adaptive def compress(image: Image) -> CompressedImage
     @solution "balanced": { /* ... */ }
 }
 
-
-
-
 📊 Benchmarks & Results
 
 Eclexia delivers measurable benefits:
-
-
 
 Metric
 Improvement
 Workload
 
-
-
-
 Energy Reduction
 20-40%
 Typical web server
-
 
 Battery Life
 +25-35%
 Mobile applications
 
-
 Carbon Footprint
 40-60%
 With carbon-aware scheduling
-
 
 Developer Time
 50-70% less
 Optimization vs. manual tuning
 
-
-
 See benchmarks/ for detailed results and methodology.
-
 
 🧪 Research & Formal Foundations
 
@@ -314,7 +267,6 @@ Eclexia is built on solid theoretical foundations:
 Formal Proofs
 
 We provide mathematical proofs for:
-
 
 Type Safety (progress & preservation)
 
@@ -331,14 +283,11 @@ Type System
 
 Eclexia extends traditional type systems with:
 
-
 Resource types: Energy, Time, Memory, Carbon
-
 
 Dimensional analysis: Track physical dimensions at type level
 
 Constraint types: @requires, @provides, @optimize
-
 
 Effect types: Track side effects (I/O, energy consumption)
 
@@ -346,17 +295,13 @@ Operational Semantics
 
 We define a formal small-step operational semantics for Eclexia's core calculus, proving:
 
-
 Progress: well-typed programs don't get stuck
 
 Preservation: evaluation preserves types
 
 Determinism: same context → same selection
 
-
-
 🏗️ Project Structure
-
 
 eclexia/
 ├── README.md                 # This file
@@ -410,30 +355,20 @@ eclexia/
     ├── integration/
     └── correctness/
 
-
-
-
 🤝 Contributing
 
 We welcome contributions! Eclexia is open-source (Apache 2.0) and community-driven.
 How to Contribute
 
-
-
 Read CONTRIBUTING.md
-
 
 Join our Discord/Slack community
 
-
 Pick an issue from GitLab Issues
-
 
 Submit a merge request (MR)
 
 Areas of Interest
-
-
 
 Compiler development (Rust)
 Type system research
@@ -447,41 +382,25 @@ Documentation (tutorials, examples)
 
 Tooling (IDE plugins, LSP)
 
-
-
 🌍 Community
-
-
 
 GitLab: https://gitlab.com/eclexia-lang/eclexia
 
-
 Website: https://eclexia.org
-
 
 Discord: https://discord.gg/eclexia (coming soon)
 
-
 Email: info@eclexia.org
-
 
 Forum: https://discuss.eclexia.org (coming soon)
 
-
 Social Media
-
-
 
 Twitter/X: @eclexialang (coming soon)
 
-
 Mastodon: @eclexia@fosstodon.org (coming soon)
 
-
 LinkedIn: Eclexia Project (coming soon)
-
-
-
 
 🎓 Academic Use
 
@@ -522,15 +441,10 @@ If you use Eclexia in research, please cite:
   note={Version 1.0}
 }
 
-
-
-
 📜 License
 
 Eclexia is dual-licensed:
 Open Source (Core)
-
-
 
 License: Apache 2.0
 
@@ -538,10 +452,7 @@ Applies to: Core language, reference compiler, standard library
 
 See: LICENSE
 
-
 Commercial (Enterprise Features)
-
-
 
 License: Proprietary
 
@@ -549,14 +460,9 @@ Applies to: Advanced optimizations, cloud services, enterprise support
 
 Contact: licensing@eclexia.org
 
-
-
-
 🚧 Roadmap
 
 Phase 1: Research Preview (Q4 2025)
-
-
 
 ✅ White paper published
 
@@ -570,7 +476,6 @@ Phase 1: Research Preview (Q4 2025)
 
 Phase 2: Alpha Release (Q1 2026)
 
-
 Optimizing compiler
 Runtime with shadow prices
 IDE plugin (VSCode)
@@ -578,7 +483,6 @@ Basic benchmarks
 Community building
 
 Phase 3: Beta Release (Q2 2026)
-
 
 Production-ready compiler
 Advanced optimizations
@@ -588,13 +492,10 @@ Documentation complete
 
 Phase 4: 1.0 Release (Q3 2026)
 
-
 Stable language spec
 Performance competitive with Rust/C++
 Rich ecosystem (libraries, tools)
 Enterprise support available
-
-
 
 🙏 Acknowledgments
 
@@ -614,33 +515,21 @@ The PL research community (for foundational work)
 GitLab (for hosting our open-source project)
 Early adopters and beta testers
 
-
-
 📞 Contact
-
-
 
 General inquiries: info@eclexia.org
 
-
 Research collaborations: research@eclexia.org
-
 
 Commercial licensing: licensing@eclexia.org
 
-
 Press & media: press@eclexia.org
 
-
 Security issues: security@eclexia.org
-
-
-
 
 🌟 Why "Eclexia"?
 
 The name "Eclexia" combines:
-
 
 "Ec-" from "Economics"
 
@@ -649,14 +538,11 @@ The name "Eclexia" combines:
 Together: "Economic Speech" or "Economics in Language"
 It also evokes:
 
-
 Eclectic: Drawing from diverse fields (CS, economics, sustainability)
 
 Excellence: Striving for optimal, principled design
 
 Ecology: Caring about environmental impact
-
-
 
 📝 Status & Stability
 
@@ -671,7 +557,6 @@ Rough edges in tooling
 Not yet ready for production use.
 We're targeting Alpha release in Q1 2026 and Beta in Q2 2026.
 
-
 ⚖️ Legal
 
 Patents
@@ -679,8 +564,6 @@ Patents
 Some aspects of Eclexia may be subject to patent protection. See IP_CLAIMS.md for details.
 Patent Grant: If you use Eclexia under the Apache 2.0 license, you receive a royalty-free patent license for patents embodied in the open-source code.
 Trademarks
-
-
 
 Eclexia™ is a trademark of Jonathan D.A. Jewell / Eclexia Project
 
@@ -691,12 +574,10 @@ Confidentiality
 
 Some documents (e.g., IP_CLAIMS.md) contain strategic information. Distribution is limited. See headers in each document.
 
-
 🎯 Mission
 
 "Make resource-efficient, carbon-aware software the default, not the exception."
 We believe that:
-
 
 Computing has a carbon footprint that must be addressed
 
@@ -709,9 +590,6 @@ Language-level support is more effective than libraries
 Eclexia aims to make sustainable computing easy, automatic, and economically optimal.
 
 Welcome to the future of programming. Welcome to Economics-as-Code. Welcome to Eclexia.
-
-
-
 
 "The best way to predict the future is to invent it." — Alan Kay
 
