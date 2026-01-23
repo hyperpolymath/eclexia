@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Formal Verification - Coq Proofs
+
+name: Verify Coq Proofs
+
+on:
+  push:
+    paths:
+      - 'formal/coq/**'
+  pull_request:
+    paths:
+      - 'formal/coq/**'
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  verify-proofs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4
+
+      - name: Set up Coq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y opam
+          opam init -y --disable-sandboxing
+          opam switch create coq-verification 4.14.1
+          eval $(opam env)
+          opam install -y coq.8.18.0
+
+      - name: Build Coq project
+        working-directory: formal/coq
+        run: |
+          eval $(opam env)
+          make
+
+      - name: Report verification status
+        if: success()
+        run: |
+          echo "✅ All Coq proofs verified successfully"
+          echo "Verified files:"
+          find formal/coq/src -name "*.vo" -exec basename {} \;

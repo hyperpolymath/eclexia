@@ -1,0 +1,21 @@
+# _CoqProject - Coq project configuration for Eclexia formal verification
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+-R src Eclexia
+
+# Coq version: 8.18+
+-arg -w
+-arg -notation-overridden
+
+# Source files (in dependency order)
+# Only Syntax.v is complete for now
+src/Syntax.v
+# TODO: Add these as they are implemented:
+# src/Typing.v
+# src/Semantics.v
+# src/Substitution.v
+# src/TypeSafety.v
+# src/Dimensions.v
+# src/Resources.v
+# src/Adaptive.v
+# src/ShadowPrices.v
