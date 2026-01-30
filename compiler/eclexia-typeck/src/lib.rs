@@ -15,7 +15,8 @@ mod env;
 mod error;
 
 use eclexia_ast::types::{Ty, TypeVar, PrimitiveTy};
-use eclexia_ast::{SourceFile, Item, Function, AdaptiveFunction, ExprId, StmtId, ExprKind, StmtKind, BinaryOp, UnaryOp, Literal, Block};
+use eclexia_ast::dimension::Dimension;
+use eclexia_ast::{SourceFile, Item, Function, AdaptiveFunction, ExprId, StmtId, ExprKind, StmtKind, BinaryOp, UnaryOp, Literal, Block, Constraint, ConstraintKind};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
@@ -261,6 +262,9 @@ impl<'a> TypeChecker<'a> {
             if let Err(e) = self.unify(&ret_ty, &body_ty, func.span) {
                 self.errors.push(e);
             }
+
+            // Check resource constraints
+            self.check_constraints(&func.constraints);
         }
     }
 
@@ -279,6 +283,9 @@ impl<'a> TypeChecker<'a> {
             return;
         };
 
+        // Check function-level constraints
+        self.check_constraints(&func.constraints);
+
         for solution in &func.solutions {
             let mut body_env = self.env.child();
             for (param, param_ty) in func.params.iter().zip(params.iter()) {
@@ -292,6 +299,9 @@ impl<'a> TypeChecker<'a> {
             if let Err(e) = self.unify(&ret_ty, &body_ty, solution.span) {
                 self.errors.push(e);
             }
+
+            // Check solution-level resource provisions
+            self.check_resource_provisions(&solution.provides);
         }
     }
 
@@ -582,19 +592,86 @@ impl<'a> TypeChecker<'a> {
     fn binary_op_type(&mut self, op: BinaryOp, lhs: &Ty, rhs: &Ty, span: eclexia_ast::span::Span) -> Ty {
         match op {
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem | BinaryOp::Pow => {
-                if let Err(e) = self.unify(lhs, rhs, span) {
-                    self.errors.push(e);
-                }
-                if self.is_numeric(lhs) {
-                    lhs.clone()
-                } else if matches!(lhs, Ty::Primitive(PrimitiveTy::String)) && op == BinaryOp::Add {
-                    Ty::Primitive(PrimitiveTy::String)
-                } else {
-                    self.errors.push(TypeError::Custom {
-                        span,
-                        message: format!("cannot apply {:?} to {} and {}", op, lhs, rhs),
-                    });
-                    Ty::Error
+                // Handle dimensional type checking for Resource types
+                match (lhs, rhs, op) {
+                    // Resource + Resource (must have same dimension)
+                    (Ty::Resource { base: b1, dimension: d1 }, Ty::Resource { base: b2, dimension: d2 }, BinaryOp::Add | BinaryOp::Sub) => {
+                        if d1 != d2 {
+                            self.errors.push(TypeError::DimensionMismatch {
+                                span,
+                                dim1: d1.to_string(),
+                                dim2: d2.to_string(),
+                            });
+                            return Ty::Error;
+                        }
+                        // Base types should be compatible
+                        if b1 != b2 {
+                            self.errors.push(TypeError::Custom {
+                                span,
+                                message: format!("cannot add {} and {} (incompatible base types)", b1.name(), b2.name()),
+                            });
+                            return Ty::Error;
+                        }
+                        Ty::Resource { base: *b1, dimension: *d1 }
+                    }
+
+                    // Resource * Resource (dimensions multiply)
+                    (Ty::Resource { base: b1, dimension: d1 }, Ty::Resource { base: b2, dimension: d2 }, BinaryOp::Mul) => {
+                        let result_dim = d1.multiply(d2);
+                        // Upgrade base type if necessary (Int * Float = Float)
+                        let result_base = if b1.is_float() || b2.is_float() {
+                            PrimitiveTy::Float
+                        } else {
+                            *b1
+                        };
+                        Ty::Resource { base: result_base, dimension: result_dim }
+                    }
+
+                    // Resource / Resource (dimensions divide)
+                    (Ty::Resource { base: _b1, dimension: d1 }, Ty::Resource { base: _b2, dimension: d2 }, BinaryOp::Div) => {
+                        let result_dim = d1.divide(d2);
+                        Ty::Resource { base: PrimitiveTy::Float, dimension: result_dim }
+                    }
+
+                    // Resource * Scalar (scalar multiplication)
+                    (Ty::Resource { base, dimension }, Ty::Primitive(p), BinaryOp::Mul) |
+                    (Ty::Primitive(p), Ty::Resource { base, dimension }, BinaryOp::Mul) if p.is_numeric() => {
+                        Ty::Resource { base: *base, dimension: *dimension }
+                    }
+
+                    // Resource / Scalar (scalar division)
+                    (Ty::Resource { base, dimension }, Ty::Primitive(p), BinaryOp::Div) if p.is_numeric() => {
+                        Ty::Resource { base: *base, dimension: *dimension }
+                    }
+
+                    // Resource ^ Int (dimension exponentiation)
+                    (Ty::Resource { base, dimension }, Ty::Primitive(p), BinaryOp::Pow) if p.is_integer() => {
+                        // For now, we can't compute the exponent at compile-time
+                        // In a more advanced implementation, we'd need constant evaluation
+                        self.errors.push(TypeError::Custom {
+                            span,
+                            message: "resource exponentiation requires constant integer exponent (not yet implemented)".to_string(),
+                        });
+                        Ty::Error
+                    }
+
+                    // Fall through to standard numeric handling
+                    _ => {
+                        if let Err(e) = self.unify(lhs, rhs, span) {
+                            self.errors.push(e);
+                        }
+                        if self.is_numeric(lhs) {
+                            lhs.clone()
+                        } else if matches!(lhs, Ty::Primitive(PrimitiveTy::String)) && op == BinaryOp::Add {
+                            Ty::Primitive(PrimitiveTy::String)
+                        } else {
+                            self.errors.push(TypeError::Custom {
+                                span,
+                                message: format!("cannot apply {:?} to {} and {}", op, lhs, rhs),
+                            });
+                            Ty::Error
+                        }
+                    }
                 }
             }
             BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
@@ -665,6 +742,95 @@ impl<'a> TypeChecker<'a> {
         matches!(ty, Ty::Primitive(p) if p.is_integer())
     }
 
+    /// Check resource constraints on a function.
+    fn check_constraints(&mut self, constraints: &[Constraint]) {
+        for constraint in constraints {
+            match &constraint.kind {
+                ConstraintKind::Resource { resource, op: _, amount } => {
+                    // Validate that the resource name is known
+                    let dimension = match resource.as_str() {
+                        "energy" => Dimension::energy(),
+                        "time" => Dimension::time(),
+                        "memory" => Dimension::memory(),
+                        "carbon" => Dimension::carbon(),
+                        "power" => Dimension::power(),
+                        other => {
+                            self.errors.push(TypeError::ResourceViolation {
+                                span: constraint.span,
+                                message: format!("unknown resource type '{}'", other),
+                            });
+                            continue;
+                        }
+                    };
+
+                    // Validate that the amount has correct units
+                    if let Some(unit_name) = &amount.unit {
+                        if let Some(unit) = eclexia_ast::dimension::parse_unit(unit_name.as_str()) {
+                            if unit.dimension != dimension {
+                                self.errors.push(TypeError::DimensionMismatch {
+                                    span: constraint.span,
+                                    dim1: dimension.to_string(),
+                                    dim2: unit.dimension.to_string(),
+                                });
+                            }
+                        } else {
+                            self.errors.push(TypeError::ResourceViolation {
+                                span: constraint.span,
+                                message: format!("unknown unit '{}'", unit_name),
+                            });
+                        }
+                    }
+                }
+                ConstraintKind::Predicate(expr_id) => {
+                    // Type check the predicate expression
+                    let pred_ty = self.infer_expr(*expr_id);
+                    if let Err(e) = self.unify(&Ty::Primitive(PrimitiveTy::Bool), &pred_ty, constraint.span) {
+                        self.errors.push(e);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Check resource provisions on a solution.
+    fn check_resource_provisions(&mut self, provisions: &[eclexia_ast::ResourceProvision]) {
+        for provision in provisions {
+            // Validate that the resource name is known
+            let dimension = match provision.resource.as_str() {
+                "energy" => Dimension::energy(),
+                "time" => Dimension::time(),
+                "memory" => Dimension::memory(),
+                "carbon" => Dimension::carbon(),
+                "power" => Dimension::power(),
+                other => {
+                    self.errors.push(TypeError::ResourceViolation {
+                        span: provision.span,
+                        message: format!("unknown resource type '{}'", other),
+                    });
+                    continue;
+                }
+            };
+
+            // Validate that the amount has correct units
+            if let Some(unit_name) = &provision.amount.unit {
+                if let Some(unit) = eclexia_ast::dimension::parse_unit(unit_name.as_str()) {
+                    if unit.dimension != dimension {
+                        self.errors.push(TypeError::DimensionMismatch {
+                            span: provision.span,
+                            dim1: dimension.to_string(),
+                            dim2: unit.dimension.to_string(),
+                        });
+                    }
+                } else {
+                    self.errors.push(TypeError::ResourceViolation {
+                        span: provision.span,
+                        message: format!("unknown unit '{}'", unit_name),
+                    });
+                }
+            }
+        }
+    }
+
     /// Unify two types.
     fn unify(&mut self, t1: &Ty, t2: &Ty, span: eclexia_ast::span::Span) -> Result<(), TypeError> {
         let t1 = self.apply(t1);
@@ -722,6 +888,20 @@ impl<'a> TypeChecker<'a> {
                 Ok(())
             }
 
+            (Ty::Resource { base: b1, dimension: d1 }, Ty::Resource { base: b2, dimension: d2 }) => {
+                if d1 != d2 {
+                    return Err(TypeError::DimensionMismatch {
+                        span,
+                        dim1: d1.to_string(),
+                        dim2: d2.to_string(),
+                    });
+                }
+                if b1 != b2 {
+                    return Err(TypeError::Mismatch { span, expected: t1, found: t2 });
+                }
+                Ok(())
+            }
+
             _ => Err(TypeError::Mismatch { span, expected: t1, found: t2 }),
         }
     }
@@ -752,6 +932,10 @@ impl<'a> TypeChecker<'a> {
             Ty::ForAll { vars, body } => Ty::ForAll {
                 vars: vars.clone(),
                 body: Box::new(self.apply(body)),
+            },
+            Ty::Resource { base, dimension } => Ty::Resource {
+                base: *base,
+                dimension: *dimension,
             },
             _ => ty.clone(),
         }
