@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: PMPL-1.0-or-later
 # SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 [package]
@@ -30,3 +30,5 @@ miette = { workspace = true }
 rustyline = { workspace = true }
 smol_str = { workspace = true }
 glob = { workspace = true }
+toml = { workspace = true }
+serde = { workspace = true }

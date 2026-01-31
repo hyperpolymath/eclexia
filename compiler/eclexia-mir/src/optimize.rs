@@ -85,15 +85,159 @@ fn dead_code_elimination(func: &mut Function) {
 }
 
 /// Constant propagation
-fn constant_propagation(_func: &mut Function, _constants: &Arena<Constant>) {
-    // TODO: Implement constant propagation
-    // This would track constant values and replace uses with constants
+fn constant_propagation(func: &mut Function, _constants: &Arena<Constant>) {
+    use rustc_hash::FxHashMap;
+
+    // Track local variables that hold constant values
+    let mut const_locals: FxHashMap<LocalId, ConstantId> = FxHashMap::default();
+
+    // Analyze instructions to find locals assigned to constants
+    for block in func.basic_blocks.iter() {
+        for inst in &block.1.instructions {
+            if let InstructionKind::Assign { target, value } = &inst.kind {
+                if let Value::Constant(const_id) = value {
+                    const_locals.insert(*target, *const_id);
+                }
+            }
+        }
+    }
+
+    // Propagate constants: replace local reads with constant values
+    for block in func.basic_blocks.iter_mut() {
+        for inst in &mut block.1.instructions {
+            match &mut inst.kind {
+                InstructionKind::Assign { value, .. } => {
+                    replace_locals_with_constants(value, &const_locals);
+                }
+                InstructionKind::ResourceTrack { amount, .. } => {
+                    replace_locals_with_constants(amount, &const_locals);
+                }
+                _ => {}
+            }
+        }
+
+        // Also propagate in terminator
+        match &mut block.1.terminator {
+            Terminator::Branch { condition, .. } => {
+                replace_locals_with_constants(condition, &const_locals);
+            }
+            Terminator::Switch { value, .. } => {
+                replace_locals_with_constants(value, &const_locals);
+            }
+            Terminator::Return(Some(value)) => {
+                replace_locals_with_constants(value, &const_locals);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Replace local variable reads with their constant values if known
+fn replace_locals_with_constants(value: &mut Value, const_locals: &rustc_hash::FxHashMap<LocalId, ConstantId>) {
+    match value {
+        Value::Local(local_id) => {
+            // If this local holds a constant, replace it
+            if let Some(&const_id) = const_locals.get(local_id) {
+                *value = Value::Constant(const_id);
+            }
+        }
+        Value::Binary { lhs, rhs, .. } => {
+            replace_locals_with_constants(lhs, const_locals);
+            replace_locals_with_constants(rhs, const_locals);
+        }
+        Value::Unary { operand, .. } => {
+            replace_locals_with_constants(operand, const_locals);
+        }
+        Value::Load { ptr } => {
+            replace_locals_with_constants(ptr, const_locals);
+        }
+        Value::Field { base, .. } => {
+            replace_locals_with_constants(base, const_locals);
+        }
+        Value::Index { base, index } => {
+            replace_locals_with_constants(base, const_locals);
+            replace_locals_with_constants(index, const_locals);
+        }
+        Value::Cast { value: inner, .. } => {
+            replace_locals_with_constants(inner, const_locals);
+        }
+        _ => {}
+    }
 }
 
 /// Inline small blocks
-fn inline_small_blocks(_func: &mut Function) {
-    // TODO: Implement block inlining
-    // Merge blocks with only a goto terminator into their predecessors
+fn inline_small_blocks(func: &mut Function) {
+    // Find blocks that only contain a goto (can be inlined into predecessors)
+    let mut inline_candidates = FxHashSet::default();
+
+    for (block_id, block) in func.basic_blocks.iter() {
+        // A block can be inlined if it:
+        // 1. Only has a Goto terminator
+        // 2. Has few instructions (or zero)
+        // 3. Is not the entry block
+        if block_id != func.entry_block
+            && block.instructions.len() <= 2
+            && matches!(block.terminator, Terminator::Goto(_))
+        {
+            inline_candidates.insert(block_id);
+        }
+    }
+
+    // Inline the candidates by redirecting predecessors
+    for block_id in inline_candidates.clone() {
+        let (target, instructions) = {
+            let block = &func.basic_blocks[block_id];
+            let target = match block.terminator {
+                Terminator::Goto(t) => t,
+                _ => continue,
+            };
+            (target, block.instructions.clone())
+        };
+
+        // Find all blocks that jump to this one and redirect them
+        for (_, pred_block) in func.basic_blocks.iter_mut() {
+            match &mut pred_block.terminator {
+                Terminator::Goto(dest) if *dest == block_id => {
+                    // Append this block's instructions to predecessor
+                    pred_block.instructions.extend(instructions.clone());
+                    // Redirect to the target
+                    *dest = target;
+                }
+                Terminator::Branch {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if *then_block == block_id {
+                        pred_block.instructions.extend(instructions.clone());
+                        *then_block = target;
+                    }
+                    if *else_block == block_id {
+                        pred_block.instructions.extend(instructions.clone());
+                        *else_block = target;
+                    }
+                }
+                Terminator::Switch { targets, default, .. } => {
+                    for (_, dest) in targets.iter_mut() {
+                        if *dest == block_id {
+                            *dest = target;
+                        }
+                    }
+                    if *default == block_id {
+                        *default = target;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Mark inlined blocks as unreachable (they'll be removed by DCE)
+    for block_id in inline_candidates {
+        let block = &mut func.basic_blocks[block_id];
+        block.instructions.clear();
+        block.terminator = Terminator::Unreachable;
+    }
 }
 
 /// Optimize resource tracking

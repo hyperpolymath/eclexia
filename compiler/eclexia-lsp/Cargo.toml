@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+
+[package]
+name = "eclexia-lsp"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+license = "AGPL-3.0-or-later"
+
+[[bin]]
+name = "eclexia-lsp"
+path = "src/main.rs"
+
+[dependencies]
+tower-lsp = "0.20"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+dashmap = "5"
+
+# Eclexia internal crates
+eclexia-parser = { path = "../eclexia-parser" }
+eclexia-typeck = { path = "../eclexia-typeck" }
+eclexia-ast = { path = "../eclexia-ast" }
+
+[features]
+default = []

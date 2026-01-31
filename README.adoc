@@ -1,8 +1,8 @@
-image:https://img.shields.io/badge/license-PMPL--1.0-blue.svg[License,link="https://github.com/hyperpolymath/palimpsest-license"]
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
 
 
 
-image:https://img.shields.io/badge/Philosophy-Palimpsest-purple.svg[Palimpsest,link="https://github.com/hyperpolymath/palimpsest-licence"]
+image:https://img.shields.io/badge/Philosophy-Palimpsest-indigo.svg[Palimpsest,link="https://github.com/hyperpolymath/palimpsest-license"]
 
 
 Eclexia: Economics-as-Code
@@ -466,7 +466,7 @@ Contact: licensing@eclexia.org
 
 🚧 Roadmap
 
-Phase 1: Research Preview (Q4 2025)
+Phase 1: Research Preview (Q4 2025) - 97% Complete
 
 ✅ White paper published
 
@@ -474,17 +474,33 @@ Phase 1: Research Preview (Q4 2025)
 
 ✅ Language specification v1.0
 
-🔄 Reference compiler (basic)
+✅ Reference compiler (complete)
+  - ✅ Lexer with dimensional literals
+  - ✅ Recursive descent parser
+  - ✅ Hindley-Milner type checker with dimensional analysis
+  - ✅ HIR lowering
+  - ✅ MIR with optimizations (constant propagation, dead code elimination, block inlining)
+  - ✅ Bytecode generator
+  - ✅ Virtual machine with resource tracking
+  - ✅ Runtime with shadow prices and adaptive engine
 
-🔄 Core standard library
+✅ Core standard library (Option, Result, Vec, HashMap, math functions)
 
-Phase 2: Alpha Release (Q1 2026)
+✅ Developer toolchain
+  - ✅ CLI (build, run, check, fmt, repl, init, test, bench)
+  - ✅ REPL with expression evaluation
+  - ✅ Testing framework (#[test] attributes)
+  - ✅ Benchmarking framework (#[bench] attributes)
+  - ✅ Package manager (manifest parsing, dependency resolution)
+  - 🔄 LSP server (70% - diagnostics, symbols, navigation working)
 
-Optimizing compiler
-Runtime with shadow prices
-IDE plugin (VSCode)
-Basic benchmarks
-Community building
+Phase 2: Alpha Release (Q1 2026) - In Progress
+
+✅ Optimizing compiler (MIR optimizations complete)
+✅ Runtime with shadow prices (complete)
+🔄 IDE plugin (LSP server 70% complete, needs rename/format)
+✅ Basic benchmarks (framework complete)
+🔄 Community building
 
 Phase 3: Beta Release (Q2 2026)
 

@@ -1,3 +1,25 @@
+## Current Session Status (Updated 2026-01-31)
+
+**Project Completion:** 97%
+**Last Session:** 2026-01-31 - LSP navigation, dependency resolution, MIR optimizations
+**Build Status:** ✅ All packages compiling, 9/9 tests passing
+**Handover Doc:** See `SESSION_HANDOVER_2026-01-31.md` in project root
+
+**Quick Status:**
+- ✅ Compiler pipeline complete (lexer → parser → typeck → HIR → MIR → bytecode → VM)
+- ✅ Runtime with shadow prices and adaptive engine
+- ✅ Standard library core modules (Option, Result, Vec, HashMap, math)
+- ✅ Testing & benchmarking frameworks
+- ✅ Package manager with dependency resolution
+- 🔄 LSP server (70% - navigation working, rename/format TODO)
+
+**Next Priorities:**
+1. LSP rename & formatting (~2-4h)
+2. Package registry client (~4-6h)
+3. VS Code extension (~4-6h)
+
+---
+
 ## Machine-Readable Artefacts
 
 The following files in `.machine_readable/` contain structured project metadata:

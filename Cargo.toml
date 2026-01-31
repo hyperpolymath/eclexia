@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: PMPL-1.0-or-later
 # SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 [workspace]
@@ -13,7 +13,7 @@ members = [
     "compiler/eclexia-mir",
     "compiler/eclexia-codegen",
     "compiler/eclexia-interp",
-    "runtime/eclexia-runtime",
+    "runtime/eclexia-runtime", "compiler/eclexia-lsp",
 ]
 
 [workspace.package]
@@ -48,6 +48,7 @@ ariadne = "0.4"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+toml = "0.8"
 
 # CLI
 clap = { version = "4", features = ["derive"] }
