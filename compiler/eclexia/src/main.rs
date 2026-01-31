@@ -8,6 +8,10 @@ use std::path::PathBuf;
 
 mod commands;
 mod repl;
+mod test_runner;
+mod bench_runner;
+mod package;
+mod resolver;
 
 #[derive(Parser)]
 #[command(name = "eclexia")]

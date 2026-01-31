@@ -63,6 +63,15 @@ impl Default for SourceFile {
     }
 }
 
+/// An attribute attached to an item (#[attr] or #[attr(args)])
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Attribute {
+    pub span: Span,
+    pub name: Ident,
+    pub args: Vec<Ident>,
+}
+
 /// Top-level item in a source file
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -88,6 +97,7 @@ pub struct Function {
     pub params: Vec<Param>,
     pub return_type: Option<TypeId>,
     pub constraints: Vec<Constraint>,
+    pub attributes: Vec<Attribute>,
     pub body: Block,
 }
 
@@ -100,6 +110,7 @@ pub struct AdaptiveFunction {
     pub params: Vec<Param>,
     pub return_type: Option<TypeId>,
     pub constraints: Vec<Constraint>,
+    pub attributes: Vec<Attribute>,
     pub optimize: Vec<Objective>,
     pub solutions: Vec<Solution>,
 }

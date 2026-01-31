@@ -237,142 +237,140 @@ def main() -> Unit
 
 /// Run tests.
 pub fn test(filter: Option<&str>) -> miette::Result<()> {
-    println!("Running tests...\n");
+    use crate::test_runner;
 
     // Look for test files in src/ and tests/
-    let test_patterns = ["src/**/*_test.ecl", "tests/**/*.ecl"];
+    let test_patterns = ["src/**/*.ecl", "tests/**/*.ecl"];
     let mut test_files = Vec::new();
 
     for pattern in test_patterns {
         for entry in glob::glob(pattern).into_diagnostic()? {
             if let Ok(path) = entry {
-                if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
-                    if let Some(f) = filter {
-                        if !name.contains(f) {
-                            continue;
-                        }
-                    }
-                    test_files.push(path);
-                }
+                test_files.push(path);
             }
         }
     }
 
     if test_files.is_empty() {
         println!("No test files found.");
-        println!("Test files should be named *_test.ecl or placed in tests/");
+        println!("Test files should be placed in src/ or tests/");
         return Ok(());
     }
 
-    let mut passed = 0;
-    let mut failed = 0;
+    let mut total_summary = test_runner::TestSummary::default();
 
     for test_file in &test_files {
-        print!("test {} ... ", test_file.display());
-
         let source = match std::fs::read_to_string(test_file) {
             Ok(s) => s,
             Err(e) => {
-                println!("FAILED (read error: {})", e);
-                failed += 1;
+                eprintln!("Failed to read {}: {}", test_file.display(), e);
                 continue;
             }
         };
 
         let (file, errors) = eclexia_parser::parse(&source);
         if !errors.is_empty() {
-            println!("FAILED (parse error)");
-            failed += 1;
+            eprintln!("Parse errors in {}:", test_file.display());
+            for err in &errors {
+                eprintln!("  {}", err.format_with_source(&source));
+            }
             continue;
         }
 
-        let type_errors = eclexia_typeck::check(&file);
-        if !type_errors.is_empty() {
-            println!("FAILED (type error)");
-            failed += 1;
+        // Collect and run tests from this file
+        let tests = test_runner::collect_tests(&file);
+        if tests.is_empty() {
             continue;
         }
 
-        match eclexia_interp::run(&file) {
-            Ok(_) => {
-                println!("ok");
-                passed += 1;
-            }
-            Err(e) => {
-                println!("FAILED ({})", e);
-                failed += 1;
-            }
-        }
+        let summary = test_runner::run_all_tests(&file, filter, true);
+        total_summary.passed += summary.passed;
+        total_summary.failed += summary.failed;
+        total_summary.ignored += summary.ignored;
+        total_summary.total_duration_ms += summary.total_duration_ms;
     }
 
-    println!("\ntest result: {}. {} passed; {} failed",
-             if failed == 0 { "ok" } else { "FAILED" },
-             passed, failed);
-
-    if failed > 0 {
-        Err(miette::miette!("{} test(s) failed", failed))
-    } else {
-        Ok(())
+    // Exit with error code if tests failed
+    if total_summary.failed > 0 {
+        return Err(miette::miette!("{} tests failed", total_summary.failed));
     }
+
+    if total_summary.passed == 0 {
+        println!("No tests found.");
+        println!("Add #[test] attribute to functions to mark them as tests.");
+        return Ok(());
+    }
+
+    println!("✓ All {} tests passed", total_summary.passed);
+    Ok(())
 }
 
 /// Run benchmarks.
 pub fn bench(filter: Option<&str>) -> miette::Result<()> {
-    println!("Running benchmarks...\n");
+    use crate::bench_runner;
 
-    // Look for benchmark files
-    let bench_patterns = ["src/**/*_bench.ecl", "benches/**/*.ecl"];
+    // Look for benchmark files in src/ and benches/
+    let bench_patterns = ["src/**/*.ecl", "benches/**/*.ecl"];
     let mut bench_files = Vec::new();
 
     for pattern in bench_patterns {
         for entry in glob::glob(pattern).into_diagnostic()? {
             if let Ok(path) = entry {
-                if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
-                    if let Some(f) = filter {
-                        if !name.contains(f) {
-                            continue;
-                        }
-                    }
-                    bench_files.push(path);
-                }
+                bench_files.push(path);
             }
         }
     }
 
     if bench_files.is_empty() {
         println!("No benchmark files found.");
-        println!("Benchmark files should be named *_bench.ecl or placed in benches/");
+        println!("Benchmark files should be placed in src/ or benches/");
         return Ok(());
     }
 
-    for bench_file in &bench_files {
-        println!("benchmark {} ...", bench_file.display());
+    let mut total_summary = bench_runner::BenchSummary::default();
+    const ITERATIONS: usize = 100; // Number of iterations per benchmark
 
+    for bench_file in &bench_files {
         let source = match std::fs::read_to_string(bench_file) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("  Error reading file: {}", e);
+                eprintln!("Failed to read {}: {}", bench_file.display(), e);
                 continue;
             }
         };
 
         let (file, errors) = eclexia_parser::parse(&source);
         if !errors.is_empty() {
-            eprintln!("  Parse errors");
+            eprintln!("Parse errors in {}:", bench_file.display());
+            for err in &errors {
+                eprintln!("  {}", err.format_with_source(&source));
+            }
             continue;
         }
 
-        let start = std::time::Instant::now();
-        match eclexia_interp::run(&file) {
-            Ok(_) => {
-                let elapsed = start.elapsed();
-                println!("  time: {:?}", elapsed);
-            }
-            Err(e) => {
-                eprintln!("  Error: {}", e);
-            }
+        // Collect and run benchmarks from this file
+        let benches = bench_runner::collect_benchmarks(&file);
+        if benches.is_empty() {
+            continue;
         }
+
+        let summary = bench_runner::run_all_benchmarks(&file, filter, ITERATIONS, true);
+        total_summary.benchmarks_run += summary.benchmarks_run;
+        total_summary.benchmarks_failed += summary.benchmarks_failed;
+        total_summary.benchmarks_ignored += summary.benchmarks_ignored;
     }
 
+    // Exit with error code if benchmarks failed
+    if total_summary.benchmarks_failed > 0 {
+        return Err(miette::miette!("{} benchmarks failed", total_summary.benchmarks_failed));
+    }
+
+    if total_summary.benchmarks_run == 0 {
+        println!("No benchmarks found.");
+        println!("Add #[bench] attribute to functions to mark them as benchmarks.");
+        return Ok(());
+    }
+
+    println!("✓ All {} benchmarks passed", total_summary.benchmarks_run);
     Ok(())
 }

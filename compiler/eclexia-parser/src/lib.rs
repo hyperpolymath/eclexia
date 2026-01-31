@@ -56,16 +56,63 @@ impl<'src> Parser<'src> {
 
     /// Parse a single top-level item.
     fn parse_item(&mut self, file: &mut SourceFile) -> ParseResult<Item> {
+        // Parse attributes (#[test], #[bench], etc.)
+        let attributes = self.parse_attributes()?;
+
         let token = self.peek();
 
         match &token.kind {
-            TokenKind::Adaptive => self.parse_adaptive_function(file).map(Item::AdaptiveFunction),
-            TokenKind::Def | TokenKind::Fn => self.parse_function(file).map(Item::Function),
+            TokenKind::Adaptive => {
+                let mut func = self.parse_adaptive_function(file)?;
+                func.attributes = attributes;
+                Ok(Item::AdaptiveFunction(func))
+            }
+            TokenKind::Def | TokenKind::Fn => {
+                let mut func = self.parse_function(file)?;
+                func.attributes = attributes;
+                Ok(Item::Function(func))
+            }
             TokenKind::Type => self.parse_type_def(file).map(Item::TypeDef),
             TokenKind::Import => self.parse_import().map(Item::Import),
             TokenKind::Const => self.parse_const(file).map(Item::Const),
             _ => Err(ParseError::unexpected_token(token.clone(), "item")),
         }
+    }
+
+    /// Parse attributes (#[name] or #[name(args)])
+    fn parse_attributes(&mut self) -> ParseResult<Vec<Attribute>> {
+        let mut attributes = Vec::new();
+
+        while self.check(TokenKind::Hash) {
+            self.advance(); // consume #
+            self.expect(TokenKind::LBracket)?;
+
+            let start = self.peek().span;
+            let name = self.expect_ident()?;
+            let mut args = Vec::new();
+
+            // Optional arguments: #[attr(arg1, arg2)]
+            if self.check(TokenKind::LParen) {
+                self.advance();
+                if !self.check(TokenKind::RParen) {
+                    loop {
+                        args.push(self.expect_ident()?);
+                        if !self.check(TokenKind::Comma) {
+                            break;
+                        }
+                        self.advance();
+                    }
+                }
+                self.expect(TokenKind::RParen)?;
+            }
+
+            let end = self.expect(TokenKind::RBracket)?;
+            let span = start.merge(end);
+
+            attributes.push(Attribute { span, name, args });
+        }
+
+        Ok(attributes)
     }
 
     /// Parse a regular function definition.
@@ -105,6 +152,7 @@ impl<'src> Parser<'src> {
             params,
             return_type,
             constraints,
+            attributes: vec![],
             body,
         })
     }
@@ -154,6 +202,7 @@ impl<'src> Parser<'src> {
             params,
             return_type,
             constraints,
+            attributes: vec![],
             optimize,
             solutions,
         })

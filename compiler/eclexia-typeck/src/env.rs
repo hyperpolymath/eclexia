@@ -47,6 +47,15 @@ impl TypeEnv {
     pub fn insert_mono(&mut self, name: SmolStr, ty: Ty) {
         self.insert(name, TypeScheme::mono(ty));
     }
+
+    /// Get all available names in this environment and parent environments.
+    pub fn available_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self.bindings.keys().map(|s| s.to_string()).collect();
+        if let Some(parent) = &self.parent {
+            names.extend(parent.available_names());
+        }
+        names
+    }
 }
 
 impl Default for TypeEnv {

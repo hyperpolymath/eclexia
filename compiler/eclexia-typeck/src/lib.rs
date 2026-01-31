@@ -128,7 +128,8 @@ impl<'a> TypeChecker<'a> {
         let ret = if let Some(ty_id) = func.return_type {
             self.resolve_ast_type(ty_id)
         } else {
-            Ty::Primitive(PrimitiveTy::Unit)
+            // Create a fresh type variable for inferred return type
+            self.fresh_var()
         };
 
         Ty::Function {
@@ -150,7 +151,8 @@ impl<'a> TypeChecker<'a> {
         let ret = if let Some(ty_id) = func.return_type {
             self.resolve_ast_type(ty_id)
         } else {
-            Ty::Primitive(PrimitiveTy::Unit)
+            // Create a fresh type variable for inferred return type
+            self.fresh_var()
         };
 
         Ty::Function {
@@ -360,6 +362,7 @@ impl<'a> TypeChecker<'a> {
                         self.errors.push(TypeError::Custom {
                             span: self.file.exprs[*iter].span,
                             message: format!("expected array, found {}", iter_ty),
+                            hint: None,
                         });
                         Ty::Error
                     }
@@ -385,10 +388,14 @@ impl<'a> TypeChecker<'a> {
                 if let Some(scheme) = self.env.lookup(name.as_str()) {
                     scheme.ty.clone()
                 } else {
-                    self.errors.push(TypeError::Undefined {
-                        span: expr.span,
-                        name: name.to_string(),
-                    });
+                    // Collect available variable names for suggestions
+                    let available = self.env.available_names();
+                    let available_refs: Vec<&str> = available.iter().map(|s| s.as_str()).collect();
+                    self.errors.push(TypeError::undefined_with_suggestions(
+                        expr.span,
+                        name.to_string(),
+                        &available_refs,
+                    ));
                     Ty::Error
                 }
             }
@@ -416,6 +423,7 @@ impl<'a> TypeChecker<'a> {
                                 self.errors.push(TypeError::Custom {
                                     span: expr.span,
                                     message: format!("expected {} arguments, found {}", params.len(), arg_tys.len()),
+                            hint: None,
                                 });
                             } else {
                                 for (param, arg) in params.iter().zip(arg_tys.iter()) {
@@ -435,6 +443,7 @@ impl<'a> TypeChecker<'a> {
                         self.errors.push(TypeError::Custom {
                             span: expr.span,
                             message: format!("expected function, found {}", func_ty),
+                            hint: None,
                         });
                         Ty::Error
                     }
@@ -503,6 +512,7 @@ impl<'a> TypeChecker<'a> {
                         self.errors.push(TypeError::Custom {
                             span: expr.span,
                             message: format!("expected array or tuple, found {}", arr_ty),
+                            hint: None,
                         });
                         Ty::Error
                     }
@@ -517,6 +527,7 @@ impl<'a> TypeChecker<'a> {
                         self.errors.push(TypeError::Custom {
                             span: expr.span,
                             message: format!("cannot access field '{}' on type {}", field, obj_ty),
+                            hint: None,
                         });
                         Ty::Error
                     }
@@ -601,6 +612,7 @@ impl<'a> TypeChecker<'a> {
                                 span,
                                 dim1: d1.to_string(),
                                 dim2: d2.to_string(),
+                                hint: Some("resources can only be added/subtracted if they have the same dimension".to_string()),
                             });
                             return Ty::Error;
                         }
@@ -609,6 +621,7 @@ impl<'a> TypeChecker<'a> {
                             self.errors.push(TypeError::Custom {
                                 span,
                                 message: format!("cannot add {} and {} (incompatible base types)", b1.name(), b2.name()),
+                            hint: None,
                             });
                             return Ty::Error;
                         }
@@ -651,6 +664,7 @@ impl<'a> TypeChecker<'a> {
                         self.errors.push(TypeError::Custom {
                             span,
                             message: "resource exponentiation requires constant integer exponent (not yet implemented)".to_string(),
+                            hint: None,
                         });
                         Ty::Error
                     }
@@ -668,6 +682,7 @@ impl<'a> TypeChecker<'a> {
                             self.errors.push(TypeError::Custom {
                                 span,
                                 message: format!("cannot apply {:?} to {} and {}", op, lhs, rhs),
+                            hint: None,
                             });
                             Ty::Error
                         }
@@ -696,6 +711,7 @@ impl<'a> TypeChecker<'a> {
                     self.errors.push(TypeError::Custom {
                         span,
                         message: format!("bitwise operations require integers, found {}", lhs),
+                            hint: None,
                     });
                     Ty::Error
                 }
@@ -713,6 +729,7 @@ impl<'a> TypeChecker<'a> {
                     self.errors.push(TypeError::Custom {
                         span,
                         message: format!("cannot negate {}", operand),
+                            hint: None,
                     });
                     Ty::Error
                 }
@@ -725,6 +742,7 @@ impl<'a> TypeChecker<'a> {
                     self.errors.push(TypeError::Custom {
                         span,
                         message: format!("bitwise not requires integer, found {}", operand),
+                            hint: None,
                     });
                     Ty::Error
                 }
@@ -758,6 +776,7 @@ impl<'a> TypeChecker<'a> {
                             self.errors.push(TypeError::ResourceViolation {
                                 span: constraint.span,
                                 message: format!("unknown resource type '{}'", other),
+                                hint: Some("valid resource types are: energy, time, memory, carbon, power".to_string()),
                             });
                             continue;
                         }
@@ -771,12 +790,14 @@ impl<'a> TypeChecker<'a> {
                                     span: constraint.span,
                                     dim1: dimension.to_string(),
                                     dim2: unit.dimension.to_string(),
+                                    hint: Some(format!("expected {} dimension, found {}", dimension, unit.dimension)),
                                 });
                             }
                         } else {
                             self.errors.push(TypeError::ResourceViolation {
                                 span: constraint.span,
                                 message: format!("unknown unit '{}'", unit_name),
+                                hint: Some("check the spelling of the unit".to_string()),
                             });
                         }
                     }
@@ -806,6 +827,7 @@ impl<'a> TypeChecker<'a> {
                     self.errors.push(TypeError::ResourceViolation {
                         span: provision.span,
                         message: format!("unknown resource type '{}'", other),
+                        hint: Some("valid resource types are: energy, time, memory, carbon, power".to_string()),
                     });
                     continue;
                 }
@@ -819,12 +841,14 @@ impl<'a> TypeChecker<'a> {
                             span: provision.span,
                             dim1: dimension.to_string(),
                             dim2: unit.dimension.to_string(),
+                            hint: Some(format!("expected {} dimension, found {}", dimension, unit.dimension)),
                         });
                     }
                 } else {
                     self.errors.push(TypeError::ResourceViolation {
                         span: provision.span,
                         message: format!("unknown unit '{}'", unit_name),
+                        hint: Some("check the spelling of the unit".to_string()),
                     });
                 }
             }
@@ -833,77 +857,8 @@ impl<'a> TypeChecker<'a> {
 
     /// Unify two types.
     fn unify(&mut self, t1: &Ty, t2: &Ty, span: eclexia_ast::span::Span) -> Result<(), TypeError> {
-        let t1 = self.apply(t1);
-        let t2 = self.apply(t2);
-
-        if t1 == t2 {
-            return Ok(());
-        }
-
-        match (&t1, &t2) {
-            (Ty::Error, _) | (_, Ty::Error) => Ok(()),
-
-            (Ty::Var(v), t) | (t, Ty::Var(v)) => {
-                if matches!(t, Ty::Var(v2) if v == v2) {
-                    Ok(())
-                } else {
-                    self.substitution.insert(*v, t.clone());
-                    Ok(())
-                }
-            }
-
-            (Ty::Primitive(p1), Ty::Primitive(p2)) if p1 == p2 => Ok(()),
-
-            (Ty::Function { params: p1, ret: r1 }, Ty::Function { params: p2, ret: r2 }) => {
-                if p1.len() != p2.len() {
-                    return Err(TypeError::Mismatch { span, expected: t1, found: t2 });
-                }
-                for (a, b) in p1.iter().zip(p2.iter()) {
-                    self.unify(a, b, span)?;
-                }
-                self.unify(r1, r2, span)
-            }
-
-            (Ty::Tuple(e1), Ty::Tuple(e2)) => {
-                if e1.len() != e2.len() {
-                    return Err(TypeError::Mismatch { span, expected: t1, found: t2 });
-                }
-                for (a, b) in e1.iter().zip(e2.iter()) {
-                    self.unify(a, b, span)?;
-                }
-                Ok(())
-            }
-
-            (Ty::Array { elem: e1, .. }, Ty::Array { elem: e2, .. }) => {
-                self.unify(e1, e2, span)
-            }
-
-            (Ty::Named { name: n1, args: a1 }, Ty::Named { name: n2, args: a2 }) if n1 == n2 => {
-                if a1.len() != a2.len() {
-                    return Err(TypeError::Mismatch { span, expected: t1, found: t2 });
-                }
-                for (a, b) in a1.iter().zip(a2.iter()) {
-                    self.unify(a, b, span)?;
-                }
-                Ok(())
-            }
-
-            (Ty::Resource { base: b1, dimension: d1 }, Ty::Resource { base: b2, dimension: d2 }) => {
-                if d1 != d2 {
-                    return Err(TypeError::DimensionMismatch {
-                        span,
-                        dim1: d1.to_string(),
-                        dim2: d2.to_string(),
-                    });
-                }
-                if b1 != b2 {
-                    return Err(TypeError::Mismatch { span, expected: t1, found: t2 });
-                }
-                Ok(())
-            }
-
-            _ => Err(TypeError::Mismatch { span, expected: t1, found: t2 }),
-        }
+        // Delegate to unify_with_occurs_check for proper infinite type detection
+        self.unify_with_occurs_check(t1, t2, span)
     }
 
     /// Apply the current substitution to a type.

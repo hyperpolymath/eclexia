@@ -43,10 +43,24 @@ impl<'a> LoweringContext<'a> {
 
     /// Get the type of an AST expression
     fn expr_type(&self, expr_id: ast::ExprId) -> Ty {
-        self.types
-            .get(&expr_id)
-            .cloned()
-            .unwrap_or(Ty::Primitive(PrimitiveTy::Unit))
+        // First check if we have a type from the type checker
+        if let Some(ty) = self.types.get(&expr_id) {
+            return ty.clone();
+        }
+
+        // Otherwise, infer simple types from literals
+        let expr = &self.source.exprs[expr_id];
+        match &expr.kind {
+            ast::ExprKind::Literal(lit) => match lit {
+                ast::Literal::Int(_) => Ty::Primitive(PrimitiveTy::Int),
+                ast::Literal::Float(_) => Ty::Primitive(PrimitiveTy::Float),
+                ast::Literal::Bool(_) => Ty::Primitive(PrimitiveTy::Bool),
+                ast::Literal::String(_) => Ty::Primitive(PrimitiveTy::String),
+                ast::Literal::Char(_) => Ty::Primitive(PrimitiveTy::Char),
+                ast::Literal::Unit => Ty::Primitive(PrimitiveTy::Unit),
+            },
+            _ => Ty::Primitive(PrimitiveTy::Unit),
+        }
     }
 
     /// Define a local variable
@@ -455,8 +469,10 @@ impl<'a> LoweringContext<'a> {
                 if let Some(local_id) = self.lookup_local(name.as_str()) {
                     ExprKind::Local(local_id)
                 } else {
-                    // Unresolved variable - error should be caught in type checking
-                    ExprKind::Literal(Literal::Unit)
+                    // Not a local variable - might be a function name
+                    // Create a placeholder local for it (will be resolved in MIR)
+                    let local_id = self.define_local(expr.span, name.clone(), Ty::Primitive(PrimitiveTy::Unit), false);
+                    ExprKind::Local(local_id)
                 }
             }
 

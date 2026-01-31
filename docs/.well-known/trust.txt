@@ -1,0 +1,57 @@
+# Trust and Transparency Information for eclexia.org
+# https://github.com/nightwatchcybersecurity/trustandtransparency.org
+
+# === Organization Information ===
+Organization: hyperpolymath
+Legal Name: Jonathan D.A. Jewell
+Country: United Kingdom
+Contact: info@eclexia.org
+Website: https://eclexia.org
+
+# === Responsible Disclosure ===
+Security Contact: security@eclexia.org
+Security Policy: https://github.com/hyperpolymath/eclexia/security/policy
+Bug Bounty: Not currently available
+Encryption: https://keys.openpgp.org/search?q=jonathan.jewell@open.ac.uk
+
+# === Privacy ===
+Privacy Policy: https://eclexia.org/privacy
+Data Controller: Jonathan D.A. Jewell
+Data Protection Officer: privacy@eclexia.org
+GDPR Compliance: Yes
+Consent Management: Consent-Aware HTTP (cookie-based)
+
+# === Transparency ===
+Open Source: Yes
+License: PMPL-1.0-or-later (https://palimpsest.spdx.dev)
+Source Code: https://github.com/hyperpolymath/eclexia
+Issue Tracker: https://github.com/hyperpolymath/eclexia/issues
+Changelog: https://github.com/hyperpolymath/eclexia/releases
+
+# === Infrastructure ===
+Hosting: GitHub Pages
+CDN: Cloudflare
+TLS Provider: Let's Encrypt, DigiCert
+DNS: Cloudflare
+Analytics: Self-hosted (consent required)
+
+# === Third-Party Services ===
+# None currently (all self-hosted or GitHub-hosted)
+
+# === Compliance & Standards ===
+WCAG Level: AA (target)
+RFC 9116: Compliant (security.txt)
+HSTS Preload: Yes
+CAA Records: Yes (flag 128)
+SPF/DMARC: Yes
+
+# === Contact Methods ===
+Email: info@eclexia.org
+GitHub: https://github.com/hyperpolymath/eclexia
+Security Email: security@eclexia.org
+PGP Key: https://keys.openpgp.org/search?q=jonathan.jewell@open.ac.uk
+
+# === Verification ===
+Last Updated: 2026-01-31
+Verified By: Jonathan D.A. Jewell
+Canonical URL: https://eclexia.org/.well-known/trust.txt

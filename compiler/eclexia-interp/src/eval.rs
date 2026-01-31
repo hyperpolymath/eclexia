@@ -247,7 +247,7 @@ impl Interpreter {
                         if i < arr.len() {
                             Ok(arr[i].clone())
                         } else {
-                            Err(RuntimeError::IndexOutOfBounds { index: i, len: arr.len(), span: None })
+                            Err(RuntimeError::IndexOutOfBounds { index: i, len: arr.len(), span: None, hint: None })
                         }
                     }
                     (Value::Tuple(t), Some(i)) => {
@@ -255,7 +255,7 @@ impl Interpreter {
                         if i < t.len() {
                             Ok(t[i].clone())
                         } else {
-                            Err(RuntimeError::IndexOutOfBounds { index: i, len: t.len(), span: None })
+                            Err(RuntimeError::IndexOutOfBounds { index: i, len: t.len(), span: None, hint: None })
                         }
                     }
                     _ => Err(RuntimeError::type_error("array or tuple", arr.type_name())),
@@ -271,7 +271,7 @@ impl Interpreter {
                         .ok_or_else(|| RuntimeError::NoSuchField {
                             struct_name: name.to_string(),
                             field: field.to_string(),
-                            span: None,
+                            span: None, hint: None,
                         }),
                     _ => Err(RuntimeError::type_error("struct", val.type_name())),
                 }
@@ -386,8 +386,8 @@ impl Interpreter {
                 _ => Err(RuntimeError::type_error("numeric", lhs.type_name())),
             },
             BinaryOp::Div => match (&lhs, &rhs) {
-                (_, Value::Int(0)) => Err(RuntimeError::DivisionByZero { span: None }),
-                (_, Value::Float(f)) if *f == 0.0 => Err(RuntimeError::DivisionByZero { span: None }),
+                (_, Value::Int(0)) => Err(RuntimeError::DivisionByZero { span: None, hint: None }),
+                (_, Value::Float(f)) if *f == 0.0 => Err(RuntimeError::DivisionByZero { span: None, hint: None }),
                 (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a / b)),
                 (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
                 (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 / b)),
@@ -627,7 +627,7 @@ impl Interpreter {
                 if args.len() != func.params.len() {
                     return Err(RuntimeError::ArityMismatch {
                         expected: func.params.len(),
-                        got: args.len(),
+                        got: args.len(), hint: None,
                     });
                 }
 
@@ -667,7 +667,7 @@ impl Interpreter {
                 if args.len() != func.params.len() {
                     return Err(RuntimeError::ArityMismatch {
                         expected: func.params.len(),
-                        got: args.len(),
+                        got: args.len(), hint: None,
                     });
                 }
 
@@ -713,6 +713,7 @@ impl Interpreter {
 
                 Err(RuntimeError::NoSuitableSolution {
                     name: func.name.to_string(),
+                    hint: None,
                 })
             }
 
@@ -720,7 +721,7 @@ impl Interpreter {
 
             _ => Err(RuntimeError::NotCallable {
                 ty: callee.type_name().to_string(),
-                span: None,
+                span: None, hint: None,
             }),
         }
     }
@@ -794,6 +795,7 @@ impl Interpreter {
                 "no solution satisfies constraints (@requires: energy < {:.1}J, latency < {:.1}ms, carbon < {:.1}gCO2e)",
                 energy_limit, latency_limit, carbon_limit
             ),
+            hint: Some("try relaxing the resource constraints or providing more solutions".to_string()),
         })
     }
 

@@ -1,0 +1,33 @@
+[package]
+name = "eclexia"
+version = "0.1.0"
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+edition = "2025"
+description = "Resource-aware programming language with dimensional type system"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/hyperpolymath/eclexia"
+
+[dependencies]
+# No external dependencies yet
+
+[dev-dependencies]
+# No dev dependencies yet
+
+[build]
+output = "bin"
+entry = "src/main.ecl"
+
+[resources]
+# Default resource budgets
+energy = "10J"
+time = "1s"
+memory = "100MB"
+carbon = "10gCO2e"
+
+[features]
+default = ["std", "runtime", "vm"]
+std = []
+runtime = []
+vm = []
+jit = []
+lsp = []
