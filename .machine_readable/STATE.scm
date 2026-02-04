@@ -17,8 +17,8 @@
     (tech-stack ()))
 
   (current-position
-    (phase "initial")
-    (overall-completion 0)
+    (phase "research-preview")
+    (overall-completion 97)
     (components ())
     (working-features ()))
 
