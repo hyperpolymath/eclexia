@@ -26,5 +26,8 @@ eclexia-parser = { path = "../eclexia-parser" }
 eclexia-typeck = { path = "../eclexia-typeck" }
 eclexia-ast = { path = "../eclexia-ast" }
 
+[dev-dependencies]
+smol_str = "0.2"
+
 [features]
 default = []
