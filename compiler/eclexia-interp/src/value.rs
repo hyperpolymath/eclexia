@@ -6,7 +6,7 @@
 use eclexia_ast::dimension::Dimension;
 use eclexia_ast::ExprId;
 use smol_str::SmolStr;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -35,6 +35,10 @@ pub enum Value {
     Tuple(Vec<Value>),
     /// Array
     Array(Rc<RefCell<Vec<Value>>>),
+    /// HashMap: key-value lookup table (keys are strings for simplicity)
+    HashMap(Rc<RefCell<HashMap<SmolStr, Value>>>),
+    /// SortedMap: ordered key-value map (keys are strings, ordered lexicographically)
+    SortedMap(Rc<RefCell<BTreeMap<SmolStr, Value>>>),
     /// Struct instance
     Struct {
         name: SmolStr,
@@ -131,6 +135,8 @@ impl Value {
             Value::Unit => false,
             Value::String(s) => !s.is_empty(),
             Value::Array(arr) => !arr.borrow().is_empty(),
+            Value::HashMap(map) => !map.borrow().is_empty(),
+            Value::SortedMap(map) => !map.borrow().is_empty(),
             Value::Tuple(t) => !t.is_empty(),
             _ => true,
         }
@@ -148,6 +154,8 @@ impl Value {
             Value::Resource { .. } => "Resource",
             Value::Tuple(_) => "Tuple",
             Value::Array(_) => "Array",
+            Value::HashMap(_) => "HashMap",
+            Value::SortedMap(_) => "SortedMap",
             Value::Struct { .. } => "Struct",
             Value::Function(_) => "Function",
             Value::AdaptiveFunction(_) => "AdaptiveFunction",
@@ -221,6 +229,26 @@ impl std::fmt::Display for Value {
                     write!(f, "{}", elem)?;
                 }
                 write!(f, "]")
+            }
+            Value::HashMap(map) => {
+                write!(f, "{{")?;
+                for (i, (k, v)) in map.borrow().iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "\"{}\": {}", k, v)?;
+                }
+                write!(f, "}}")
+            }
+            Value::SortedMap(map) => {
+                write!(f, "SortedMap{{")?;
+                for (i, (k, v)) in map.borrow().iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "\"{}\": {}", k, v)?;
+                }
+                write!(f, "}}")
             }
             Value::Struct { name, fields } => {
                 write!(f, "{} {{ ", name)?;

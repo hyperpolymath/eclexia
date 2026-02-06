@@ -65,6 +65,159 @@ impl<'a> TypeChecker<'a> {
             ret: Box::new(Ty::Array { elem: Box::new(Ty::Primitive(PrimitiveTy::Int)), size: None }),
         });
 
+        // Collection builtins: HashMap
+        let hashmap_ty = Ty::Named { name: SmolStr::new("HashMap"), args: vec![] };
+        env.insert_mono(SmolStr::new("hashmap_new"), Ty::Function {
+            params: vec![],
+            ret: Box::new(hashmap_ty.clone()),
+        });
+        env.insert_mono(SmolStr::new("hashmap_insert"), Ty::Function {
+            params: vec![], // Variadic-like: (map, key, value)
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+        });
+        env.insert_mono(SmolStr::new("hashmap_get"), Ty::Function {
+            params: vec![], // (map, key)
+            ret: Box::new(Ty::Var(TypeVar::new(0))),
+        });
+        env.insert_mono(SmolStr::new("hashmap_remove"), Ty::Function {
+            params: vec![], // (map, key)
+            ret: Box::new(Ty::Var(TypeVar::new(0))),
+        });
+        env.insert_mono(SmolStr::new("hashmap_contains"), Ty::Function {
+            params: vec![], // (map, key)
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
+        });
+        env.insert_mono(SmolStr::new("hashmap_len"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+        });
+        env.insert_mono(SmolStr::new("hashmap_keys"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Array { elem: Box::new(Ty::Primitive(PrimitiveTy::String)), size: None }),
+        });
+        env.insert_mono(SmolStr::new("hashmap_values"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
+        });
+        env.insert_mono(SmolStr::new("hashmap_entries"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
+        });
+
+        // Collection builtins: SortedMap
+        let sortedmap_ty = Ty::Named { name: SmolStr::new("SortedMap"), args: vec![] };
+        env.insert_mono(SmolStr::new("sortedmap_new"), Ty::Function {
+            params: vec![],
+            ret: Box::new(sortedmap_ty.clone()),
+        });
+        env.insert_mono(SmolStr::new("sortedmap_insert"), Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+        });
+        env.insert_mono(SmolStr::new("sortedmap_get"), Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Var(TypeVar::new(0))),
+        });
+        env.insert_mono(SmolStr::new("sortedmap_remove"), Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Var(TypeVar::new(0))),
+        });
+        env.insert_mono(SmolStr::new("sortedmap_len"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+        });
+        env.insert_mono(SmolStr::new("sortedmap_keys"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Array { elem: Box::new(Ty::Primitive(PrimitiveTy::String)), size: None }),
+        });
+        env.insert_mono(SmolStr::new("sortedmap_min_key"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Var(TypeVar::new(0))),
+        });
+        env.insert_mono(SmolStr::new("sortedmap_max_key"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Var(TypeVar::new(0))),
+        });
+        env.insert_mono(SmolStr::new("sortedmap_range"), Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
+        });
+
+        // Collection builtins: Queue
+        env.insert_mono(SmolStr::new("queue_new"), Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
+        });
+        env.insert_mono(SmolStr::new("queue_enqueue"), Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+        });
+        env.insert_mono(SmolStr::new("queue_dequeue"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Var(TypeVar::new(0))),
+        });
+        env.insert_mono(SmolStr::new("queue_peek"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Var(TypeVar::new(0))),
+        });
+        env.insert_mono(SmolStr::new("queue_len"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+        });
+        env.insert_mono(SmolStr::new("queue_is_empty"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
+        });
+
+        // Collection builtins: PriorityQueue
+        let pq_ty = Ty::Named { name: SmolStr::new("PriorityQueue"), args: vec![] };
+        env.insert_mono(SmolStr::new("priority_queue_new"), Ty::Function {
+            params: vec![],
+            ret: Box::new(pq_ty),
+        });
+        env.insert_mono(SmolStr::new("priority_queue_push"), Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+        });
+        env.insert_mono(SmolStr::new("priority_queue_pop"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Var(TypeVar::new(0))),
+        });
+        env.insert_mono(SmolStr::new("priority_queue_peek"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Var(TypeVar::new(0))),
+        });
+        env.insert_mono(SmolStr::new("priority_queue_len"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+        });
+
+        // Collection builtins: Set operations
+        env.insert_mono(SmolStr::new("set_union"), Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
+        });
+        env.insert_mono(SmolStr::new("set_intersection"), Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
+        });
+        env.insert_mono(SmolStr::new("set_difference"), Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
+        });
+        env.insert_mono(SmolStr::new("set_symmetric_difference"), Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
+        });
+        env.insert_mono(SmolStr::new("set_is_subset"), Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
+        });
+        env.insert_mono(SmolStr::new("set_from_array"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
+        });
+
         Self {
             file,
             env,

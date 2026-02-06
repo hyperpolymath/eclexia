@@ -6,7 +6,7 @@
      (version "1.0")
      (schema-version "1.0")
      (created "2026-02-04")
-     (updated "2026-02-06")
+     (updated "2026-02-06T2")
      (project "eclexia")
      (repo "hyperpolymath/eclexia"))
 
@@ -17,7 +17,7 @@
 
     (current-position
      (phase "tooling")
-     (overall-completion 90)
+     (overall-completion 92)
      (components
        (("lexer" "Tokenization with dimensional literals" 100)
         ("parser" "Recursive descent with error recovery" 100)
@@ -34,7 +34,7 @@
         ("bench-framework" "#[bench] attribute support" 100)
         ("package-manager" "Manifest parsing + dependency resolution" 90)
         ("lsp" "Diagnostics, symbols, hover, go-to-def, find-refs, completion" 70)
-        ("stdlib" "Core, collections, math modules" 70)
+        ("stdlib" "Core, Collections (Vec, HashMap, HashSet, SortedMap, Queue, PriorityQueue, Set ops), Math" 85)
         ("debugger" "Not started" 0)
         ("vscode-extension" "Not started" 0)
         ("linter" "Not started" 0)
@@ -52,8 +52,8 @@
         "Benchmarking framework with #[bench] attributes"
         "LSP server: diagnostics, document symbols, hover, go-to-definition, find-references, completion"
         "Package manager: manifest parsing, dependency resolution (registry client TODO)"
-        "Standard library: Core (Option, Result, assert, print), Collections (Vec, HashMap, HashSet), Math (trig, log, rounding)"
-        "9 integration tests, all passing"
+        "Standard library: Core (Option, Result, assert, print), Collections (Vec, HashMap, HashSet, SortedMap, Queue, PriorityQueue, Set operations), Math (trig, log, rounding)"
+        "28 collection builtin tests + 41 pre-existing tests, all passing"
         "11 example programs (.ecl files)"
         "ClusterFuzzLite fuzzing support"
         "OpenSSF Scorecard compliance")))
@@ -73,11 +73,11 @@
       ((milestone-id "m2")
        (name "Runtime and Standard Library")
        (status "in-progress")
-       (completion 85)
+       (completion 90)
        (items ("Stack-based VM with shadow pricing"
                "Resource tracking and budget enforcement"
                "Core stdlib (Option, Result, assert, print)"
-               "Collections (Vec, HashMap, HashSet)"
+               "Collections (Vec, HashMap, HashSet, SortedMap, Queue, PriorityQueue, Set ops)"
                "Math module (trig, log, rounding, number theory)"
                "I/O module (TODO)"
                "Text processing module (TODO)"
@@ -133,4 +133,13 @@
     (session-history
      ((date "2026-02-06")
       (accomplishments
-        ("Updated STATE.scm with accurate project status from code audit"))))))
+        ("Updated STATE.scm with accurate project status from code audit")))
+     ((date "2026-02-06-b")
+      (accomplishments
+        ("Implemented stdlib collections: SortedMap, Queue, PriorityQueue, Set operations"
+         "Added HashMap and SortedMap Value variants to interpreter"
+         "Implemented 40+ collection builtin functions in Rust"
+         "Registered all collection types in the type checker"
+         "Extended collections.ecl with full API documentation"
+         "Added 28 unit tests for all collection builtins (all passing)"
+         "All 69 workspace tests pass, no regressions"))))))
