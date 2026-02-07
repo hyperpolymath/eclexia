@@ -36,6 +36,20 @@ impl<'src> Parser<'src> {
         self.parse_expr_prec(file, Precedence::None)
     }
 
+    /// Parse an expression without struct literals (for contexts where { starts a block).
+    pub fn parse_expr_no_struct(&mut self, file: &mut SourceFile) -> ParseResult<ExprId> {
+        // Set flag to disable struct literals
+        let old_flag = self.no_struct_literals;
+        self.no_struct_literals = true;
+
+        let result = self.parse_expr_prec(file, Precedence::None);
+
+        // Restore flag
+        self.no_struct_literals = old_flag;
+
+        result
+    }
+
     /// Parse an expression with a minimum precedence.
     fn parse_expr_prec(&mut self, file: &mut SourceFile, min_prec: Precedence) -> ParseResult<ExprId> {
         let mut lhs = self.parse_prefix(file)?;
@@ -102,6 +116,13 @@ impl<'src> Parser<'src> {
             }
 
             // Identifier
+            // NOTE: Struct literals (Name { field: value }) are currently NOT supported
+            // in expression position due to ambiguity with blocks in contexts like:
+            //   for x in arr { body }
+            // Where `arr {` could be mistaken for a struct literal.
+            //
+            // Workaround: Use explicit constructor functions or parse struct literals
+            // only in unambiguous contexts (future enhancement).
             TokenKind::Ident(name) => ExprKind::Var(name),
 
             // Parenthesized expression or tuple
@@ -291,6 +312,96 @@ impl<'src> Parser<'src> {
         Ok(Block { span, stmts, expr })
     }
 
+    /// Parse postfix operations WITHOUT struct literals (for use in contexts where { starts a block).
+    fn parse_postfix_no_struct(&mut self, file: &mut SourceFile, mut expr: ExprId) -> ParseResult<ExprId> {
+        loop {
+            match self.peek().kind {
+                // Function call
+                TokenKind::LParen => {
+                    self.advance();
+                    let mut args = Vec::new();
+                    if !self.check(TokenKind::RParen) {
+                        loop {
+                            args.push(self.parse_expr(file)?);
+                            if !self.check(TokenKind::Comma) {
+                                break;
+                            }
+                            self.advance();
+                        }
+                    }
+                    let end = self.expect(TokenKind::RParen)?;
+
+                    let span = file.exprs[expr].span.merge(end);
+                    let call_expr = Expr {
+                        span,
+                        kind: ExprKind::Call { func: expr, args },
+                    };
+                    expr = file.exprs.alloc(call_expr);
+                }
+
+                // Field access or method call
+                TokenKind::Dot => {
+                    self.advance();
+                    let field = self.expect_ident()?;
+
+                    if self.check(TokenKind::LParen) {
+                        // Method call
+                        self.advance();
+                        let mut args = Vec::new();
+                        if !self.check(TokenKind::RParen) {
+                            loop {
+                                args.push(self.parse_expr(file)?);
+                                if !self.check(TokenKind::Comma) {
+                                    break;
+                                }
+                                self.advance();
+                            }
+                        }
+                        let end = self.expect(TokenKind::RParen)?;
+
+                        let span = file.exprs[expr].span.merge(end);
+                        let method_expr = Expr {
+                            span,
+                            kind: ExprKind::MethodCall {
+                                receiver: expr,
+                                method: field,
+                                args,
+                            },
+                        };
+                        expr = file.exprs.alloc(method_expr);
+                    } else {
+                        // Field access
+                        let span = file.exprs[expr].span.merge(self.previous_span());
+                        let field_expr = Expr {
+                            span,
+                            kind: ExprKind::Field { expr, field },
+                        };
+                        expr = file.exprs.alloc(field_expr);
+                    }
+                }
+
+                // Index access
+                TokenKind::LBracket => {
+                    self.advance();
+                    let index = self.parse_expr(file)?;
+                    let end = self.expect(TokenKind::RBracket)?;
+
+                    let span = file.exprs[expr].span.merge(end);
+                    let index_expr = Expr {
+                        span,
+                        kind: ExprKind::Index { expr, index },
+                    };
+                    expr = file.exprs.alloc(index_expr);
+                }
+
+                // SKIP LBrace (struct literals) - that's the whole point of this function!
+                _ => break,
+            }
+        }
+
+        Ok(expr)
+    }
+
     /// Parse postfix operations (calls, field access, indexing).
     fn parse_postfix(&mut self, file: &mut SourceFile, mut expr: ExprId) -> ParseResult<ExprId> {
         loop {
@@ -374,8 +485,13 @@ impl<'src> Parser<'src> {
                 }
 
                 // Struct literal: Name { field: value, ... }
-                // Only parse as struct literal if expr is a Var (identifier)
+                // Only parse if expr is a Var (identifier) AND struct literals are enabled
                 TokenKind::LBrace => {
+                    // Skip if struct literals are disabled (for loop context)
+                    if self.no_struct_literals {
+                        break;
+                    }
+
                     // Check if the current expression is an identifier
                     if !matches!(file.exprs[expr].kind, ExprKind::Var(_)) {
                         break;

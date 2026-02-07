@@ -25,6 +25,8 @@ pub struct Parser<'src> {
     lexer: Lexer<'src>,
     source: &'src str,
     errors: Vec<ParseError>,
+    /// Disable struct literal parsing in postfix position (for contexts where { starts a block)
+    no_struct_literals: bool,
 }
 
 impl<'src> Parser<'src> {
@@ -34,6 +36,7 @@ impl<'src> Parser<'src> {
             lexer: Lexer::new(source),
             source,
             errors: Vec::new(),
+            no_struct_literals: false,
         }
     }
 
@@ -609,7 +612,9 @@ impl<'src> Parser<'src> {
                 self.advance();
                 let name = self.expect_ident()?;
                 self.expect(TokenKind::In)?;
-                let iter = self.parse_expr(file)?;
+                // Parse iterator expression WITHOUT postfix struct literals
+                // to avoid ambiguity with the for loop body block
+                let iter = self.parse_expr_no_struct(file)?;
                 let body = self.parse_block(file)?;
                 StmtKind::For { name, iter, body }
             }
