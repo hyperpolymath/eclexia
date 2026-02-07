@@ -17,17 +17,18 @@ pub enum Precedence {
     Or = 2,           // or, ||
     And = 3,          // and, &&
     Equality = 4,     // ==, !=
-    Comparison = 5,   // <, >, <=, >=
-    BitOr = 6,        // |
-    BitXor = 7,       // ^
-    BitAnd = 8,       // &
-    Shift = 9,        // <<, >>
-    Term = 10,        // +, -
-    Factor = 11,      // *, /, %
-    Power = 12,       // **
-    Unary = 13,       // !, -, ~
-    Call = 14,        // (), [], .
-    Primary = 15,
+    Cast = 5,         // as
+    Comparison = 6,   // <, >, <=, >=
+    BitOr = 7,        // |
+    BitXor = 8,       // ^
+    BitAnd = 9,       // &
+    Shift = 10,       // <<, >>
+    Term = 11,        // +, -
+    Factor = 12,      // *, /, %
+    Power = 13,       // **
+    Unary = 14,       // !, -, ~
+    Call = 15,        // (), [], .
+    Primary = 16,
 }
 
 impl<'src> Parser<'src> {
@@ -205,7 +206,7 @@ impl<'src> Parser<'src> {
 
             // Match expression
             TokenKind::Match => {
-                let scrutinee = self.parse_expr(file)?;
+                let scrutinee = self.parse_expr_no_struct(file)?;
                 self.expect(TokenKind::LBrace)?;
 
                 let mut arms = Vec::new();
@@ -551,6 +552,20 @@ impl<'src> Parser<'src> {
     ) -> ParseResult<ExprId> {
         let token = self.advance();
 
+        // Handle type cast specially (requires type, not expression)
+        if matches!(token.kind, TokenKind::As) {
+            let target_ty = self.parse_type(file)?;
+            let span = file.exprs[lhs].span.merge(file.types[target_ty].span);
+            let cast_expr = Expr {
+                span,
+                kind: ExprKind::Cast {
+                    expr: lhs,
+                    target_ty,
+                },
+            };
+            return Ok(file.exprs.alloc(cast_expr));
+        }
+
         let op = match token.kind {
             // Arithmetic
             TokenKind::Plus => BinaryOp::Add,
@@ -682,6 +697,7 @@ impl<'src> Parser<'src> {
             TokenKind::PipePipe | TokenKind::Or => Precedence::Or,
             TokenKind::AmpAmp | TokenKind::And => Precedence::And,
             TokenKind::EqEq | TokenKind::BangEq => Precedence::Equality,
+            TokenKind::As => Precedence::Cast,
             TokenKind::Lt | TokenKind::Le | TokenKind::Gt | TokenKind::Ge => Precedence::Comparison,
             TokenKind::DotDot => Precedence::Comparison,
             TokenKind::Pipe => Precedence::BitOr,

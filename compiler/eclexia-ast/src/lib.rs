@@ -373,6 +373,11 @@ pub enum ExprKind {
     },
     /// Resource literal (e.g., 100J, 5ms, 10gCO2e)
     Resource(ResourceAmount),
+    /// Type cast (e.g., x as T)
+    Cast {
+        expr: ExprId,
+        target_ty: TypeId,
+    },
     /// Error placeholder for recovery
     Error,
 }

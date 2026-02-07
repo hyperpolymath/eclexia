@@ -669,13 +669,7 @@ pub fn register(env: &Environment) {
         }),
     );
 
-    env.define(
-        SmolStr::new("None"),
-        Value::Builtin(BuiltinFn {
-            name: "None",
-            func: builtin_none,
-        }),
-    );
+    env.define(SmolStr::new("None"), Value::None);
 
     // Result type constructors
     env.define(
@@ -733,6 +727,14 @@ pub fn register(env: &Environment) {
         Value::Builtin(BuiltinFn {
             name: "is_err",
             func: builtin_is_err,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("unwrap"),
+        Value::Builtin(BuiltinFn {
+            name: "unwrap",
+            func: builtin_unwrap,
         }),
     );
 }
@@ -2376,14 +2378,7 @@ fn builtin_some(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::custom("Some requires exactly 1 argument"));
     }
-
-    let mut fields = HashMap::new();
-    fields.insert(SmolStr::new("0"), args[0].clone());
-
-    Ok(Value::Struct {
-        name: SmolStr::new("Some"),
-        fields,
-    })
+    Ok(Value::Some(Box::new(args[0].clone())))
 }
 
 /// Construct a None variant of Option<T>.
@@ -2392,11 +2387,7 @@ fn builtin_none(args: &[Value]) -> RuntimeResult<Value> {
     if !args.is_empty() {
         return Err(RuntimeError::custom("None takes no arguments"));
     }
-
-    Ok(Value::Struct {
-        name: SmolStr::new("None"),
-        fields: HashMap::new(),
-    })
+    Ok(Value::None)
 }
 
 /// Construct an Ok variant of Result<T, E>.
@@ -2464,12 +2455,7 @@ fn builtin_is_some(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::custom("is_some requires exactly 1 argument"));
     }
-
-    match &args[0] {
-        Value::Struct { name, .. } if name.as_str() == "Some" => Ok(Value::Bool(true)),
-        Value::Struct { name, .. } if name.as_str() == "None" => Ok(Value::Bool(false)),
-        other => Err(RuntimeError::type_error("Option", other.type_name())),
-    }
+    Ok(Value::Bool(matches!(args[0], Value::Some(_))))
 }
 
 /// Check if an Option value is None.
@@ -2478,12 +2464,7 @@ fn builtin_is_none(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::custom("is_none requires exactly 1 argument"));
     }
-
-    match &args[0] {
-        Value::Struct { name, .. } if name.as_str() == "None" => Ok(Value::Bool(true)),
-        Value::Struct { name, .. } if name.as_str() == "Some" => Ok(Value::Bool(false)),
-        other => Err(RuntimeError::type_error("Option", other.type_name())),
-    }
+    Ok(Value::Bool(matches!(args[0], Value::None)))
 }
 
 /// Check if a Result value is Ok.
@@ -2511,6 +2492,17 @@ fn builtin_is_err(args: &[Value]) -> RuntimeResult<Value> {
         Value::Struct { name, .. } if name.as_str() == "Err" => Ok(Value::Bool(true)),
         Value::Struct { name, .. } if name.as_str() == "Ok" => Ok(Value::Bool(false)),
         other => Err(RuntimeError::type_error("Result", other.type_name())),
+    }
+}
+
+fn builtin_unwrap(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::custom("unwrap requires exactly 1 argument"));
+    }
+    match &args[0] {
+        Value::Some(v) => Ok(*v.clone()),
+        Value::None => Err(RuntimeError::custom("called unwrap on None value")),
+        other => Err(RuntimeError::type_error("Option", other.type_name())),
     }
 }
 

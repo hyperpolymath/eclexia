@@ -50,6 +50,10 @@ pub enum Value {
     AdaptiveFunction(Rc<AdaptiveFunction>),
     /// Built-in function
     Builtin(BuiltinFn),
+    /// Option::Some
+    Some(Box<Value>),
+    /// Option::None
+    None,
 }
 
 /// A user-defined function.
@@ -132,7 +136,7 @@ impl Value {
             Value::Bool(b) => *b,
             Value::Int(n) => *n != 0,
             Value::Float(f) => *f != 0.0,
-            Value::Unit => false,
+            Value::Unit | Value::None => false,
             Value::String(s) => !s.is_empty(),
             Value::Array(arr) => !arr.borrow().is_empty(),
             Value::HashMap(map) => !map.borrow().is_empty(),
@@ -160,6 +164,8 @@ impl Value {
             Value::Function(_) => "Function",
             Value::AdaptiveFunction(_) => "AdaptiveFunction",
             Value::Builtin(_) => "Builtin",
+            Value::Some(_) => "Option",
+            Value::None => "Option",
         }
     }
 
@@ -263,6 +269,8 @@ impl std::fmt::Display for Value {
             Value::Function(func) => write!(f, "<fn {}>", func.name),
             Value::AdaptiveFunction(func) => write!(f, "<adaptive fn {}>", func.name),
             Value::Builtin(b) => write!(f, "<builtin {}>", b.name),
+            Value::Some(v) => write!(f, "Some({})", v),
+            Value::None => write!(f, "None"),
         }
     }
 }
@@ -279,6 +287,8 @@ impl PartialEq for Value {
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Char(a), Value::Char(b)) => a == b,
             (Value::Tuple(a), Value::Tuple(b)) => a == b,
+            (Value::Some(a), Value::Some(b)) => a == b,
+            (Value::None, Value::None) => true,
             _ => false,
         }
     }

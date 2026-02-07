@@ -430,6 +430,11 @@ impl<'a> Printer<'a> {
                     self.write(unit.as_str());
                 }
             }
+            ExprKind::Cast { expr, target_ty } => {
+                self.format_expr(*expr, file);
+                self.write(" as ");
+                self.format_type(*target_ty, file);
+            }
             ExprKind::Error => self.write("/* error */"),
         }
     }

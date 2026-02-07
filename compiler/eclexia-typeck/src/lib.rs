@@ -754,6 +754,10 @@ impl<'a> TypeChecker<'a> {
                 Ty::Primitive(PrimitiveTy::Float)
             }
 
+            ExprKind::Cast { expr, target_ty } => {
+                self.infer_expr(*expr); // Type-check the expr
+                self.resolve_ast_type(*target_ty) // Return the target type
+            }
             ExprKind::Error => Ty::Error,
         }
     }

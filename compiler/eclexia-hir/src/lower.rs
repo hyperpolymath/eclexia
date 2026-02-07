@@ -663,6 +663,18 @@ impl<'a> LoweringContext<'a> {
                 })
             }
 
+            ast::ExprKind::Cast { expr, target_ty } => {
+                let inner = self.lower_expr(*expr);
+                let ty = self.convert_type(&self.source.types[*target_ty]);
+                return self.hir.exprs.alloc(Expr {
+                    span: self.source.exprs[expr_id].span,
+                    ty: ty.clone(),
+                    kind: ExprKind::Cast {
+                        expr: inner,
+                        target_ty: ty,
+                    },
+                });
+            }
             ast::ExprKind::Error => ExprKind::Literal(Literal::Unit),
         };
 

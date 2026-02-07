@@ -98,6 +98,8 @@ pub enum TokenKind {
     Or,
     #[token("not")]
     Not,
+    #[token("as")]
+    As,
 
     // === Eclexia-specific keywords ===
     #[token("@solution")]

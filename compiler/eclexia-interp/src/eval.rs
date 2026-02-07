@@ -342,6 +342,10 @@ impl Interpreter {
                 })
             }
 
+            ExprKind::Cast { expr, .. } => {
+                // For now, just evaluate the expression (ignore the cast)
+                self.eval_expr(*expr, file, env)
+            }
             ExprKind::Error => Err(RuntimeError::custom("error expression")),
         }
     }
@@ -465,11 +469,20 @@ impl Interpreter {
                 (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a >> b)),
                 _ => Err(RuntimeError::type_error("integer", lhs.type_name())),
             },
-            BinaryOp::Range | BinaryOp::RangeInclusive => {
-                // TODO: Implement proper Range type
-                // For now, just return an error
-                Err(RuntimeError::custom("range operations not yet fully implemented in interpreter"))
-            }
+            BinaryOp::Range => match (&lhs, &rhs) {
+                (Value::Int(start), Value::Int(end)) => {
+                    let values: Vec<Value> = (*start..*end).map(Value::Int).collect();
+                    Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(values))))
+                }
+                _ => Err(RuntimeError::type_error("integer", lhs.type_name())),
+            },
+            BinaryOp::RangeInclusive => match (&lhs, &rhs) {
+                (Value::Int(start), Value::Int(end)) => {
+                    let values: Vec<Value> = (*start..=*end).map(Value::Int).collect();
+                    Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(values))))
+                }
+                _ => Err(RuntimeError::type_error("integer", lhs.type_name())),
+            },
         }
     }
 
@@ -663,6 +676,23 @@ impl Interpreter {
                         for item in &file.items {
                             if let Item::Function(f) = item {
                                 if f.name == func.name {
+                                    // Define resource names from @requires attributes as string values
+                                    for attr in &f.attributes {
+                                        if attr.name.as_str() == "requires" {
+                                            // Args are [resource, amount, resource, amount, ...]
+                                            for chunk in attr.args.chunks(2) {
+                                                if let Some(resource_name) = chunk.first() {
+                                                    call_env.define(resource_name.clone(), Value::String(resource_name.clone()));
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Also check constraints (for @requires: syntax)
+                                    for constraint in &f.constraints {
+                                        if let ConstraintKind::Resource { resource, .. } = &constraint.kind {
+                                            call_env.define(resource.clone(), Value::String(resource.clone()));
+                                        }
+                                    }
                                     match self.eval_block(&f.body, file, &call_env) {
                                         Ok(v) => return Ok(v),
                                         Err(RuntimeError::Return(v)) => return Ok(v),
@@ -690,37 +720,93 @@ impl Interpreter {
                     call_env.define(param.clone(), arg.clone());
                 }
 
-                // Select the best solution based on @requires constraints, shadow prices, and @when clauses
-                let solution_idx = self.select_solution(&func.solutions, &func.requires, file, &call_env)?;
-                let solution = &func.solutions[solution_idx];
+                // Check if any solutions have @when clauses
+                let has_when = func.solutions.iter().any(|s| s.when_expr.is_some());
 
-                println!(
-                    "  [adaptive] Selected solution '{}' for {}",
-                    solution.name, func.name
-                );
+                if has_when {
+                    // Use standard selection when @when clauses exist
+                    let solution_idx = self.select_solution(&func.solutions, &func.requires, file, &call_env)?;
+                    let solution = &func.solutions[solution_idx];
 
-                // Track resource usage
-                if let Some(energy) = solution.provides.energy {
-                    self.energy_used += energy;
-                }
-                if let Some(carbon) = solution.provides.carbon {
-                    self.carbon_used += carbon;
-                }
+                    eprintln!(
+                        "  [adaptive] Selected solution '{}' for {}",
+                        solution.name, func.name
+                    );
 
-                // Find and execute the solution body
-                for item in &file.items {
-                    if let Item::AdaptiveFunction(f) = item {
-                        if f.name == func.name {
-                            for (i, sol) in f.solutions.iter().enumerate() {
-                                if i == solution_idx {
-                                    match self.eval_block(&sol.body, file, &call_env) {
-                                        Ok(v) => return Ok(v),
-                                        Err(RuntimeError::Return(v)) => return Ok(v),
-                                        Err(e) => return Err(e),
+                    if let Some(energy) = solution.provides.energy {
+                        self.energy_used += energy;
+                    }
+                    if let Some(carbon) = solution.provides.carbon {
+                        self.carbon_used += carbon;
+                    }
+
+                    for item in &file.items {
+                        if let Item::AdaptiveFunction(f) = item {
+                            if f.name == func.name {
+                                for (i, sol) in f.solutions.iter().enumerate() {
+                                    if i == solution_idx {
+                                        match self.eval_block(&sol.body, file, &call_env) {
+                                            Ok(v) => return Ok(v),
+                                            Err(RuntimeError::Return(v)) => return Ok(v),
+                                            Err(e) => return Err(e),
+                                        }
                                     }
                                 }
                             }
                         }
+                    }
+                } else {
+                    // No @when clauses: evaluate all feasible solutions, pick the one
+                    // with the maximum numeric result (economics optimization)
+                    let mut best_result: Option<(usize, Value)> = None;
+
+                    for item in &file.items {
+                        if let Item::AdaptiveFunction(f) = item {
+                            if f.name == func.name {
+                                for (i, sol) in f.solutions.iter().enumerate() {
+                                    let sol_env = call_env.child();
+                                    match self.eval_block(&sol.body, file, &sol_env) {
+                                        Ok(v) | Err(RuntimeError::Return(v)) => {
+                                            let numeric_val = match &v {
+                                                Value::Int(n) => *n as f64,
+                                                Value::Float(f) => *f,
+                                                _ => 0.0,
+                                            };
+                                            let is_better = match &best_result {
+                                                None => true,
+                                                Some((_, prev)) => {
+                                                    let prev_val = match prev {
+                                                        Value::Int(n) => *n as f64,
+                                                        Value::Float(f) => *f,
+                                                        _ => 0.0,
+                                                    };
+                                                    numeric_val > prev_val
+                                                }
+                                            };
+                                            if is_better {
+                                                best_result = Some((i, v));
+                                            }
+                                        }
+                                        Err(_) => continue,
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if let Some((idx, result)) = best_result {
+                        let solution = &func.solutions[idx];
+                        eprintln!(
+                            "  [adaptive] Selected solution '{}' for {} (by output optimization)",
+                            solution.name, func.name
+                        );
+                        if let Some(energy) = solution.provides.energy {
+                            self.energy_used += energy;
+                        }
+                        if let Some(carbon) = solution.provides.carbon {
+                            self.carbon_used += carbon;
+                        }
+                        return Ok(result);
                     }
                 }
 
