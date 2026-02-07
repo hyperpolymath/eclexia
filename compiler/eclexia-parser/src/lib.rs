@@ -73,6 +73,7 @@ impl<'src> Parser<'src> {
                 Ok(Item::Function(func))
             }
             TokenKind::Type => self.parse_type_def(file).map(Item::TypeDef),
+            TokenKind::Struct => self.parse_struct_shorthand(file).map(Item::TypeDef),
             TokenKind::Import => self.parse_import().map(Item::Import),
             TokenKind::Const => self.parse_const(file).map(Item::Const),
             _ => Err(ParseError::unexpected_token(token.clone(), "item")),
@@ -681,6 +682,42 @@ impl<'src> Parser<'src> {
             name,
             params,
             kind,
+        })
+    }
+
+    /// Parse struct shorthand: `struct Name { fields }`
+    fn parse_struct_shorthand(&mut self, file: &mut SourceFile) -> ParseResult<TypeDef> {
+        let start = self.expect(TokenKind::Struct)?;
+        let name = self.expect_ident()?;
+
+        // Type parameters (optional): struct Foo<T, U> { ... }
+        let params = if self.check(TokenKind::Lt) {
+            self.advance();
+            let mut params = Vec::new();
+            loop {
+                params.push(self.expect_ident()?);
+                if !self.check(TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+            }
+            self.expect(TokenKind::Gt)?;
+            params
+        } else {
+            Vec::new()
+        };
+
+        self.expect(TokenKind::LBrace)?;
+        let fields = self.parse_fields(file)?;
+        self.expect(TokenKind::RBrace)?;
+
+        let span = start.merge(self.previous_span());
+
+        Ok(TypeDef {
+            span,
+            name,
+            params,
+            kind: TypeDefKind::Struct(fields),
         })
     }
 

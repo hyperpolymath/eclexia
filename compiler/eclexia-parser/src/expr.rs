@@ -373,6 +373,51 @@ impl<'src> Parser<'src> {
                     expr = file.exprs.alloc(index_expr);
                 }
 
+                // Struct literal: Name { field: value, ... }
+                // Only parse as struct literal if expr is a Var (identifier)
+                TokenKind::LBrace => {
+                    // Check if the current expression is an identifier
+                    if !matches!(file.exprs[expr].kind, ExprKind::Var(_)) {
+                        break;
+                    }
+
+                    // Extract the struct name
+                    let name = match &file.exprs[expr].kind {
+                        ExprKind::Var(n) => n.clone(),
+                        _ => unreachable!(),
+                    };
+
+                    self.advance(); // consume {
+                    let mut fields = Vec::new();
+
+                    if !self.check(TokenKind::RBrace) {
+                        loop {
+                            let field_name = self.expect_ident()?;
+                            self.expect(TokenKind::Colon)?;
+                            let field_value = self.parse_expr(file)?;
+                            fields.push((field_name, field_value));
+
+                            if !self.check(TokenKind::Comma) {
+                                break;
+                            }
+                            self.advance();
+
+                            // Allow trailing comma
+                            if self.check(TokenKind::RBrace) {
+                                break;
+                            }
+                        }
+                    }
+
+                    let end = self.expect(TokenKind::RBrace)?;
+                    let span = file.exprs[expr].span.merge(end);
+                    let struct_expr = Expr {
+                        span,
+                        kind: ExprKind::Struct { name, fields },
+                    };
+                    expr = file.exprs.alloc(struct_expr);
+                }
+
                 _ => break,
             }
         }
