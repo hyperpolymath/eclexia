@@ -642,6 +642,66 @@ pub fn register(env: &Environment) {
             func: builtin_set_from_array,
         }),
     );
+
+    // Standard library essentials
+    env.define(
+        SmolStr::new("assert"),
+        Value::Builtin(BuiltinFn {
+            name: "assert",
+            func: builtin_assert,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("panic"),
+        Value::Builtin(BuiltinFn {
+            name: "panic",
+            func: builtin_panic,
+        }),
+    );
+
+    // Option type constructors
+    env.define(
+        SmolStr::new("Some"),
+        Value::Builtin(BuiltinFn {
+            name: "Some",
+            func: builtin_some,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("None"),
+        Value::Builtin(BuiltinFn {
+            name: "None",
+            func: builtin_none,
+        }),
+    );
+
+    // Result type constructors
+    env.define(
+        SmolStr::new("Ok"),
+        Value::Builtin(BuiltinFn {
+            name: "Ok",
+            func: builtin_ok,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("Err"),
+        Value::Builtin(BuiltinFn {
+            name: "Err",
+            func: builtin_err,
+        }),
+    );
+
+    // Economics-specific functions
+    env.define(
+        SmolStr::new("shadow_price"),
+        Value::Builtin(BuiltinFn {
+            name: "shadow_price",
+            func: builtin_shadow_price,
+        }),
+    );
 }
 
 fn builtin_println(args: &[Value]) -> RuntimeResult<Value> {
@@ -2229,6 +2289,140 @@ fn builtin_set_from_array(args: &[Value]) -> RuntimeResult<Value> {
         }
         other => Err(RuntimeError::type_error("Array", other.type_name())),
     }
+}
+
+// ============================================================================
+// Standard Library Essentials
+// ============================================================================
+
+/// Assert that a condition is true, panic if false.
+/// Usage: assert(condition, message)
+fn builtin_assert(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() < 1 {
+        return Err(RuntimeError::custom("assert requires at least 1 argument (condition)"));
+    }
+
+    let condition = match &args[0] {
+        Value::Bool(b) => *b,
+        other => return Err(RuntimeError::type_error("Bool", other.type_name())),
+    };
+
+    if !condition {
+        let message = if args.len() >= 2 {
+            match &args[1] {
+                Value::String(s) => s.to_string(),
+                other => format!("Assertion failed: {:?}", other),
+            }
+        } else {
+            "Assertion failed".to_string()
+        };
+        return Err(RuntimeError::custom(message));
+    }
+
+    Ok(Value::Unit)
+}
+
+/// Panic with a message and halt execution.
+/// Usage: panic(message)
+fn builtin_panic(args: &[Value]) -> RuntimeResult<Value> {
+    let message = if args.is_empty() {
+        "panic called".to_string()
+    } else {
+        match &args[0] {
+            Value::String(s) => s.to_string(),
+            other => format!("{:?}", other),
+        }
+    };
+
+    Err(RuntimeError::custom(format!("panic: {}", message)))
+}
+
+/// Construct a Some variant of Option<T>.
+/// Usage: Some(value)
+fn builtin_some(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::custom("Some requires exactly 1 argument"));
+    }
+
+    let mut fields = HashMap::new();
+    fields.insert(SmolStr::new("0"), args[0].clone());
+
+    Ok(Value::Struct {
+        name: SmolStr::new("Some"),
+        fields,
+    })
+}
+
+/// Construct a None variant of Option<T>.
+/// Usage: None()
+fn builtin_none(args: &[Value]) -> RuntimeResult<Value> {
+    if !args.is_empty() {
+        return Err(RuntimeError::custom("None takes no arguments"));
+    }
+
+    Ok(Value::Struct {
+        name: SmolStr::new("None"),
+        fields: HashMap::new(),
+    })
+}
+
+/// Construct an Ok variant of Result<T, E>.
+/// Usage: Ok(value)
+fn builtin_ok(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::custom("Ok requires exactly 1 argument"));
+    }
+
+    let mut fields = HashMap::new();
+    fields.insert(SmolStr::new("0"), args[0].clone());
+
+    Ok(Value::Struct {
+        name: SmolStr::new("Ok"),
+        fields,
+    })
+}
+
+/// Construct an Err variant of Result<T, E>.
+/// Usage: Err(error)
+fn builtin_err(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::custom("Err requires exactly 1 argument"));
+    }
+
+    let mut fields = HashMap::new();
+    fields.insert(SmolStr::new("0"), args[0].clone());
+
+    Ok(Value::Struct {
+        name: SmolStr::new("Err"),
+        fields,
+    })
+}
+
+/// Query the shadow price for a specific resource.
+/// Usage: shadow_price(resource_name)
+/// Returns the current shadow price (marginal value) for the resource.
+fn builtin_shadow_price(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::custom("shadow_price requires exactly 1 argument (resource name)"));
+    }
+
+    let resource_name = match &args[0] {
+        Value::String(s) => s.as_str(),
+        other => return Err(RuntimeError::type_error("String", other.type_name())),
+    };
+
+    // For now, return fixed shadow prices based on resource type
+    // In a full implementation, this would query the runtime's optimization state
+    let price = match resource_name {
+        "energy" => 1.0,      // $1 per Joule
+        "time" => 0.1,        // $0.10 per millisecond
+        "carbon" => 50.0,     // $50 per gCO2e
+        "memory" => 0.001,    // $0.001 per byte
+        "latency" => 0.1,     // $0.10 per ms
+        _ => 1.0,             // Default shadow price
+    };
+
+    Ok(Value::Float(price))
 }
 
 // ============================================================================
