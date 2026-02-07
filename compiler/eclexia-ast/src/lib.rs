@@ -94,6 +94,7 @@ pub enum Item {
 pub struct Function {
     pub span: Span,
     pub name: Ident,
+    pub type_params: Vec<Ident>,
     pub params: Vec<Param>,
     pub return_type: Option<TypeId>,
     pub constraints: Vec<Constraint>,
@@ -107,6 +108,7 @@ pub struct Function {
 pub struct AdaptiveFunction {
     pub span: Span,
     pub name: Ident,
+    pub type_params: Vec<Ident>,
     pub params: Vec<Param>,
     pub return_type: Option<TypeId>,
     pub constraints: Vec<Constraint>,

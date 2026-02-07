@@ -180,6 +180,23 @@ impl<'src> Parser<'src> {
         // Function name
         let name = self.expect_ident()?;
 
+        // Type parameters (optional): <T, U, ...>
+        let type_params = if self.check(TokenKind::Lt) {
+            self.advance();
+            let mut params = Vec::new();
+            loop {
+                params.push(self.expect_ident()?);
+                if !self.check(TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+            }
+            self.expect(TokenKind::Gt)?;
+            params
+        } else {
+            Vec::new()
+        };
+
         // Parameters
         self.expect(TokenKind::LParen)?;
         let params = self.parse_params(file)?;
@@ -204,6 +221,7 @@ impl<'src> Parser<'src> {
         Ok(Function {
             span,
             name,
+            type_params,
             params,
             return_type,
             constraints,
@@ -224,6 +242,23 @@ impl<'src> Parser<'src> {
 
         // Function name
         let name = self.expect_ident()?;
+
+        // Type parameters (optional): <T, U, ...>
+        let type_params = if self.check(TokenKind::Lt) {
+            self.advance();
+            let mut params = Vec::new();
+            loop {
+                params.push(self.expect_ident()?);
+                if !self.check(TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+            }
+            self.expect(TokenKind::Gt)?;
+            params
+        } else {
+            Vec::new()
+        };
 
         // Parameters
         self.expect(TokenKind::LParen)?;
@@ -254,6 +289,7 @@ impl<'src> Parser<'src> {
         Ok(AdaptiveFunction {
             span,
             name,
+            type_params,
             params,
             return_type,
             constraints,
@@ -810,6 +846,7 @@ impl<'src> Parser<'src> {
             // Named type
             let name = self.expect_ident()?;
 
+            // Generic type arguments: Foo<T, U> or Foo[T, U]
             let args = if self.check(TokenKind::LBracket) {
                 self.advance();
                 let mut args = Vec::new();
@@ -821,6 +858,19 @@ impl<'src> Parser<'src> {
                     self.advance();
                 }
                 self.expect(TokenKind::RBracket)?;
+                args
+            } else if self.check(TokenKind::Lt) {
+                // Support angle bracket syntax: Foo<T, U>
+                self.advance();
+                let mut args = Vec::new();
+                loop {
+                    args.push(self.parse_type(file)?);
+                    if !self.check(TokenKind::Comma) {
+                        break;
+                    }
+                    self.advance();
+                }
+                self.expect(TokenKind::Gt)?;
                 args
             } else {
                 Vec::new()
