@@ -702,6 +702,39 @@ pub fn register(env: &Environment) {
             func: builtin_shadow_price,
         }),
     );
+
+    // Option/Result helper methods (as standalone functions)
+    env.define(
+        SmolStr::new("is_some"),
+        Value::Builtin(BuiltinFn {
+            name: "is_some",
+            func: builtin_is_some,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("is_none"),
+        Value::Builtin(BuiltinFn {
+            name: "is_none",
+            func: builtin_is_none,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("is_ok"),
+        Value::Builtin(BuiltinFn {
+            name: "is_ok",
+            func: builtin_is_ok,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("is_err"),
+        Value::Builtin(BuiltinFn {
+            name: "is_err",
+            func: builtin_is_err,
+        }),
+    );
 }
 
 fn builtin_println(args: &[Value]) -> RuntimeResult<Value> {
@@ -2423,6 +2456,62 @@ fn builtin_shadow_price(args: &[Value]) -> RuntimeResult<Value> {
     };
 
     Ok(Value::Float(price))
+}
+
+/// Check if an Option value is Some.
+/// Usage: is_some(option_value)
+fn builtin_is_some(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::custom("is_some requires exactly 1 argument"));
+    }
+
+    match &args[0] {
+        Value::Struct { name, .. } if name.as_str() == "Some" => Ok(Value::Bool(true)),
+        Value::Struct { name, .. } if name.as_str() == "None" => Ok(Value::Bool(false)),
+        other => Err(RuntimeError::type_error("Option", other.type_name())),
+    }
+}
+
+/// Check if an Option value is None.
+/// Usage: is_none(option_value)
+fn builtin_is_none(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::custom("is_none requires exactly 1 argument"));
+    }
+
+    match &args[0] {
+        Value::Struct { name, .. } if name.as_str() == "None" => Ok(Value::Bool(true)),
+        Value::Struct { name, .. } if name.as_str() == "Some" => Ok(Value::Bool(false)),
+        other => Err(RuntimeError::type_error("Option", other.type_name())),
+    }
+}
+
+/// Check if a Result value is Ok.
+/// Usage: is_ok(result_value)
+fn builtin_is_ok(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::custom("is_ok requires exactly 1 argument"));
+    }
+
+    match &args[0] {
+        Value::Struct { name, .. } if name.as_str() == "Ok" => Ok(Value::Bool(true)),
+        Value::Struct { name, .. } if name.as_str() == "Err" => Ok(Value::Bool(false)),
+        other => Err(RuntimeError::type_error("Result", other.type_name())),
+    }
+}
+
+/// Check if a Result value is Err.
+/// Usage: is_err(result_value)
+fn builtin_is_err(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::custom("is_err requires exactly 1 argument"));
+    }
+
+    match &args[0] {
+        Value::Struct { name, .. } if name.as_str() == "Err" => Ok(Value::Bool(true)),
+        Value::Struct { name, .. } if name.as_str() == "Ok" => Ok(Value::Bool(false)),
+        other => Err(RuntimeError::type_error("Result", other.type_name())),
+    }
 }
 
 // ============================================================================
