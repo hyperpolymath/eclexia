@@ -790,7 +790,28 @@ impl<'src> Parser<'src> {
     fn parse_type(&mut self, file: &mut SourceFile) -> ParseResult<TypeId> {
         let start = self.peek().span;
 
-        let kind = if self.check(TokenKind::LParen) {
+        let kind = if self.check(TokenKind::Fn) {
+            // Function type: fn(T, U) -> R
+            self.advance();
+            self.expect(TokenKind::LParen)?;
+
+            let mut params = Vec::new();
+            if !self.check(TokenKind::RParen) {
+                loop {
+                    params.push(self.parse_type(file)?);
+                    if !self.check(TokenKind::Comma) {
+                        break;
+                    }
+                    self.advance();
+                }
+            }
+            self.expect(TokenKind::RParen)?;
+
+            self.expect(TokenKind::Arrow)?;
+            let ret = self.parse_type(file)?;
+
+            TypeKind::Function { params, ret }
+        } else if self.check(TokenKind::LParen) {
             // Tuple or function type
             self.advance();
 

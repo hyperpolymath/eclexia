@@ -201,12 +201,45 @@ impl<'src> Parser<'src> {
                 ExprKind::Match { scrutinee, arms }
             }
 
-            // Lambda
+            // Lambda with fn syntax: fn(x, y) -> expr
             TokenKind::Fn => {
                 self.expect(TokenKind::LParen)?;
                 let params = self.parse_params(file)?;
                 self.expect(TokenKind::RParen)?;
                 self.expect(TokenKind::Arrow)?;
+                let body = self.parse_expr(file)?;
+                ExprKind::Lambda { params, body }
+            }
+
+            // Lambda with pipe syntax: |x, y| expr
+            TokenKind::Pipe => {
+                let mut params = Vec::new();
+
+                // Parse parameters between pipes
+                if !self.check(TokenKind::Pipe) {
+                    loop {
+                        let name = self.expect_ident()?;
+                        // Optional type annotation
+                        let ty = if self.check(TokenKind::Colon) {
+                            self.advance();
+                            Some(self.parse_type(file)?)
+                        } else {
+                            None
+                        };
+                        params.push(Param {
+                            span: token.span,
+                            name,
+                            ty,
+                        });
+
+                        if !self.check(TokenKind::Comma) {
+                            break;
+                        }
+                        self.advance();
+                    }
+                }
+
+                self.expect(TokenKind::Pipe)?;
                 let body = self.parse_expr(file)?;
                 ExprKind::Lambda { params, body }
             }
