@@ -118,37 +118,59 @@ pub fn check(input: &Path) -> miette::Result<()> {
 
 /// Format source files.
 pub fn fmt(inputs: &[std::path::PathBuf], check: bool) -> miette::Result<()> {
+    use eclexia_fmt::Formatter;
+
+    let formatter = Formatter::new();
     let mut has_issues = false;
+    let mut changed_files = 0;
 
     for input in inputs {
         let source = std::fs::read_to_string(input)
             .into_diagnostic()
             .wrap_err_with(|| format!("Failed to read {}", input.display()))?;
 
-        // Parse to check for syntax errors
-        let (_file, errors) = eclexia_parser::parse(&source);
-
-        if !errors.is_empty() {
-            has_issues = true;
-            eprintln!("{}:", input.display());
-            for err in &errors {
-                eprintln!("  {}", err.format_with_source(&source));
+        // Format the source
+        let formatted = match formatter.format(&source) {
+            Ok(f) => f,
+            Err(e) => {
+                has_issues = true;
+                eprintln!("✗ {}: {}", input.display(), e);
+                continue;
             }
-            continue;
-        }
+        };
 
-        if check {
-            println!("✓ {} is well-formed", input.display());
+        // Check if formatting changed anything
+        if formatted != source {
+            changed_files += 1;
+
+            if check {
+                eprintln!("✗ {} needs formatting", input.display());
+                has_issues = true;
+            } else {
+                // Write formatted code back to file
+                std::fs::write(input, &formatted)
+                    .into_diagnostic()
+                    .wrap_err_with(|| format!("Failed to write {}", input.display()))?;
+                println!("✓ Formatted {}", input.display());
+            }
         } else {
-            // For now, just report that the file is valid
-            // TODO: Implement actual pretty-printing
-            println!("✓ {} (no changes needed)", input.display());
+            if !check {
+                println!("✓ {} (no changes needed)", input.display());
+            }
         }
     }
 
-    if has_issues {
-        Err(miette::miette!("Some files have syntax errors"))
+    if check && changed_files > 0 {
+        Err(miette::miette!(
+            "{} file(s) need formatting. Run 'eclexia fmt' to format them.",
+            changed_files
+        ))
+    } else if has_issues {
+        Err(miette::miette!("Some files have errors"))
     } else {
+        if check {
+            println!("✓ All {} files are correctly formatted", inputs.len());
+        }
         Ok(())
     }
 }
@@ -372,5 +394,310 @@ pub fn bench(filter: Option<&str>) -> miette::Result<()> {
     }
 
     println!("✓ All {} benchmarks passed", total_summary.benchmarks_run);
+    Ok(())
+}
+
+/// Install dependencies from package.toml.
+pub fn install() -> miette::Result<()> {
+    use crate::package::PackageManifest;
+    use crate::package_manager::PackageManager;
+
+    // Load package.toml
+    let manifest_path = Path::new("package.toml");
+    if !manifest_path.exists() {
+        return Err(miette::miette!(
+            "No package.toml found in current directory.\nRun 'eclexia init' to create a new project."
+        ));
+    }
+
+    let manifest_content = std::fs::read_to_string(manifest_path)
+        .into_diagnostic()
+        .wrap_err("Failed to read package.toml")?;
+
+    let manifest: PackageManifest = toml::from_str(&manifest_content)
+        .into_diagnostic()
+        .wrap_err("Failed to parse package.toml")?;
+
+    // Initialize package manager and install
+    let mut pm = PackageManager::new()
+        .map_err(|e| miette::miette!("{}", e))?;
+
+    pm.install(&manifest)
+        .map_err(|e| miette::miette!("{}", e))?;
+
+    Ok(())
+}
+
+/// Lint source files.
+pub fn lint(inputs: &[std::path::PathBuf]) -> miette::Result<()> {
+    use eclexia_lint::Linter;
+
+    let linter = Linter::new();
+    let mut has_issues = false;
+    let mut total_diagnostics = 0;
+
+    for input in inputs {
+        let source = std::fs::read_to_string(input)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to read {}", input.display()))?;
+
+        // Parse the file
+        let (file, parse_errors) = eclexia_parser::parse(&source);
+
+        if !parse_errors.is_empty() {
+            eprintln!("✗ {}: Parse errors prevent linting", input.display());
+            has_issues = true;
+            continue;
+        }
+
+        // Run linter
+        let diagnostics = linter.lint(&file, &source);
+
+        if !diagnostics.is_empty() {
+            total_diagnostics += diagnostics.len();
+            has_issues = true;
+
+            println!("Linting {}:", input.display());
+            println!("{}", linter.format_diagnostics(&diagnostics, &source));
+        } else {
+            println!("✓ {} (no issues)", input.display());
+        }
+    }
+
+    if has_issues {
+        Err(miette::miette!(
+            "Found {} lint issue(s) in {} file(s)",
+            total_diagnostics,
+            inputs.len()
+        ))
+    } else {
+        println!("✓ All {} files passed linting", inputs.len());
+        Ok(())
+    }
+}
+
+/// Debug Eclexia bytecode interactively
+pub fn debug(input: &std::path::Path) -> miette::Result<()> {
+    use eclexia_debugger::DebugSession;
+    use std::io::{self, Write};
+
+    // Read and parse source
+    let source = std::fs::read_to_string(input)
+        .map_err(|e| miette::miette!("Failed to read {}: {}", input.display(), e))?;
+
+    let (file, parse_errors) = eclexia_parser::parse(&source);
+    if !parse_errors.is_empty() {
+        return Err(miette::miette!("Cannot debug file with parse errors"));
+    }
+
+    // Type check
+    let type_errors = eclexia_typeck::check(&file);
+    if !type_errors.is_empty() {
+        return Err(miette::miette!("Cannot debug file with type errors"));
+    }
+
+    // Lower to HIR
+    let hir_file = eclexia_hir::lower_source_file(&file);
+
+    // Lower to MIR
+    let mir_file = eclexia_mir::lower_hir_file(&hir_file);
+
+    // Generate bytecode
+    use eclexia_codegen::Backend;
+    let mut codegen = eclexia_codegen::BytecodeGenerator::new();
+    let module = codegen.generate(&mir_file)
+        .map_err(|e| miette::miette!("Code generation failed: {}", e))?;
+
+    // Create VM and debug session
+    let vm = eclexia_codegen::VirtualMachine::new(module);
+    let mut session = DebugSession::new(vm);
+
+    println!("Eclexia Debugger");
+    println!("Type 'help' for commands\n");
+
+    // REPL loop
+    loop {
+        print!("(eclexia-dbg) ");
+        io::stdout().flush().unwrap();
+
+        let mut line = String::new();
+        if io::stdin().read_line(&mut line).is_err() {
+            break;
+        }
+
+        let parts: Vec<&str> = line.trim().split_whitespace().collect();
+        if parts.is_empty() {
+            continue;
+        }
+
+        match parts[0] {
+            "help" | "h" => {
+                println!("Commands:");
+                println!("  help, h           - Show this help");
+                println!("  break, b <f> <i>  - Set breakpoint at function index <f>, instruction <i>");
+                println!("  delete, d <f> <i> - Remove breakpoint");
+                println!("  list, l           - List breakpoints");
+                println!("  clear, c          - Clear all breakpoints");
+                println!("  step, s           - Step one instruction");
+                println!("  continue, r       - Continue execution");
+                println!("  stack             - Show stack");
+                println!("  locals            - Show local variables");
+                println!("  callstack         - Show call stack");
+                println!("  resources         - Show resource usage");
+                println!("  pos               - Show current position");
+                println!("  quit, q           - Exit debugger");
+            }
+            "break" | "b" => {
+                if parts.len() != 3 {
+                    println!("Usage: break <function_idx> <instruction_idx>");
+                    continue;
+                }
+                match (parts[1].parse::<usize>(), parts[2].parse::<usize>()) {
+                    (Ok(func_idx), Ok(inst_idx)) => {
+                        session.set_breakpoint(func_idx, inst_idx);
+                        println!("Breakpoint set at {}:{}", func_idx, inst_idx);
+                    }
+                    _ => println!("Invalid indices"),
+                }
+            }
+            "delete" | "d" => {
+                if parts.len() != 3 {
+                    println!("Usage: delete <function_idx> <instruction_idx>");
+                    continue;
+                }
+                match (parts[1].parse::<usize>(), parts[2].parse::<usize>()) {
+                    (Ok(func_idx), Ok(inst_idx)) => {
+                        if session.remove_breakpoint(func_idx, inst_idx) {
+                            println!("Breakpoint removed");
+                        } else {
+                            println!("No breakpoint at {}:{}", func_idx, inst_idx);
+                        }
+                    }
+                    _ => println!("Invalid indices"),
+                }
+            }
+            "list" | "l" => {
+                let breakpoints = session.list_breakpoints();
+                if breakpoints.is_empty() {
+                    println!("No breakpoints set");
+                } else {
+                    println!("Breakpoints:");
+                    for (func_idx, inst_idx) in breakpoints {
+                        println!("  {}:{}", func_idx, inst_idx);
+                    }
+                }
+            }
+            "clear" | "c" => {
+                session.clear_breakpoints();
+                println!("All breakpoints cleared");
+            }
+            "step" | "s" => {
+                match session.step() {
+                    Ok(()) => println!("{}", session.get_current_instruction()),
+                    Err(e) => println!("Error: {}", e),
+                }
+            }
+            "continue" | "r" => {
+                match session.continue_execution() {
+                    Ok(result) => {
+                        use eclexia_debugger::ContinueResult;
+                        match result {
+                            ContinueResult::Breakpoint(f, i) => {
+                                println!("Hit breakpoint at {}:{}", f, i);
+                                println!("{}", session.get_current_instruction());
+                            }
+                            ContinueResult::Finished(val) => {
+                                println!("Program finished: {}", val);
+                            }
+                            ContinueResult::Error(e) => {
+                                println!("Error: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => println!("Error: {}", e),
+                }
+            }
+            "stack" => {
+                println!("{}", session.inspect_stack());
+            }
+            "locals" => {
+                println!("{}", session.inspect_locals());
+            }
+            "callstack" => {
+                println!("{}", session.inspect_call_stack());
+            }
+            "resources" => {
+                println!("{}", session.inspect_resources());
+            }
+            "pos" => {
+                if let Some((func_idx, inst_idx)) = session.get_position() {
+                    println!("At {}:{}", func_idx, inst_idx);
+                    println!("{}", session.get_current_instruction());
+                } else {
+                    println!("No active frame");
+                }
+            }
+            "quit" | "q" => {
+                println!("Exiting debugger");
+                break;
+            }
+            _ => {
+                println!("Unknown command: '{}'. Type 'help' for commands.", parts[0]);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Generate documentation for Eclexia source files
+pub fn doc(inputs: &[std::path::PathBuf], output_dir: &std::path::Path, format: &str) -> miette::Result<()> {
+    use eclexia_doc::DocGenerator;
+
+    std::fs::create_dir_all(output_dir)
+        .into_diagnostic()
+        .wrap_err("Failed to create output directory")?;
+
+    for input in inputs {
+        let source = std::fs::read_to_string(input)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to read {}", input.display()))?;
+
+        // Parse the file
+        let (file, parse_errors) = eclexia_parser::parse(&source);
+
+        if !parse_errors.is_empty() {
+            eprintln!("Warning: {} has parse errors, documentation may be incomplete", input.display());
+        }
+
+        // Generate documentation
+        let mut generator = DocGenerator::new();
+        generator.document_file(&file, &source);
+
+        let module_name = input
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("module");
+
+        let output_content = match format {
+            "html" => generator.generate_html(module_name),
+            "markdown" | "md" => generator.generate_markdown(module_name),
+            _ => {
+                return Err(miette::miette!("Unknown format: {}. Use 'html' or 'markdown'", format));
+            }
+        };
+
+        let ext = if format == "html" { "html" } else { "md" };
+        let output_file = output_dir.join(format!("{}.{}", module_name, ext));
+
+        std::fs::write(&output_file, output_content)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to write {}", output_file.display()))?;
+
+        println!("✓ Generated documentation: {}", output_file.display());
+    }
+
+    println!("\n✓ Documentation generated in {}/", output_dir.display());
+
     Ok(())
 }

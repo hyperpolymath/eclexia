@@ -25,6 +25,8 @@ dashmap = "5"
 eclexia-parser = { path = "../eclexia-parser" }
 eclexia-typeck = { path = "../eclexia-typeck" }
 eclexia-ast = { path = "../eclexia-ast" }
+eclexia-fmt = { path = "../eclexia-fmt" }
+eclexia-lint = { path = "../eclexia-lint" }
 
 [dev-dependencies]
 smol_str = "0.2"

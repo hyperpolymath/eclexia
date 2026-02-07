@@ -337,6 +337,23 @@ impl Default for Resolver {
     }
 }
 
+/// Simplified dependency resolution for package manager.
+/// Takes a HashMap of name -> version requirement and returns resolved packages.
+/// Note: This is a simplified version that doesn't query a real registry yet.
+/// For now, it just parses the dependency declarations and returns them as-is.
+pub fn resolve_dependencies(
+    dependencies: &HashMap<String, String>,
+) -> Result<Vec<(String, String)>, String> {
+    // For now, just return the dependencies as specified
+    // TODO: Implement full resolution with registry queries
+    let resolved: Vec<(String, String)> = dependencies
+        .iter()
+        .map(|(name, version)| (name.clone(), version.clone()))
+        .collect();
+
+    Ok(resolved)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

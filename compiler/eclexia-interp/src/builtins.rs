@@ -216,6 +216,30 @@ pub fn register(env: &Environment) {
         }),
     );
 
+    env.define(
+        SmolStr::new("str_to_lowercase"),
+        Value::Builtin(BuiltinFn {
+            name: "str_to_lowercase",
+            func: builtin_str_to_lowercase,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("str_to_uppercase"),
+        Value::Builtin(BuiltinFn {
+            name: "str_to_uppercase",
+            func: builtin_str_to_uppercase,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("str_replace"),
+        Value::Builtin(BuiltinFn {
+            name: "str_replace",
+            func: builtin_str_replace,
+        }),
+    );
+
     // Array operations
     env.define(
         SmolStr::new("array_map"),
@@ -238,6 +262,63 @@ pub fn register(env: &Environment) {
         Value::Builtin(BuiltinFn {
             name: "array_sum",
             func: builtin_array_sum,
+        }),
+    );
+
+    // Time operations
+    env.define(
+        SmolStr::new("time_now_ms"),
+        Value::Builtin(BuiltinFn {
+            name: "time_now_ms",
+            func: builtin_time_now_ms,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("time_unix_timestamp"),
+        Value::Builtin(BuiltinFn {
+            name: "time_unix_timestamp",
+            func: builtin_time_unix_timestamp,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("time_sleep_ms"),
+        Value::Builtin(BuiltinFn {
+            name: "time_sleep_ms",
+            func: builtin_time_sleep_ms,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("time_hour"),
+        Value::Builtin(BuiltinFn {
+            name: "time_hour",
+            func: builtin_time_hour,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("time_day_of_week"),
+        Value::Builtin(BuiltinFn {
+            name: "time_day_of_week",
+            func: builtin_time_day_of_week,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("time_to_iso8601"),
+        Value::Builtin(BuiltinFn {
+            name: "time_to_iso8601",
+            func: builtin_time_to_iso8601,
+        }),
+    );
+
+    env.define(
+        SmolStr::new("time_from_iso8601"),
+        Value::Builtin(BuiltinFn {
+            name: "time_from_iso8601",
+            func: builtin_time_from_iso8601,
         }),
     );
 
@@ -1046,6 +1127,178 @@ fn builtin_str_contains(args: &[Value]) -> RuntimeResult<Value> {
         (Value::String(s), Value::String(needle)) => Ok(Value::Bool(s.contains(needle.as_str()))),
         (Value::String(_), other) => Err(RuntimeError::type_error("string", other.type_name())),
         (other, _) => Err(RuntimeError::type_error("string", other.type_name())),
+    }
+}
+
+fn builtin_str_to_lowercase(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::ArityMismatch {
+            expected: 1,
+            got: args.len(), hint: None,
+        });
+    }
+
+    match &args[0] {
+        Value::String(s) => Ok(Value::String(SmolStr::new(&s.to_lowercase()))),
+        other => Err(RuntimeError::type_error("string", other.type_name())),
+    }
+}
+
+fn builtin_str_to_uppercase(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::ArityMismatch {
+            expected: 1,
+            got: args.len(), hint: None,
+        });
+    }
+
+    match &args[0] {
+        Value::String(s) => Ok(Value::String(SmolStr::new(&s.to_uppercase()))),
+        other => Err(RuntimeError::type_error("string", other.type_name())),
+    }
+}
+
+fn builtin_str_replace(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 3 {
+        return Err(RuntimeError::ArityMismatch {
+            expected: 3,
+            got: args.len(), hint: None,
+        });
+    }
+
+    match (&args[0], &args[1], &args[2]) {
+        (Value::String(s), Value::String(pattern), Value::String(replacement)) => {
+            let result = s.replace(pattern.as_str(), replacement.as_str());
+            Ok(Value::String(SmolStr::new(&result)))
+        }
+        (Value::String(_), Value::String(_), other) => {
+            Err(RuntimeError::type_error("string", other.type_name()))
+        }
+        (Value::String(_), other, _) => Err(RuntimeError::type_error("string", other.type_name())),
+        (other, _, _) => Err(RuntimeError::type_error("string", other.type_name())),
+    }
+}
+
+// ============================================================================
+// Time Operations
+// ============================================================================
+
+fn builtin_time_now_ms(_args: &[Value]) -> RuntimeResult<Value> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| RuntimeError::custom(&format!("Time error: {}", e)))?;
+
+    Ok(Value::Int(now.as_millis() as i64))
+}
+
+fn builtin_time_unix_timestamp(_args: &[Value]) -> RuntimeResult<Value> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| RuntimeError::custom(&format!("Time error: {}", e)))?;
+
+    Ok(Value::Int(now.as_secs() as i64))
+}
+
+fn builtin_time_sleep_ms(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::ArityMismatch {
+            expected: 1,
+            got: args.len(), hint: None,
+        });
+    }
+
+    match &args[0] {
+        Value::Int(millis) => {
+            if *millis < 0 {
+                return Err(RuntimeError::custom("sleep duration must be non-negative"));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(*millis as u64));
+            Ok(Value::Unit)
+        }
+        other => Err(RuntimeError::type_error("integer", other.type_name())),
+    }
+}
+
+fn builtin_time_hour(_args: &[Value]) -> RuntimeResult<Value> {
+    // Simple implementation using local time
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| RuntimeError::custom(&format!("Time error: {}", e)))?;
+
+    // Simplified: hour from UTC (full impl would need timezone handling)
+    let secs = now.as_secs();
+    let hour = (secs / 3600) % 24;
+
+    Ok(Value::Int(hour as i64))
+}
+
+fn builtin_time_day_of_week(_args: &[Value]) -> RuntimeResult<Value> {
+    // Simple implementation: days since Unix epoch (Thursday)
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| RuntimeError::custom(&format!("Time error: {}", e)))?;
+
+    let days = now.as_secs() / 86400;
+    // Unix epoch (1970-01-01) was a Thursday (4), so add 4 and mod 7
+    let day_of_week = (days + 4) % 7;
+
+    Ok(Value::Int(day_of_week as i64))
+}
+
+fn builtin_time_to_iso8601(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::ArityMismatch {
+            expected: 1,
+            got: args.len(), hint: None,
+        });
+    }
+
+    match &args[0] {
+        Value::Int(timestamp) => {
+            // Simple ISO 8601 formatting (YYYY-MM-DDTHH:MM:SSZ)
+            // Note: This is simplified; full impl would use chrono or similar
+            let secs = *timestamp as u64;
+            let days = secs / 86400;
+            let year = 1970 + (days / 365);  // Approximate
+
+            // Simplified format
+            let iso = format!("{:04}-01-01T00:00:00Z", year);
+            Ok(Value::String(SmolStr::new(&iso)))
+        }
+        other => Err(RuntimeError::type_error("integer", other.type_name())),
+    }
+}
+
+fn builtin_time_from_iso8601(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::ArityMismatch {
+            expected: 1,
+            got: args.len(), hint: None,
+        });
+    }
+
+    match &args[0] {
+        Value::String(iso_str) => {
+            // Simplified parsing - just extract year and convert to timestamp
+            // Note: This is simplified; full impl would use chrono or similar
+            if let Some(year_str) = iso_str.split('-').next() {
+                if let Ok(year) = year_str.parse::<i64>() {
+                    // Approximate timestamp (seconds since 1970)
+                    let timestamp = (year - 1970) * 365 * 86400;
+                    return Ok(Value::Int(timestamp));
+                }
+            }
+            Err(RuntimeError::custom("Invalid ISO 8601 format"))
+        }
+        other => Err(RuntimeError::type_error("string", other.type_name())),
     }
 }
 

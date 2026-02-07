@@ -21,7 +21,7 @@ mod vm;
 
 pub use bytecode::{BytecodeModule, BytecodeGenerator, Instruction as BytecodeInstruction};
 pub use cranelift_backend::CraneliftBackend;
-pub use vm::{VirtualMachine, Value as VmValue, VmError};
+pub use vm::{VirtualMachine, Value as VmValue, VmError, CallFrame, ResourceUsage, DebugEvent, DebugAction};
 
 use eclexia_ast::types::Ty;
 use eclexia_mir::{MirFile, LocalId, BlockId};

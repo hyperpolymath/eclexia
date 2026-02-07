@@ -518,6 +518,8 @@ impl<'hir> LoweringContext<'hir> {
             hir::BinaryOp::BitXor => BinaryOp::BitXor,
             hir::BinaryOp::Shl => BinaryOp::Shl,
             hir::BinaryOp::Shr => BinaryOp::Shr,
+            hir::BinaryOp::Range => BinaryOp::Range,
+            hir::BinaryOp::RangeInclusive => BinaryOp::RangeInclusive,
         }
     }
 

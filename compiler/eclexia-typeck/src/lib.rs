@@ -869,6 +869,22 @@ impl<'a> TypeChecker<'a> {
                     Ty::Error
                 }
             }
+            BinaryOp::Range | BinaryOp::RangeInclusive => {
+                // Range operators: 0..5 or 0..=5
+                // For now, we require both sides to be integers and return a generic type
+                // TODO: Implement proper Range<T> type
+                if !self.is_integer(lhs) || !self.is_integer(rhs) {
+                    self.errors.push(TypeError::Custom {
+                        span,
+                        message: "range operators require integer bounds".to_string(),
+                        hint: Some("ranges like 0..5 only work with integers".to_string()),
+                    });
+                    return Ty::Error;
+                }
+                // Return an opaque "Range" type for now
+                // This allows ranges to be used in for loops
+                lhs.clone()
+            }
         }
     }
 

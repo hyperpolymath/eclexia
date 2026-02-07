@@ -566,6 +566,15 @@ impl<'src> Parser<'src> {
         let kind = match &token.kind {
             TokenKind::Let => {
                 self.advance();
+
+                // Optional 'mut' keyword
+                let _is_mut = if self.check(TokenKind::Mut) {
+                    self.advance();
+                    true
+                } else {
+                    false
+                };
+
                 let name = self.expect_ident()?;
 
                 let ty = if self.check(TokenKind::Colon) {
@@ -775,6 +784,11 @@ impl<'src> Parser<'src> {
 
         self.expect(TokenKind::Eq)?;
         let value = self.parse_expr(file)?;
+
+        // Optional semicolon
+        if self.check(TokenKind::Semi) {
+            self.advance();
+        }
 
         let span = start.merge(self.previous_span());
 

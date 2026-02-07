@@ -15,3 +15,7 @@ eclexia-ast = { path = "../../compiler/eclexia-ast" }
 smol_str = { workspace = true }
 rustc-hash = { workspace = true }
 tokio = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+quickcheck = { workspace = true }

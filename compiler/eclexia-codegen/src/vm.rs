@@ -8,7 +8,7 @@
 use crate::bytecode::{BytecodeModule, Instruction};
 use eclexia_ast::dimension::Dimension;
 use smol_str::SmolStr;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// A value on the VM stack
 #[derive(Debug, Clone)]
@@ -104,28 +104,48 @@ impl std::error::Error for VmError {}
 
 /// Call frame for function calls
 #[derive(Debug, Clone)]
-struct CallFrame {
+pub struct CallFrame {
     /// Function being executed
-    function_idx: usize,
+    pub function_idx: usize,
 
     /// Instruction pointer
-    ip: usize,
+    pub ip: usize,
 
     /// Base pointer for local variables
-    bp: usize,
+    pub bp: usize,
 }
 
 /// Resource tracking entry
 #[derive(Debug, Clone)]
-struct ResourceUsage {
+pub struct ResourceUsage {
     /// Resource name
-    resource: SmolStr,
+    pub resource: SmolStr,
 
     /// Dimension
-    dimension: Dimension,
+    pub dimension: Dimension,
 
     /// Amount consumed
-    amount: f64,
+    pub amount: f64,
+}
+
+/// Debug event
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DebugEvent {
+    /// Hit a breakpoint
+    Breakpoint,
+    /// Single step
+    Step,
+}
+
+/// Action to take after a debug event
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DebugAction {
+    /// Continue execution
+    Continue,
+    /// Step to next instruction
+    Step,
+    /// Pause execution (return from execute)
+    Pause,
 }
 
 /// Virtual machine state
@@ -150,6 +170,18 @@ pub struct VirtualMachine {
 
     /// Call stack depth limit
     call_limit: usize,
+
+    /// Debug mode enabled
+    debug_mode: bool,
+
+    /// Breakpoints (function_idx, instruction_idx)
+    breakpoints: HashSet<(usize, usize)>,
+
+    /// Single-step mode
+    single_step: bool,
+
+    /// Paused at current instruction
+    paused: bool,
 }
 
 impl VirtualMachine {
@@ -163,7 +195,88 @@ impl VirtualMachine {
             resources: Vec::new(),
             stack_limit: 10000,
             call_limit: 1000,
+            debug_mode: false,
+            breakpoints: HashSet::new(),
+            single_step: false,
+            paused: false,
         }
+    }
+
+    /// Enable debug mode
+    pub fn enable_debug(&mut self) {
+        self.debug_mode = true;
+    }
+
+    /// Disable debug mode
+    pub fn disable_debug(&mut self) {
+        self.debug_mode = false;
+        self.single_step = false;
+    }
+
+    /// Set a breakpoint at the given function and instruction
+    pub fn set_breakpoint(&mut self, func_idx: usize, inst_idx: usize) {
+        self.breakpoints.insert((func_idx, inst_idx));
+    }
+
+    /// Remove a breakpoint
+    pub fn remove_breakpoint(&mut self, func_idx: usize, inst_idx: usize) {
+        self.breakpoints.remove(&(func_idx, inst_idx));
+    }
+
+    /// Clear all breakpoints
+    pub fn clear_breakpoints(&mut self) {
+        self.breakpoints.clear();
+    }
+
+    /// Enable single-step mode
+    pub fn enable_single_step(&mut self) {
+        self.single_step = true;
+    }
+
+    /// Disable single-step mode
+    pub fn disable_single_step(&mut self) {
+        self.single_step = false;
+    }
+
+    /// Check if execution is paused
+    pub fn is_paused(&self) -> bool {
+        self.paused
+    }
+
+    /// Resume execution
+    pub fn resume(&mut self) {
+        self.paused = false;
+    }
+
+    /// Step one instruction (enables single-step and resumes)
+    pub fn step_one(&mut self) {
+        self.single_step = true;
+        self.paused = false;
+    }
+
+    /// Get current stack
+    pub fn get_stack(&self) -> &[Value] {
+        &self.stack
+    }
+
+    /// Get current locals
+    pub fn get_locals(&self) -> &[Value] {
+        &self.locals
+    }
+
+    /// Get current call stack
+    pub fn get_call_stack(&self) -> &[CallFrame] {
+        &self.call_stack
+    }
+
+    /// Get current resource usage
+    pub fn get_resources(&self) -> &[ResourceUsage] {
+        &self.resources
+    }
+
+    /// Get module
+    pub fn get_module(&self) -> &BytecodeModule {
+        &self.module
     }
 
     /// Execute the module's entry point
@@ -219,6 +332,21 @@ impl VirtualMachine {
             let ip = frame.ip;
             let call_depth_before = self.call_stack.len();
 
+            // Check for breakpoint or single-step mode
+            if self.debug_mode && !self.paused {
+                let at_breakpoint = self.breakpoints.contains(&(func_idx, ip));
+                if at_breakpoint || self.single_step {
+                    // Pause execution
+                    self.paused = true;
+                    // If single-stepping, disable it so we pause at next instruction
+                    if self.single_step {
+                        self.single_step = false;
+                    }
+                    // Return control to debugger
+                    return Ok(Value::Unit);
+                }
+            }
+
             // Clone the instruction to avoid borrow conflicts
             let inst = {
                 let func = &self.module.functions[func_idx];
@@ -229,8 +357,10 @@ impl VirtualMachine {
             };
 
             // Debug
-            eprintln!("Exec: func={}, ip={}, inst={:?}, stack={}, locals={}, call_depth={}",
-                     func_idx, ip, inst, self.stack.len(), self.locals.len(), call_depth_before);
+            if !self.debug_mode {
+                eprintln!("Exec: func={}, ip={}, inst={:?}, stack={}, locals={}, call_depth={}",
+                         func_idx, ip, inst, self.stack.len(), self.locals.len(), call_depth_before);
+            }
 
             // Execute instruction
             match self.execute_instruction(&inst)? {
@@ -578,6 +708,19 @@ impl VirtualMachine {
                 let a = self.pop()?.as_int()?;
                 self.push(Value::Int(!a))?;
                 Ok(ExecutionResult::Continue)
+            }
+
+            // Range
+            Instruction::Range => {
+                // TODO: Implement proper Range value type
+                // For now, just error
+                Err(VmError::InvalidInstruction("Range operator not yet fully implemented in VM".to_string()))
+            }
+
+            Instruction::RangeInclusive => {
+                // TODO: Implement proper Range value type
+                // For now, just error
+                Err(VmError::InvalidInstruction("RangeInclusive operator not yet fully implemented in VM".to_string()))
             }
 
             // Control flow

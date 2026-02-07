@@ -334,6 +334,10 @@ pub enum BinaryOp {
     BitXor,
     Shl,
     Shr,
+
+    // Range
+    Range,
+    RangeInclusive,
 }
 
 /// Unary operators
@@ -366,6 +370,8 @@ impl From<eclexia_hir::BinaryOp> for BinaryOp {
             eclexia_hir::BinaryOp::BitXor => BinaryOp::BitXor,
             eclexia_hir::BinaryOp::Shl => BinaryOp::Shl,
             eclexia_hir::BinaryOp::Shr => BinaryOp::Shr,
+            eclexia_hir::BinaryOp::Range => BinaryOp::Range,
+            eclexia_hir::BinaryOp::RangeInclusive => BinaryOp::RangeInclusive,
         }
     }
 }

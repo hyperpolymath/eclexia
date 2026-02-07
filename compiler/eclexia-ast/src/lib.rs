@@ -443,6 +443,9 @@ pub enum BinaryOp {
     BitXor,
     Shl,
     Shr,
+    // Range
+    Range,      // ..
+    RangeInclusive, // ..= (if needed later)
 }
 
 /// Unary operator

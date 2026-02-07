@@ -465,6 +465,11 @@ impl Interpreter {
                 (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a >> b)),
                 _ => Err(RuntimeError::type_error("integer", lhs.type_name())),
             },
+            BinaryOp::Range | BinaryOp::RangeInclusive => {
+                // TODO: Implement proper Range type
+                // For now, just return an error
+                Err(RuntimeError::custom("range operations not yet fully implemented in interpreter"))
+            }
         }
     }
 

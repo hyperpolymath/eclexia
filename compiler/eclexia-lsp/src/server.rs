@@ -111,6 +111,25 @@ fn find_call_context(text: &str, offset: usize) -> Option<(String, usize)> {
     None
 }
 
+/// Extract the identifier prefix before the cursor position.
+/// Scans backwards from offset to find the start of an identifier.
+fn extract_prefix(text: &str, offset: usize) -> String {
+    let bytes = text.as_bytes();
+    let end = offset.min(bytes.len());
+
+    // Scan backwards to find the start of the identifier
+    let mut start = end;
+    while start > 0 && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_') {
+        start -= 1;
+    }
+
+    if start < end {
+        String::from_utf8_lossy(&bytes[start..end]).to_string()
+    } else {
+        String::new()
+    }
+}
+
 /// Document state stored in memory.
 struct Document {
     /// The document text
@@ -154,7 +173,7 @@ impl EclexiaLanguageServer {
 
         // Build symbol table if parsing succeeded
         let symbols = if parse_errors.is_empty() {
-            Some(SymbolTable::build(&file))
+            Some(SymbolTable::build(&file, text))
         } else {
             None
         };
@@ -188,7 +207,7 @@ impl EclexiaLanguageServer {
             diagnostics.push(diagnostic);
         }
 
-        // If parsing succeeded, run type checker
+        // If parsing succeeded, run type checker and linter
         if parse_errors.is_empty() {
             let type_errors = eclexia_typeck::check(&file);
 
@@ -214,6 +233,44 @@ impl EclexiaLanguageServer {
                     code_description: None,
                     source: Some("eclexia-typeck".to_string()),
                     message: error.to_string(), // Use Display implementation
+                    related_information: None,
+                    tags: None,
+                    data: None,
+                };
+                diagnostics.push(diagnostic);
+            }
+
+            // Run linter
+            let linter = eclexia_lint::Linter::new();
+            let lint_diagnostics = linter.lint(&file, text);
+
+            // Convert lint diagnostics to LSP diagnostics
+            for lint_diag in lint_diagnostics {
+                let start_lc = lint_diag.span.start_linecol(text);
+                let end_lc = lint_diag.span.end_linecol(text);
+
+                let severity = match lint_diag.severity {
+                    eclexia_lint::diagnostics::Severity::Error => DiagnosticSeverity::ERROR,
+                    eclexia_lint::diagnostics::Severity::Warning => DiagnosticSeverity::WARNING,
+                    eclexia_lint::diagnostics::Severity::Info => DiagnosticSeverity::INFORMATION,
+                };
+
+                let diagnostic = Diagnostic {
+                    range: Range {
+                        start: Position {
+                            line: start_lc.line.saturating_sub(1),
+                            character: start_lc.col.saturating_sub(1),
+                        },
+                        end: Position {
+                            line: end_lc.line.saturating_sub(1),
+                            character: end_lc.col.saturating_sub(1),
+                        },
+                    },
+                    severity: Some(severity),
+                    code: Some(tower_lsp::lsp_types::NumberOrString::String(lint_diag.rule.clone())),
+                    code_description: None,
+                    source: Some("eclexia-lint".to_string()),
+                    message: lint_diag.message,
                     related_information: None,
                     tags: None,
                     data: None,
@@ -355,20 +412,36 @@ impl LanguageServer for EclexiaLanguageServer {
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let uri = params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
 
         if let Some(doc) = self.documents.get(&uri) {
             if let Some(ref symbols) = doc.symbols {
-                // Get all symbols and show them as hover info
-                let global_syms = symbols.global_symbols();
+                // Convert LSP position to byte offset
+                let byte_offset = line_col_to_offset(&doc.text, position.line, position.character);
+                let position_span = Span::new(byte_offset, byte_offset + 1);
 
-                if !global_syms.is_empty() {
-                    let mut hover_text = String::from("## Symbols in this file:\n\n");
-                    for sym in global_syms {
-                        hover_text.push_str(&format!(
-                            "- **{}** ({:?})\n",
-                            sym.name,
-                            sym.kind
-                        ));
+                // Find the symbol at cursor position
+                if let Some(symbol) = symbols.symbol_at_position(position_span) {
+                    let mut hover_text = String::new();
+
+                    // Symbol name and kind
+                    hover_text.push_str(&format!("**{}**", symbol.name));
+
+                    // Add kind information
+                    let kind_str = match symbol.kind {
+                        crate::symbols::SymbolKind::Function => "function",
+                        crate::symbols::SymbolKind::AdaptiveFunction => "adaptive function",
+                        crate::symbols::SymbolKind::TypeDef => "type",
+                        crate::symbols::SymbolKind::Const => "constant",
+                        crate::symbols::SymbolKind::Variable => "variable",
+                        crate::symbols::SymbolKind::Parameter => "parameter",
+                    };
+                    hover_text.push_str(&format!("\n\n*{}*", kind_str));
+
+                    // Add documentation if available
+                    if let Some(ref doc) = symbol.doc {
+                        hover_text.push_str("\n\n---\n\n");
+                        hover_text.push_str(doc);
                     }
 
                     return Ok(Some(Hover {
@@ -387,13 +460,58 @@ impl LanguageServer for EclexiaLanguageServer {
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
+        let position = params.text_document_position.position;
 
         if let Some(doc) = self.documents.get(&uri) {
             if let Some(ref symbols) = doc.symbols {
                 let mut completions = Vec::new();
 
-                // Suggest all global symbols
+                // Extract prefix by scanning backwards from cursor
+                let byte_offset = line_col_to_offset(&doc.text, position.line, position.character);
+                let prefix = extract_prefix(&doc.text, byte_offset as usize);
+
+                // Add keyword completions
+                let keywords = vec![
+                    "fn", "let", "if", "else", "match", "return", "true", "false",
+                    "resource", "adaptive", "shadow", "budget", "dimension",
+                    "@requires", "@provides", "@builtin", "@test", "@bench",
+                    "import", "type", "const", "for", "while", "break", "continue",
+                ];
+
+                for keyword in keywords {
+                    if prefix.is_empty() || keyword.starts_with(&prefix) {
+                        completions.push(CompletionItem {
+                            label: keyword.to_string(),
+                            label_details: None,
+                            kind: Some(CompletionItemKind::KEYWORD),
+                            detail: Some(format!("keyword")),
+                            documentation: None,
+                            deprecated: Some(false),
+                            preselect: None,
+                            sort_text: Some(format!("0_{}", keyword)), // Keywords first
+                            filter_text: None,
+                            insert_text: None,
+                            insert_text_format: None,
+                            insert_text_mode: None,
+                            text_edit: None,
+                            additional_text_edits: None,
+                            command: None,
+                            commit_characters: None,
+                            data: None,
+                            tags: None,
+                        });
+                    }
+                }
+
+                // Suggest symbols filtered by prefix
                 for symbol in symbols.global_symbols() {
+                    let name = symbol.name.as_str();
+
+                    // Filter by prefix
+                    if !prefix.is_empty() && !name.starts_with(&prefix) {
+                        continue;
+                    }
+
                     let kind = match symbol.kind {
                         crate::symbols::SymbolKind::Function => CompletionItemKind::FUNCTION,
                         crate::symbols::SymbolKind::AdaptiveFunction => CompletionItemKind::FUNCTION,
@@ -405,6 +523,13 @@ impl LanguageServer for EclexiaLanguageServer {
 
                     let detail = symbol.doc.clone();
 
+                    // Sort: exact match > prefix match
+                    let sort_text = if name == prefix {
+                        format!("1_{}", name) // Exact match
+                    } else {
+                        format!("2_{}", name) // Prefix match
+                    };
+
                     completions.push(CompletionItem {
                         label: symbol.name.to_string(),
                         label_details: None,
@@ -413,7 +538,7 @@ impl LanguageServer for EclexiaLanguageServer {
                         documentation: None,
                         deprecated: Some(false),
                         preselect: None,
-                        sort_text: None,
+                        sort_text: Some(sort_text),
                         filter_text: None,
                         insert_text: None,
                         insert_text_format: None,
@@ -602,36 +727,17 @@ impl LanguageServer for EclexiaLanguageServer {
         let uri = params.text_document.uri;
 
         if let Some(doc) = self.documents.get(&uri) {
-            // Only format documents that parse without errors
-            let (_file, errors) = eclexia_parser::parse(&doc.text);
-            if !errors.is_empty() {
-                return Ok(None);
-            }
-
             let original = &doc.text;
-            let mut formatted_lines: Vec<String> = Vec::new();
-            let mut prev_blank = false;
 
-            for line in original.lines() {
-                let trimmed = line.trim_end();
-                let is_blank = trimmed.is_empty();
-
-                // Collapse consecutive blank lines to at most one
-                if is_blank && prev_blank {
-                    continue;
+            // Use the new formatter
+            let formatter = eclexia_fmt::Formatter::new();
+            let formatted = match formatter.format(original) {
+                Ok(f) => f,
+                Err(_) => {
+                    // If formatting fails (e.g., parse errors), return None
+                    return Ok(None);
                 }
-
-                formatted_lines.push(trimmed.to_string());
-                prev_blank = is_blank;
-            }
-
-            // Remove trailing blank lines, then add exactly one trailing newline
-            while formatted_lines.last().map_or(false, |l| l.is_empty()) {
-                formatted_lines.pop();
-            }
-
-            let mut formatted = formatted_lines.join("\n");
-            formatted.push('\n');
+            };
 
             if formatted != *original {
                 // Count total lines in original

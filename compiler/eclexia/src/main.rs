@@ -12,6 +12,10 @@ mod test_runner;
 mod bench_runner;
 mod package;
 mod resolver;
+mod registry;
+mod cache;
+mod lockfile;
+mod package_manager;
 
 #[derive(Parser)]
 #[command(name = "eclexia")]
@@ -95,6 +99,38 @@ enum Commands {
         #[arg(value_name = "FILTER")]
         filter: Option<String>,
     },
+
+    /// Lint Eclexia source code
+    Lint {
+        /// Input file(s)
+        #[arg(value_name = "FILE")]
+        input: Vec<PathBuf>,
+    },
+
+    /// Debug Eclexia bytecode
+    Debug {
+        /// Input file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+    },
+
+    /// Generate documentation
+    Doc {
+        /// Input file(s)
+        #[arg(value_name = "FILE")]
+        input: Vec<PathBuf>,
+
+        /// Output directory
+        #[arg(short, long, default_value = "docs")]
+        output: PathBuf,
+
+        /// Output format
+        #[arg(short, long, default_value = "html")]
+        format: String,
+    },
+
+    /// Install dependencies from package.toml
+    Install,
 }
 
 fn main() -> miette::Result<()> {
@@ -124,6 +160,18 @@ fn main() -> miette::Result<()> {
         }
         Commands::Bench { filter } => {
             commands::bench(filter.as_deref())?;
+        }
+        Commands::Lint { input } => {
+            commands::lint(&input)?;
+        }
+        Commands::Debug { input } => {
+            commands::debug(&input)?;
+        }
+        Commands::Doc { input, output, format } => {
+            commands::doc(&input, &output, &format)?;
+        }
+        Commands::Install => {
+            commands::install()?;
         }
     }
 

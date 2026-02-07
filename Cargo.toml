@@ -13,7 +13,12 @@ members = [
     "compiler/eclexia-mir",
     "compiler/eclexia-codegen",
     "compiler/eclexia-interp",
-    "runtime/eclexia-runtime", "compiler/eclexia-lsp",
+    "compiler/eclexia-fmt",
+    "compiler/eclexia-lint",
+    "compiler/eclexia-debugger",
+    "compiler/eclexia-doc",
+    "runtime/eclexia-runtime",
+    "compiler/eclexia-lsp",
 ]
 
 [workspace.package]
@@ -65,6 +70,10 @@ tokio = { version = "1.37", features = ["full"] }
 smol_str = "0.2"
 la-arena = "0.3"
 rustc-hash = "1.1"
+
+# Testing
+quickcheck = "1.0"
+proptest = "1.4"
 
 [profile.release]
 lto = true

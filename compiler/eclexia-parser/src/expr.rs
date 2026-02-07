@@ -417,6 +417,9 @@ impl<'src> Parser<'src> {
             TokenKind::LtLt => BinaryOp::Shl,
             TokenKind::GtGt => BinaryOp::Shr,
 
+            // Range
+            TokenKind::DotDot => BinaryOp::Range,
+
             _ => return Err(ParseError::unexpected_token(token, "operator")),
         };
 
@@ -518,6 +521,7 @@ impl<'src> Parser<'src> {
             TokenKind::AmpAmp | TokenKind::And => Precedence::And,
             TokenKind::EqEq | TokenKind::BangEq => Precedence::Equality,
             TokenKind::Lt | TokenKind::Le | TokenKind::Gt | TokenKind::Ge => Precedence::Comparison,
+            TokenKind::DotDot => Precedence::Comparison,
             TokenKind::Pipe => Precedence::BitOr,
             TokenKind::Caret => Precedence::BitXor,
             TokenKind::Amp => Precedence::BitAnd,

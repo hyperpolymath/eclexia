@@ -96,61 +96,104 @@ impl SymbolTable {
     }
 
     /// Build symbol table from a source file
-    pub fn build(file: &SourceFile) -> Self {
+    pub fn build(file: &SourceFile, source: &str) -> Self {
         let mut table = Self::new();
 
         // Collect top-level items
         for item in &file.items {
-            table.collect_item(item, file);
+            table.collect_item(item, file, source);
         }
 
         table
     }
 
     /// Collect symbols from an item
-    fn collect_item(&mut self, item: &Item, file: &SourceFile) {
+    fn collect_item(&mut self, item: &Item, file: &SourceFile, source: &str) {
         match item {
             Item::Function(func) => {
+                // Extract doc comments
+                let doc = extract_doc_comment(source, func.span.start as usize);
+
                 let symbol = Symbol {
                     name: func.name.clone(),
                     kind: SymbolKind::Function,
                     definition_span: func.span,
-                    doc: None, // TODO: Extract doc comments
+                    doc,
                 };
                 self.define_symbol(symbol);
 
-                // Collect references from function body
+                // Enter function scope
+                self.enter_scope(func.body.span);
+
+                // Define function parameters as symbols in function scope
+                for param in &func.params {
+                    let param_symbol = Symbol {
+                        name: param.name.clone(),
+                        kind: SymbolKind::Parameter,
+                        definition_span: param.span,
+                        doc: None,
+                    };
+                    self.define_symbol(param_symbol);
+                }
+
+                // Collect references and local variables from function body
                 self.collect_block_references(&func.body, file);
+
+                // Exit function scope
+                self.exit_scope();
             }
             Item::AdaptiveFunction(func) => {
+                // Extract doc comments
+                let doc = extract_doc_comment(source, func.span.start as usize);
+
                 let symbol = Symbol {
                     name: func.name.clone(),
                     kind: SymbolKind::AdaptiveFunction,
                     definition_span: func.span,
-                    doc: None,
+                    doc,
                 };
                 self.define_symbol(symbol);
 
-                // Collect references from solutions
+                // Each solution is a separate scope
                 for solution in &func.solutions {
+                    self.enter_scope(solution.body.span);
+
+                    // Define function parameters in each solution scope
+                    for param in &func.params {
+                        let param_symbol = Symbol {
+                            name: param.name.clone(),
+                            kind: SymbolKind::Parameter,
+                            definition_span: param.span,
+                            doc: None,
+                        };
+                        self.define_symbol(param_symbol);
+                    }
+
                     self.collect_block_references(&solution.body, file);
+                    self.exit_scope();
                 }
             }
             Item::TypeDef(typedef) => {
+                // Extract doc comments
+                let doc = extract_doc_comment(source, typedef.span.start as usize);
+
                 let symbol = Symbol {
                     name: typedef.name.clone(),
                     kind: SymbolKind::TypeDef,
                     definition_span: typedef.span,
-                    doc: None,
+                    doc,
                 };
                 self.define_symbol(symbol);
             }
             Item::Const(const_def) => {
+                // Extract doc comments
+                let doc = extract_doc_comment(source, const_def.span.start as usize);
+
                 let symbol = Symbol {
                     name: const_def.name.clone(),
                     kind: SymbolKind::Const,
                     definition_span: const_def.span,
-                    doc: None,
+                    doc,
                 };
                 self.define_symbol(symbol);
             }
@@ -232,7 +275,17 @@ impl SymbolTable {
     fn collect_stmt_references(&mut self, stmt_id: StmtId, file: &SourceFile) {
         let stmt = &file.stmts[stmt_id];
         match &stmt.kind {
-            StmtKind::Let { value, .. } => {
+            StmtKind::Let { name, value, .. } => {
+                // Define the variable in current scope
+                let var_symbol = Symbol {
+                    name: name.clone(),
+                    kind: SymbolKind::Variable,
+                    definition_span: stmt.span,
+                    doc: None,
+                };
+                self.define_symbol(var_symbol);
+
+                // Collect references from the value expression
                 self.collect_expr_references(*value, file);
             }
             StmtKind::Expr(expr_id) => {
@@ -246,9 +299,25 @@ impl SymbolTable {
                 self.collect_expr_references(*condition, file);
                 self.collect_block_references(body, file);
             }
-            StmtKind::For { iter, body, .. } => {
+            StmtKind::For { name, iter, body } => {
+                // Enter for-loop scope
+                self.enter_scope(body.span);
+
+                // Define loop variable in for-loop scope
+                let loop_var = Symbol {
+                    name: name.clone(),
+                    kind: SymbolKind::Variable,
+                    definition_span: stmt.span,
+                    doc: None,
+                };
+                self.define_symbol(loop_var);
+
+                // Collect references from iterator and body
                 self.collect_expr_references(*iter, file);
                 self.collect_block_references(body, file);
+
+                // Exit for-loop scope
+                self.exit_scope();
             }
         }
     }
@@ -359,6 +428,67 @@ impl SymbolTable {
 impl Default for SymbolTable {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Extract doc comments by scanning backwards from the definition position.
+/// Looks for lines starting with `///` or `//!` immediately before the item.
+fn extract_doc_comment(source: &str, def_start: usize) -> Option<String> {
+    let bytes = source.as_bytes();
+    if def_start == 0 {
+        return None;
+    }
+
+    // Find the line start before def_start
+    let mut line_start = def_start;
+    while line_start > 0 && bytes[line_start - 1] != b'\n' {
+        line_start -= 1;
+    }
+
+    // Scan backwards to collect doc comment lines
+    let mut doc_lines = Vec::new();
+    let mut current = line_start;
+
+    while current > 0 {
+        // Move to previous line
+        if current > 0 {
+            current -= 1; // Skip newline
+        }
+        while current > 0 && bytes[current - 1] != b'\n' {
+            current -= 1;
+        }
+
+        // Extract the line
+        let line_end = if current < bytes.len() && bytes[current..].iter().position(|&b| b == b'\n').is_some() {
+            current + bytes[current..].iter().position(|&b| b == b'\n').unwrap()
+        } else {
+            bytes.len()
+        };
+
+        let line = std::str::from_utf8(&bytes[current..line_end]).ok()?.trim();
+
+        // Check if it's a doc comment
+        if line.starts_with("///") {
+            let content = line.trim_start_matches("///").trim();
+            doc_lines.push(content.to_string());
+        } else if line.starts_with("//!") {
+            let content = line.trim_start_matches("//!").trim();
+            doc_lines.push(content.to_string());
+        } else if line.is_empty() {
+            // Empty lines are okay, continue
+            continue;
+        } else {
+            // Not a doc comment line, stop
+            break;
+        }
+    }
+
+    if doc_lines.is_empty() {
+        None
+    } else {
+        // Reverse to get correct order
+        doc_lines.reverse();
+        Some(doc_lines.join("\n"))
     }
 }
 

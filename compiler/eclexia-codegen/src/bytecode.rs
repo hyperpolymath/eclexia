@@ -81,6 +81,12 @@ pub enum Instruction {
     Shr,
     BitNot,
 
+    // Range
+    /// Create range (start..end)
+    Range,
+    /// Create inclusive range (start..=end)
+    RangeInclusive,
+
     // Control flow
     /// Jump to label
     Jump(usize),
@@ -504,6 +510,8 @@ impl BytecodeGenerator {
             (BinaryOp::BitXor, _) => Instruction::BitXor,
             (BinaryOp::Shl, _) => Instruction::Shl,
             (BinaryOp::Shr, _) => Instruction::Shr,
+            (BinaryOp::Range, _) => Instruction::Range,
+            (BinaryOp::RangeInclusive, _) => Instruction::RangeInclusive,
         };
         out.push(inst);
         Ok(())

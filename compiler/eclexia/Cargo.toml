@@ -23,6 +23,10 @@ eclexia-hir = { path = "../eclexia-hir" }
 eclexia-mir = { path = "../eclexia-mir" }
 eclexia-codegen = { path = "../eclexia-codegen" }
 eclexia-interp = { path = "../eclexia-interp" }
+eclexia-fmt = { path = "../eclexia-fmt" }
+eclexia-lint = { path = "../eclexia-lint" }
+eclexia-debugger = { path = "../eclexia-debugger" }
+eclexia-doc = { path = "../eclexia-doc" }
 eclexia-runtime = { path = "../../runtime/eclexia-runtime" }
 
 clap = { workspace = true }
@@ -32,3 +36,7 @@ smol_str = { workspace = true }
 glob = { workspace = true }
 toml = { workspace = true }
 serde = { workspace = true }
+reqwest = { version = "0.11", features = ["blocking", "rustls-tls", "json"], default-features = false }
+sha2 = "0.10"
+tar = "0.4"
+serde_json = "1.0"
