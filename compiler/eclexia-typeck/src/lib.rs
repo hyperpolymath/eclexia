@@ -527,6 +527,24 @@ impl<'a> TypeChecker<'a> {
                 self.check_block(body);
                 self.env = old_env;
             }
+            StmtKind::Assign { target, value } => {
+                // Type check the value
+                let value_ty = self.infer_expr(*value);
+
+                // Check that target variable exists and types match
+                if let Some(target_scheme) = self.env.lookup(target.as_str()) {
+                    let target_ty = target_scheme.ty.clone();
+                    if let Err(e) = self.unify(&target_ty, &value_ty, stmt.span) {
+                        self.errors.push(e);
+                    }
+                } else {
+                    self.errors.push(TypeError::Custom {
+                        span: stmt.span,
+                        message: format!("undefined variable: {}", target),
+                        hint: Some("variables must be declared with 'let' before assignment".to_string()),
+                    });
+                }
+            }
         }
     }
 

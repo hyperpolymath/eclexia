@@ -95,6 +95,11 @@ fn collect_used_vars(stmt_id: eclexia_ast::StmtId, ctx: &LintContext, used: &mut
                 collect_used_vars(stmt_id, ctx, used);
             }
         }
+        StmtKind::Assign { target, value } => {
+            // Mark target as used
+            used.insert(target.clone());
+            collect_used_vars_expr(*value, ctx, used);
+        }
     }
 }
 

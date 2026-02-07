@@ -390,6 +390,29 @@ impl<'a> LoweringContext<'a> {
 
                 StmtKind::Let { local, init }
             }
+            ast::StmtKind::Assign { target, value } => {
+                // Look up the local variable
+                let local = if let Some(local_id) = self.lookup_local(target.as_str()) {
+                    local_id
+                } else {
+                    // Variable not found - create an error local
+                    self.define_local(stmt.span, target.clone(), Ty::Primitive(PrimitiveTy::Unit), true)
+                };
+
+                let value_expr = self.lower_expr(*value);
+
+                // Create an assignment expression
+                let assign_expr = self.hir.exprs.alloc(Expr {
+                    span: stmt.span,
+                    ty: Ty::Primitive(PrimitiveTy::Unit),
+                    kind: ExprKind::Assign {
+                        target: local,
+                        value: value_expr,
+                    },
+                });
+
+                StmtKind::Expr(assign_expr)
+            }
             ast::StmtKind::Expr(e) => StmtKind::Expr(self.lower_expr(*e)),
             ast::StmtKind::Return(e) => StmtKind::Return(e.map(|e| self.lower_expr(e))),
             ast::StmtKind::While { condition, body } => {

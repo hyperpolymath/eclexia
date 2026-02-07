@@ -350,6 +350,12 @@ pub enum ExprKind {
         expr: ExprId,
         target_ty: Ty,
     },
+
+    /// Assignment
+    Assign {
+        target: LocalId,
+        value: ExprId,
+    },
 }
 
 /// Literal value

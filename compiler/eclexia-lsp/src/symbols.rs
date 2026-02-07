@@ -319,6 +319,10 @@ impl SymbolTable {
                 // Exit for-loop scope
                 self.exit_scope();
             }
+            StmtKind::Assign { target: _, value } => {
+                // Collect references from the value expression
+                self.collect_expr_references(*value, file);
+            }
         }
     }
 

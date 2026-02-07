@@ -292,6 +292,11 @@ pub enum StmtKind {
         ty: Option<TypeId>,
         value: ExprId,
     },
+    /// Assignment statement
+    Assign {
+        target: Ident,
+        value: ExprId,
+    },
     /// Expression statement
     Expr(ExprId),
     /// Return statement

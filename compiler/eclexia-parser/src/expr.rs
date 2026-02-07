@@ -179,7 +179,8 @@ impl<'src> Parser<'src> {
 
             // If expression
             TokenKind::If => {
-                let condition = self.parse_expr(file)?;
+                // Parse condition without struct literals to avoid ambiguity with then block
+                let condition = self.parse_expr_no_struct(file)?;
 
                 // Optional 'then' keyword
                 if self.check(TokenKind::Then) {

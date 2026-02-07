@@ -275,6 +275,12 @@ impl<'a> Printer<'a> {
             StmtKind::Return(None) => {
                 self.write("return;");
             }
+            StmtKind::Assign { target, value } => {
+                self.write(target.as_str());
+                self.write(" = ");
+                self.format_expr(*value, file);
+                self.write(";");
+            }
             StmtKind::While { condition, body } => {
                 self.write("while ");
                 self.format_expr(*condition, file);

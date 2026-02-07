@@ -460,12 +460,67 @@ impl<'src> Parser<'src> {
     fn parse_solutions(&mut self, file: &mut SourceFile) -> ParseResult<Vec<Solution>> {
         let mut solutions = Vec::new();
 
-        while self.check(TokenKind::AtSolution) {
-            let solution = self.parse_solution(file)?;
-            solutions.push(solution);
+        // Parse solutions - either @solution syntax or shorthand (name @requires...)
+        loop {
+            if self.check(TokenKind::AtSolution) {
+                let solution = self.parse_solution(file)?;
+                solutions.push(solution);
+            } else if matches!(self.peek().kind, TokenKind::Ident(_)) {
+                // Shorthand solution syntax
+                let solution = self.parse_solution_shorthand(file)?;
+                solutions.push(solution);
+            } else {
+                break;
+            }
         }
 
         Ok(solutions)
+    }
+
+    /// Parse a shorthand solution: name @requires(...) { body }
+    fn parse_solution_shorthand(&mut self, file: &mut SourceFile) -> ParseResult<Solution> {
+        let start = self.peek().span;
+
+        // Solution name
+        let name = self.expect_ident()?;
+
+        // @requires clause (convert to provides with negated resource)
+        let mut provides = Vec::new();
+        if self.check(TokenKind::AtRequires) {
+            self.advance();
+            self.expect(TokenKind::LParen)?;
+
+            loop {
+                let resource = self.expect_ident()?;
+                self.expect(TokenKind::Colon)?;
+                let amount = self.parse_resource_amount()?;
+
+                provides.push(ResourceProvision {
+                    span: self.previous_span(),
+                    resource,
+                    amount,
+                });
+
+                if !self.check(TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+            }
+
+            self.expect(TokenKind::RParen)?;
+        }
+
+        // Solution body
+        let body = self.parse_block(file)?;
+        let span = start.merge(body.span);
+
+        Ok(Solution {
+            span,
+            name,
+            when_clause: None,
+            provides,
+            body,
+        })
     }
 
     /// Parse a single solution alternative.
@@ -617,6 +672,26 @@ impl<'src> Parser<'src> {
                 let iter = self.parse_expr_no_struct(file)?;
                 let body = self.parse_block(file)?;
                 StmtKind::For { name, iter, body }
+            }
+            TokenKind::Ident(_) => {
+                // Could be assignment (x = y) or expression statement
+                // Parse as expression first
+                let expr = self.parse_expr(file)?;
+
+                // Check if it's a simple Var followed by =
+                if matches!(file.exprs[expr].kind, ExprKind::Var(_)) && self.check(TokenKind::Eq) {
+                    // It's an assignment
+                    let target = match &file.exprs[expr].kind {
+                        ExprKind::Var(name) => name.clone(),
+                        _ => unreachable!(),
+                    };
+                    self.advance(); // consume =
+                    let value = self.parse_expr(file)?;
+                    StmtKind::Assign { target, value }
+                } else {
+                    // Regular expression statement
+                    StmtKind::Expr(expr)
+                }
             }
             _ => {
                 let expr = self.parse_expr(file)?;

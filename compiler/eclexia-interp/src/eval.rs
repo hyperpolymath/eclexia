@@ -597,6 +597,14 @@ impl Interpreter {
                     _ => Err(RuntimeError::type_error("iterable", iterable.type_name())),
                 }
             }
+            StmtKind::Assign { target, value } => {
+                let val = self.eval_expr(*value, file, env)?;
+                if env.assign(target.as_str(), val) {
+                    Ok(())
+                } else {
+                    Err(RuntimeError::custom(format!("undefined variable: {}", target)))
+                }
+            }
         }
     }
 
