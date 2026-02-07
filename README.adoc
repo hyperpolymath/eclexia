@@ -590,16 +590,17 @@ Ecology: Caring about environmental impact
 
 📝 Status & Stability
 
-Current Status: Research Preview / Pre-Alpha
-Eclexia is under active development. The language specification is stabilizing, but expect:
+Current Status: Alpha
+Eclexia is under active development. As of February 2026:
 
-Breaking changes to syntax/semantics
-Incomplete compiler implementation
-Limited standard library
-Rough edges in tooling
+* **32/32 valid conformance tests passing (100%)**
+* Full parser, interpreter, formatter, and linter functional
+* LSP server for IDE support
+* Type casting, pattern matching, adaptive functions, Option types all working
+* Resource tracking and shadow pricing operational
 
-Not yet ready for production use.
-We're targeting Alpha release in Q1 2026 and Beta in Q2 2026.
+The language specification is stabilizing but expect breaking changes to syntax/semantics.
+We're targeting Beta release in Q2 2026.
 
 ⚖️ Legal
 
