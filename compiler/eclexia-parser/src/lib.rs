@@ -79,10 +79,11 @@ impl<'src> Parser<'src> {
         }
     }
 
-    /// Parse attributes (#[name] or #[name(args)])
+    /// Parse attributes (#[name] or #[name(args)]) and annotations (@requires, @provides, etc.)
     fn parse_attributes(&mut self) -> ParseResult<Vec<Attribute>> {
         let mut attributes = Vec::new();
 
+        // Parse #[...] style attributes
         while self.check(TokenKind::Hash) {
             self.advance(); // consume #
             self.expect(TokenKind::LBracket)?;
@@ -109,6 +110,60 @@ impl<'src> Parser<'src> {
             let end = self.expect(TokenKind::RBracket)?;
             let span = start.merge(end);
 
+            attributes.push(Attribute { span, name, args });
+        }
+
+        // Parse @annotation(...) style annotations
+        while self.check(TokenKind::AtRequires) || self.check(TokenKind::AtProvides) ||
+              self.check(TokenKind::AtOptimize) || self.check(TokenKind::AtDeferUntil) {
+            let token = self.advance();
+            let start = token.span;
+
+            // Get annotation name (requires, provides, optimize, defer_until)
+            let name = match token.kind {
+                TokenKind::AtRequires => SmolStr::new("requires"),
+                TokenKind::AtProvides => SmolStr::new("provides"),
+                TokenKind::AtOptimize => SmolStr::new("optimize"),
+                TokenKind::AtDeferUntil => SmolStr::new("defer_until"),
+                _ => unreachable!(),
+            };
+
+            let mut args = Vec::new();
+
+            // Parse arguments: @requires(energy: 100J, time: 10ms)
+            if self.check(TokenKind::LParen) {
+                self.advance();
+                if !self.check(TokenKind::RParen) {
+                    loop {
+                        // Parse resource: amount pairs
+                        let resource = self.expect_ident()?;
+                        args.push(resource.clone());
+
+                        if self.check(TokenKind::Colon) {
+                            self.advance();
+                            // Parse the amount (could be resource literal or number)
+                            let amount_token = self.advance();
+                            let amount = match &amount_token.kind {
+                                TokenKind::Resource(r) => {
+                                    SmolStr::new(&format!("{}{}", r.value, r.unit))
+                                }
+                                TokenKind::Integer(n) => SmolStr::new(&n.to_string()),
+                                TokenKind::Float(f) => SmolStr::new(&f.to_string()),
+                                _ => SmolStr::new("unknown"),
+                            };
+                            args.push(amount);
+                        }
+
+                        if !self.check(TokenKind::Comma) {
+                            break;
+                        }
+                        self.advance();
+                    }
+                }
+                self.expect(TokenKind::RParen)?;
+            }
+
+            let span = start.merge(self.previous_span());
             attributes.push(Attribute { span, name, args });
         }
 
@@ -554,6 +609,12 @@ impl<'src> Parser<'src> {
         let kind = if self.check(TokenKind::Struct) {
             self.advance();
             self.expect(TokenKind::LBrace)?;
+            let fields = self.parse_fields(file)?;
+            self.expect(TokenKind::RBrace)?;
+            TypeDefKind::Struct(fields)
+        } else if self.check(TokenKind::LBrace) {
+            // Struct shorthand: type Foo = { ... } instead of type Foo = struct { ... }
+            self.advance();
             let fields = self.parse_fields(file)?;
             self.expect(TokenKind::RBrace)?;
             TypeDefKind::Struct(fields)

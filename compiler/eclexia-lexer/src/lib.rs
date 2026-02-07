@@ -143,8 +143,17 @@ pub enum TokenKind {
 
     // === Identifiers ===
     // Note: Keywords take priority. Single underscore is handled separately.
-    #[regex(r"[a-zA-Z][a-zA-Z0-9_]*", |lex| SmolStr::new(lex.slice()))]
-    #[regex(r"_[a-zA-Z0-9_]+", |lex| SmolStr::new(lex.slice()))]
+    // Support Unicode XID_Start and XID_Continue properties for mathematical notation (π, τ, etc.)
+    #[regex(r"[a-zA-Z_\u{80}-\u{10FFFF}][a-zA-Z0-9_\u{80}-\u{10FFFF}]*", |lex| {
+        let s = lex.slice();
+        // Verify first char is XID_Start, rest are XID_Continue
+        if s.chars().next().map_or(false, is_xid_start) &&
+           s.chars().skip(1).all(is_xid_continue) {
+            Some(SmolStr::new(s))
+        } else {
+            None
+        }
+    })]
     Ident(SmolStr),
 
     // === Operators ===
@@ -218,7 +227,7 @@ pub enum TokenKind {
     Hash,
     #[token("?")]
     Question,
-    #[token("_")]
+    #[token("_", priority = 10)]
     Underscore,
 
     // === Delimiters ===
@@ -321,6 +330,18 @@ fn parse_char(s: &str) -> char {
         Some(c) => c,
         None => '\0',
     }
+}
+
+/// Check if a character is valid as the first character of an identifier (XID_Start).
+/// This includes ASCII letters, underscore, and Unicode letter/ideograph characters.
+fn is_xid_start(c: char) -> bool {
+    c == '_' || c.is_alphabetic()
+}
+
+/// Check if a character is valid in the continuation of an identifier (XID_Continue).
+/// This includes XID_Start characters plus digits.
+fn is_xid_continue(c: char) -> bool {
+    is_xid_start(c) || c.is_numeric()
 }
 
 /// Lexer for Eclexia source code.
