@@ -8,6 +8,7 @@ use crate::env::Environment;
 use crate::error::{RuntimeError, RuntimeResult};
 use crate::value::{AdaptiveFunction, Function, FunctionBody, ResourceProvides, ResourceRequires, Solution, Value};
 use eclexia_ast::*;
+use eclexia_ast::TypeKind;
 use smol_str::SmolStr;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -34,6 +35,8 @@ pub struct Interpreter {
     shadow_latency: f64,
     /// Current call depth for recursion limiting
     call_depth: usize,
+    /// Method table: type_name -> method_name -> Value::Function
+    method_table: HashMap<SmolStr, HashMap<SmolStr, Value>>,
 }
 
 impl Interpreter {
@@ -54,6 +57,7 @@ impl Interpreter {
             shadow_carbon: 1.0,
             shadow_latency: 1.0,
             call_depth: 0,
+            method_table: HashMap::new(),
         }
     }
 
@@ -155,11 +159,123 @@ impl Interpreter {
                 let value = self.eval_expr(c.value, file, &self.global.clone())?;
                 self.global.define(c.name.clone(), value);
             }
-            Item::TypeDef(_) => {
-                // Type definitions don't create runtime values
+            Item::TypeDef(td) => {
+                // Register enum variant constructors as functions
+                if let TypeDefKind::Enum(variants) = &td.kind {
+                    for variant in variants {
+                        let vname = variant.name.clone();
+                        match &variant.fields {
+                            None => {
+                                // Unit variant: register as a struct value with no fields
+                                self.global.define(
+                                    vname.clone(),
+                                    Value::Struct {
+                                        name: vname,
+                                        fields: HashMap::new(),
+                                    },
+                                );
+                            }
+                            Some(field_types) => {
+                                // Tuple variant: register a constructor function
+                                let param_names: Vec<SmolStr> = (0..field_types.len())
+                                    .map(|i| SmolStr::new(format!("_{}", i)))
+                                    .collect();
+                                let variant_name = vname.clone();
+                                self.global.define(
+                                    vname,
+                                    Value::Function(Rc::new(Function {
+                                        name: variant_name,
+                                        params: param_names,
+                                        body: FunctionBody::Block {
+                                            file_idx: 0,
+                                            block_idx: 0,
+                                        },
+                                        closure: self.global.clone(),
+                                    })),
+                                );
+                            }
+                        }
+                    }
+                }
+                // Struct type defs don't need constructors (use ExprKind::Struct)
             }
             Item::Import(_) => {
-                // Imports not yet implemented
+                // Imports: for intra-file modules, resolve the path
+                // Full import resolution requires a module system; skip for now
+            }
+            Item::TraitDecl(_) => {
+                // Trait declarations: register default method bodies
+                // Actual dispatch is handled via impl blocks
+            }
+            Item::ImplBlock(impl_block) => {
+                // Register impl block methods in the method table
+                let type_name = self.resolve_type_name(impl_block.self_ty, file);
+                for item in &impl_block.items {
+                    match item {
+                        eclexia_ast::ImplItem::Method {
+                            sig,
+                            ..
+                        } => {
+                            let param_names: Vec<SmolStr> =
+                                sig.params.iter().map(|p| p.name.clone()).collect();
+                            let func = Value::Function(Rc::new(Function {
+                                name: sig.name.clone(),
+                                params: param_names,
+                                body: FunctionBody::Block {
+                                    file_idx: 0,
+                                    block_idx: 0,
+                                },
+                                closure: self.global.clone(),
+                            }));
+                            // Store in method table
+                            self.method_table
+                                .entry(type_name.clone())
+                                .or_default()
+                                .insert(sig.name.clone(), func.clone());
+                            // Also register as TypeName::method_name in global env
+                            let qualified = SmolStr::new(format!("{}::{}", type_name, sig.name));
+                            self.global.define(qualified, func.clone());
+                        }
+                        eclexia_ast::ImplItem::AssocConst {
+                            name, value, ..
+                        } => {
+                            let val = self.eval_expr(*value, file, &self.global.clone())?;
+                            let qualified = SmolStr::new(format!("{}::{}", type_name, name));
+                            self.global.define(qualified, val);
+                        }
+                        eclexia_ast::ImplItem::AssocType { .. } => {
+                            // Associated types don't create runtime values
+                        }
+                    }
+                }
+            }
+            Item::ModuleDecl(module) => {
+                // Module scoping: create a child environment for the module
+                if let Some(ref items) = module.items {
+                    let mod_env = self.global.child();
+                    // Register items in the module environment
+                    for item in items {
+                        self.register_item_in_env(item, file, &mod_env)?;
+                    }
+                    // Expose module items in global env with qualified names
+                    for (name, value) in mod_env.locals() {
+                        let qualified = SmolStr::new(format!("{}::{}", module.name, name));
+                        self.global.define(qualified, value);
+                    }
+                }
+            }
+            Item::EffectDecl(_) => {
+                // Effect declarations: register effect operations as stubs
+                // Full algebraic effects require continuation support
+            }
+            Item::StaticDecl(static_decl) => {
+                // Static variable: evaluate initializer and store in global env
+                let val = self.eval_expr(static_decl.value, file, &self.global.clone())?;
+                self.global.define(static_decl.name.clone(), val);
+            }
+            Item::ExternBlock(_) => {
+                // Extern blocks: foreign function stubs
+                // Would need FFI integration; skip for now
             }
         }
         Ok(())
@@ -322,12 +438,30 @@ impl Interpreter {
                 for arg in args {
                     arg_values.push(self.eval_expr(*arg, file, env)?);
                 }
-                // Look up method as a function
-                if let Some(func) = env.get(method.as_str()) {
-                    self.call_value(&func, &arg_values, file)
-                } else {
-                    Err(RuntimeError::undefined(method.as_str()))
+
+                // 1. Check method table for the receiver's type
+                let type_name = self.value_type_name(&recv);
+                if let Some(methods) = self.method_table.get(&type_name) {
+                    if let Some(func) = methods.get(method.as_ref()) {
+                        return self.call_method(&func.clone(), &arg_values, file, &recv);
+                    }
                 }
+
+                // 2. Check qualified name in env (TypeName::method)
+                let qualified = format!("{}::{}", type_name, method);
+                if let Some(func) = env.get(&qualified) {
+                    return self.call_method(&func, &arg_values, file, &recv);
+                }
+
+                // 3. Fallback: look up method as a standalone function
+                if let Some(func) = env.get(method.as_str()) {
+                    return self.call_value(&func, &arg_values, file);
+                }
+
+                Err(RuntimeError::custom(format!(
+                    "no method '{}' found for type '{}'",
+                    method, type_name
+                )))
             }
 
             ExprKind::Struct { name, fields } => {
@@ -342,10 +476,140 @@ impl Interpreter {
                 })
             }
 
-            ExprKind::Cast { expr, .. } => {
-                // For now, just evaluate the expression (ignore the cast)
+            ExprKind::Cast { expr, target_ty } => {
+                let val = self.eval_expr(*expr, file, env)?;
+                // Perform numeric conversions based on target type
+                let target_type = &file.types[*target_ty];
+                match &target_type.kind {
+                    TypeKind::Named { name, .. } => match name.as_str() {
+                        "Int" | "i64" | "i32" | "i16" | "i8" | "u64" | "u32" | "u16" | "u8"
+                        | "isize" | "usize" => match &val {
+                            Value::Int(_) => Ok(val),
+                            Value::Float(f) => Ok(Value::Int(*f as i64)),
+                            Value::Bool(b) => Ok(Value::Int(if *b { 1 } else { 0 })),
+                            Value::Char(c) => Ok(Value::Int(*c as i64)),
+                            Value::String(s) => s
+                                .parse::<i64>()
+                                .map(Value::Int)
+                                .map_err(|_| RuntimeError::custom(format!("cannot cast '{}' to Int", s))),
+                            _ => Err(RuntimeError::type_error("numeric", val.type_name())),
+                        },
+                        "Float" | "f64" | "f32" => match &val {
+                            Value::Float(_) => Ok(val),
+                            Value::Int(n) => Ok(Value::Float(*n as f64)),
+                            Value::Bool(b) => Ok(Value::Float(if *b { 1.0 } else { 0.0 })),
+                            Value::String(s) => s
+                                .parse::<f64>()
+                                .map(Value::Float)
+                                .map_err(|_| RuntimeError::custom(format!("cannot cast '{}' to Float", s))),
+                            _ => Err(RuntimeError::type_error("numeric", val.type_name())),
+                        },
+                        "String" => Ok(Value::String(SmolStr::new(format!("{}", val)))),
+                        "Bool" => Ok(Value::Bool(val.is_truthy())),
+                        "Char" => match &val {
+                            Value::Int(n) => char::from_u32(*n as u32)
+                                .map(Value::Char)
+                                .ok_or_else(|| RuntimeError::custom(format!("invalid char code: {}", n))),
+                            Value::Char(_) => Ok(val),
+                            _ => Err(RuntimeError::type_error("Int or Char", val.type_name())),
+                        },
+                        _ => Ok(val), // Unknown cast target: pass through
+                    },
+                    _ => Ok(val), // Non-named type: pass through
+                }
+            }
+
+            ExprKind::ArrayRepeat { value, count } => {
+                let val = self.eval_expr(*value, file, env)?;
+                let cnt = self.eval_expr(*count, file, env)?;
+                match cnt.as_int() {
+                    Some(n) => {
+                        let values = vec![val; n as usize];
+                        Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(values))))
+                    }
+                    None => Err(RuntimeError::type_error("integer", cnt.type_name())),
+                }
+            }
+
+            ExprKind::Try(inner) => {
+                let val = self.eval_expr(*inner, file, env)?;
+                match &val {
+                    Value::Some(v) => Ok(*v.clone()),
+                    Value::None => Err(RuntimeError::custom("try operator (?) on None value")),
+                    // Handle Result types: Ok(value) unwraps, Err(e) propagates
+                    Value::Struct { name, fields } if name.as_str() == "Ok" => {
+                        fields
+                            .get("0")
+                            .cloned()
+                            .ok_or_else(|| RuntimeError::custom("malformed Ok value"))
+                    }
+                    Value::Struct { name, fields } if name.as_str() == "Err" => {
+                        let err_val = fields
+                            .get("0")
+                            .cloned()
+                            .unwrap_or(Value::Unit);
+                        Err(RuntimeError::custom(format!("try operator (?) on Err: {}", err_val)))
+                    }
+                    // For non-Option/Result types, pass through
+                    _ => Ok(val),
+                }
+            }
+
+            ExprKind::Borrow { expr, .. } => {
+                // Borrow semantics not modeled in interpreter; evaluate inner expr
                 self.eval_expr(*expr, file, env)
             }
+
+            ExprKind::Deref(expr) => {
+                // Deref semantics not modeled in interpreter; evaluate inner expr
+                self.eval_expr(*expr, file, env)
+            }
+
+            ExprKind::AsyncBlock(block) => {
+                // Simplified: evaluate async block eagerly (no actual async runtime)
+                self.eval_block(block, file, env)
+            }
+
+            ExprKind::Await(expr) => {
+                // Await not yet implemented; evaluate inner expression
+                self.eval_expr(*expr, file, env)
+            }
+
+            ExprKind::Handle { expr, .. } => {
+                // Effect handlers not yet implemented; evaluate inner expression
+                self.eval_expr(*expr, file, env)
+            }
+
+            ExprKind::ReturnExpr(opt_expr) => {
+                let val = if let Some(e) = opt_expr {
+                    self.eval_expr(*e, file, env)?
+                } else {
+                    Value::Unit
+                };
+                Err(RuntimeError::Return(val))
+            }
+
+            ExprKind::BreakExpr { .. } => {
+                // Break as expression
+                Err(RuntimeError::Break)
+            }
+
+            ExprKind::ContinueExpr { .. } => {
+                // Continue as expression
+                Err(RuntimeError::Continue)
+            }
+
+            ExprKind::PathExpr(segments) => {
+                // Try to look up the full path as a single name (e.g., Foo::bar)
+                let full_name = segments.join("::");
+                env.get(&full_name)
+                    .or_else(|| {
+                        // Fallback: try the last segment as a simple variable
+                        segments.last().and_then(|s| env.get(s.as_str()))
+                    })
+                    .ok_or_else(|| RuntimeError::undefined(&full_name))
+            }
+
             ExprKind::Error => Err(RuntimeError::custom("error expression")),
         }
     }
@@ -536,9 +800,9 @@ impl Interpreter {
         let stmt = &file.stmts[stmt_id];
 
         match &stmt.kind {
-            StmtKind::Let { name, value, .. } => {
+            StmtKind::Let { pattern, value, .. } => {
                 let val = self.eval_expr(*value, file, env)?;
-                env.define(name.clone(), val);
+                self.bind_pattern(pattern, &val, env);
                 Ok(())
             }
             StmtKind::Expr(expr) => {
@@ -578,13 +842,13 @@ impl Interpreter {
                 }
                 Ok(())
             }
-            StmtKind::For { name, iter, body } => {
+            StmtKind::For { pattern, iter, body } => {
                 let iterable = self.eval_expr(*iter, file, env)?;
                 match iterable {
                     Value::Array(arr) => {
                         for val in arr.borrow().iter() {
                             let loop_env = env.child();
-                            loop_env.define(name.clone(), val.clone());
+                            self.bind_pattern(pattern, val, &loop_env);
                             match self.eval_block(body, file, &loop_env) {
                                 Ok(_) => {}
                                 Err(RuntimeError::Break) => break,
@@ -597,7 +861,7 @@ impl Interpreter {
                     Value::Tuple(t) => {
                         for val in t {
                             let loop_env = env.child();
-                            loop_env.define(name.clone(), val);
+                            self.bind_pattern(pattern, &val, &loop_env);
                             match self.eval_block(body, file, &loop_env) {
                                 Ok(_) => {}
                                 Err(RuntimeError::Break) => break,
@@ -612,11 +876,78 @@ impl Interpreter {
             }
             StmtKind::Assign { target, value } => {
                 let val = self.eval_expr(*value, file, env)?;
-                if env.assign(target.as_str(), val) {
-                    Ok(())
-                } else {
-                    Err(RuntimeError::custom(format!("undefined variable: {}", target)))
+                // target is now an ExprId; look up the expression to get the name
+                let target_expr = &file.exprs[*target];
+                match &target_expr.kind {
+                    ExprKind::Var(name) => {
+                        if env.assign(name.as_str(), val) {
+                            Ok(())
+                        } else {
+                            Err(RuntimeError::custom(format!("undefined variable: {}", name)))
+                        }
+                    }
+                    ExprKind::Field { expr, field } => {
+                        let base = self.eval_expr(*expr, file, env)?;
+                        match base {
+                            Value::Struct { name, mut fields } => {
+                                fields.insert(field.clone(), val);
+                                // Re-assign the whole struct back
+                                // This is a simplification; proper mutation needs ref semantics
+                                let base_expr = &file.exprs[*expr];
+                                if let ExprKind::Var(var_name) = &base_expr.kind {
+                                    env.assign(var_name.as_str(), Value::Struct { name, fields });
+                                }
+                                Ok(())
+                            }
+                            _ => Err(RuntimeError::type_error("struct", base.type_name())),
+                        }
+                    }
+                    ExprKind::Index { expr, index } => {
+                        let base = self.eval_expr(*expr, file, env)?;
+                        let idx = self.eval_expr(*index, file, env)?;
+                        match (&base, idx.as_int()) {
+                            (Value::Array(arr), Some(i)) => {
+                                let mut arr = arr.borrow_mut();
+                                let i = i as usize;
+                                if i < arr.len() {
+                                    arr[i] = val;
+                                    Ok(())
+                                } else {
+                                    Err(RuntimeError::IndexOutOfBounds { index: i, len: arr.len(), span: None, hint: None })
+                                }
+                            }
+                            _ => Err(RuntimeError::type_error("array", base.type_name())),
+                        }
+                    }
+                    _ => {
+                        Err(RuntimeError::custom("unsupported assignment target".to_string()))
+                    }
                 }
+            }
+            StmtKind::Loop { body, .. } => {
+                let mut iterations: u64 = 0;
+                loop {
+                    iterations += 1;
+                    if iterations > MAX_LOOP_ITERATIONS {
+                        return Err(RuntimeError::custom(format!(
+                            "maximum loop iterations ({}) exceeded",
+                            MAX_LOOP_ITERATIONS
+                        )));
+                    }
+                    match self.eval_block(body, file, env) {
+                        Ok(_) => {}
+                        Err(RuntimeError::Break) => break,
+                        Err(RuntimeError::Continue) => continue,
+                        Err(e) => return Err(e),
+                    }
+                }
+                Ok(())
+            }
+            StmtKind::Break { .. } => {
+                Err(RuntimeError::Break)
+            }
+            StmtKind::Continue { .. } => {
+                Err(RuntimeError::Continue)
             }
         }
     }
@@ -949,7 +1280,326 @@ impl Interpreter {
                     None
                 }
             }
+            Pattern::Struct { name, fields, rest } => {
+                if let Value::Struct {
+                    name: struct_name,
+                    fields: struct_fields,
+                } = value
+                {
+                    if name != struct_name {
+                        return None;
+                    }
+                    let mut bindings = vec![];
+                    for fp in fields {
+                        if let Some(v) = struct_fields.get(&fp.name) {
+                            if let Some(ref pat) = fp.pattern {
+                                bindings.extend(self.match_pattern(pat, v)?);
+                            } else {
+                                // Shorthand: field name is also the binding
+                                bindings.push((fp.name.clone(), v.clone()));
+                            }
+                        } else if !rest {
+                            return None;
+                        }
+                    }
+                    Some(bindings)
+                } else {
+                    None
+                }
+            }
+            Pattern::Slice(patterns) => {
+                if let Value::Array(arr) = value {
+                    let arr = arr.borrow();
+                    if patterns.len() != arr.len() {
+                        return None;
+                    }
+                    let mut bindings = vec![];
+                    for (p, v) in patterns.iter().zip(arr.iter()) {
+                        bindings.extend(self.match_pattern(p, v)?);
+                    }
+                    Some(bindings)
+                } else {
+                    None
+                }
+            }
+            Pattern::Or(patterns) => {
+                // Try each alternative; return bindings from the first match
+                for p in patterns {
+                    if let Some(bindings) = self.match_pattern(p, value) {
+                        return Some(bindings);
+                    }
+                }
+                None
+            }
+            Pattern::Range { start, end, inclusive } => {
+                // Match numeric ranges
+                let val_num = match value {
+                    Value::Int(n) => Some(*n as f64),
+                    Value::Float(f) => Some(*f),
+                    _ => None,
+                };
+                if let Some(v) = val_num {
+                    let start_ok = match start {
+                        Some(pat) => {
+                            let lit_val = match pat.as_ref() {
+                                Pattern::Literal(lit) => Some(self.eval_literal(lit)),
+                                _ => None,
+                            };
+                            match lit_val.and_then(|lv| lv.as_float()) {
+                                Some(s) => v >= s,
+                                None => false,
+                            }
+                        }
+                        None => true,
+                    };
+                    let end_ok = match end {
+                        Some(pat) => {
+                            let lit_val = match pat.as_ref() {
+                                Pattern::Literal(lit) => Some(self.eval_literal(lit)),
+                                _ => None,
+                            };
+                            match lit_val.and_then(|lv| lv.as_float()) {
+                                Some(e) => if *inclusive { v <= e } else { v < e },
+                                None => false,
+                            }
+                        }
+                        None => true,
+                    };
+                    if start_ok && end_ok { Some(vec![]) } else { None }
+                } else {
+                    None
+                }
+            }
+            Pattern::Rest => {
+                // Rest pattern (..) only meaningful inside slice/struct patterns
+                Some(vec![])
+            }
+            Pattern::Binding { name, pattern } => {
+                // name @ pattern: bind the whole value and also match sub-pattern
+                if let Some(mut bindings) = self.match_pattern(pattern, value) {
+                    bindings.push((name.clone(), value.clone()));
+                    Some(bindings)
+                } else {
+                    None
+                }
+            }
+            Pattern::Reference { pattern, .. } => {
+                // Reference patterns not modeled in interpreter; match inner pattern
+                self.match_pattern(pattern, value)
+            }
         }
+    }
+
+    /// Bind a pattern to a value, defining variables in the environment.
+    fn bind_pattern(&self, pattern: &Pattern, value: &Value, env: &Environment) {
+        match pattern {
+            Pattern::Var(name) => {
+                env.define(name.clone(), value.clone());
+            }
+            Pattern::Wildcard => {
+                // No binding needed
+            }
+            Pattern::Tuple(patterns) => {
+                if let Value::Tuple(values) = value {
+                    for (pat, val) in patterns.iter().zip(values.iter()) {
+                        self.bind_pattern(pat, val, env);
+                    }
+                }
+            }
+            Pattern::Slice(patterns) => {
+                if let Value::Array(arr) = value {
+                    let arr = arr.borrow();
+                    for (pat, val) in patterns.iter().zip(arr.iter()) {
+                        self.bind_pattern(pat, val, env);
+                    }
+                }
+            }
+            Pattern::Struct { name: _, fields, .. } => {
+                if let Value::Struct { fields: struct_fields, .. } = value {
+                    for fp in fields {
+                        if let Some(val) = struct_fields.get(&fp.name) {
+                            if let Some(ref pat) = fp.pattern {
+                                self.bind_pattern(pat, val, env);
+                            } else {
+                                // Shorthand: field name is also the binding
+                                env.define(fp.name.clone(), val.clone());
+                            }
+                        }
+                    }
+                }
+            }
+            Pattern::Constructor { name: _, fields } => {
+                // Treat constructor fields as positional bindings
+                if let Value::Tuple(values) = value {
+                    for (pat, val) in fields.iter().zip(values.iter()) {
+                        self.bind_pattern(pat, val, env);
+                    }
+                }
+            }
+            Pattern::Binding { name, pattern } => {
+                // Bind the whole value and also destructure
+                env.define(name.clone(), value.clone());
+                self.bind_pattern(pattern, value, env);
+            }
+            Pattern::Reference { pattern, .. } => {
+                // References not modeled; destructure inner
+                self.bind_pattern(pattern, value, env);
+            }
+            Pattern::Or(patterns) => {
+                // Try each alternative; bind from the first match
+                for pat in patterns {
+                    if self.match_pattern(pat, value).is_some() {
+                        self.bind_pattern(pat, value, env);
+                        break;
+                    }
+                }
+            }
+            Pattern::Literal(_) | Pattern::Range { .. } | Pattern::Rest => {
+                // Literals, ranges, and rest don't bind variables
+            }
+        }
+    }
+
+    /// Resolve a TypeId to a type name string (for method table lookups).
+    fn resolve_type_name(&self, type_id: TypeId, file: &SourceFile) -> SmolStr {
+        let ty = &file.types[type_id];
+        match &ty.kind {
+            TypeKind::Named { name, .. } => name.clone(),
+            _ => SmolStr::new("<unknown>"),
+        }
+    }
+
+    /// Get the runtime type name of a Value (for method dispatch).
+    fn value_type_name(&self, val: &Value) -> SmolStr {
+        match val {
+            Value::Struct { name, .. } => name.clone(),
+            Value::Array(_) => SmolStr::new("Array"),
+            Value::HashMap(_) => SmolStr::new("HashMap"),
+            Value::SortedMap(_) => SmolStr::new("SortedMap"),
+            Value::String(_) => SmolStr::new("String"),
+            Value::Int(_) => SmolStr::new("Int"),
+            Value::Float(_) => SmolStr::new("Float"),
+            Value::Bool(_) => SmolStr::new("Bool"),
+            Value::Char(_) => SmolStr::new("Char"),
+            Value::Tuple(_) => SmolStr::new("Tuple"),
+            Value::Resource { .. } => SmolStr::new("Resource"),
+            Value::Some(_) | Value::None => SmolStr::new("Option"),
+            Value::Function(_) => SmolStr::new("Function"),
+            Value::AdaptiveFunction(_) => SmolStr::new("AdaptiveFunction"),
+            Value::Builtin(_) => SmolStr::new("Builtin"),
+            Value::Unit => SmolStr::new("Unit"),
+        }
+    }
+
+    /// Register an item in a specific environment (for module scoping).
+    fn register_item_in_env(
+        &mut self,
+        item: &Item,
+        file: &SourceFile,
+        env: &Environment,
+    ) -> RuntimeResult<()> {
+        match item {
+            Item::Function(func) => {
+                let value = Value::Function(Rc::new(Function {
+                    name: func.name.clone(),
+                    params: func.params.iter().map(|p| p.name.clone()).collect(),
+                    body: FunctionBody::Block {
+                        file_idx: 0,
+                        block_idx: 0,
+                    },
+                    closure: env.clone(),
+                }));
+                env.define(func.name.clone(), value);
+            }
+            Item::Const(c) => {
+                let value = self.eval_expr(c.value, file, &env.clone())?;
+                env.define(c.name.clone(), value);
+            }
+            Item::StaticDecl(s) => {
+                let value = self.eval_expr(s.value, file, &env.clone())?;
+                env.define(s.name.clone(), value);
+            }
+            _ => {
+                // Other items in module scope: delegate to register_item
+                // which puts them in global; acceptable for now
+            }
+        }
+        Ok(())
+    }
+
+    /// Call a method on a value, finding the correct body in the file's items.
+    fn call_method(
+        &mut self,
+        callee: &Value,
+        args: &[Value],
+        file: &SourceFile,
+        receiver: &Value,
+    ) -> RuntimeResult<Value> {
+        if self.call_depth >= MAX_CALL_DEPTH {
+            return Err(RuntimeError::custom(format!(
+                "maximum call depth of {} exceeded (possible infinite recursion)",
+                MAX_CALL_DEPTH
+            )));
+        }
+        self.call_depth += 1;
+
+        let result = match callee {
+            Value::Function(func) => {
+                let call_env = func.closure.child();
+                // Bind 'self' parameter if first param matches
+                let mut param_iter = func.params.iter();
+                let mut arg_iter = args.iter();
+
+                if let Some(first_param) = param_iter.next() {
+                    if first_param.as_str() == "self" || first_param.as_str() == "&self" {
+                        call_env.define(SmolStr::new("self"), receiver.clone());
+                        arg_iter.next(); // skip receiver in args
+                    } else {
+                        if let Some(arg) = arg_iter.next() {
+                            call_env.define(first_param.clone(), arg.clone());
+                        }
+                    }
+                }
+
+                for (param, arg) in param_iter.zip(arg_iter) {
+                    call_env.define(param.clone(), arg.clone());
+                }
+
+                // Find the method body in impl blocks
+                let type_name = self.value_type_name(receiver);
+                for item in &file.items {
+                    if let Item::ImplBlock(impl_block) = item {
+                        let impl_type = self.resolve_type_name(impl_block.self_ty, file);
+                        if impl_type == type_name {
+                            for impl_item in &impl_block.items {
+                                if let eclexia_ast::ImplItem::Method {
+                                    sig, body, ..
+                                } = impl_item
+                                {
+                                    if sig.name == func.name {
+                                        let r = self.eval_block(body, file, &call_env);
+                                        self.call_depth -= 1;
+                                        return match r {
+                                            Ok(v) => Ok(v),
+                                            Err(RuntimeError::Return(v)) => Ok(v),
+                                            Err(e) => Err(e),
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fallback: try as regular function call
+                self.call_depth -= 1;
+                return self.call_value(callee, args, file);
+            }
+            _ => self.call_value_inner(callee, args, file),
+        };
+
+        self.call_depth -= 1;
+        result
     }
 }
 

@@ -8,7 +8,7 @@
 
 mod printer;
 
-use eclexia_ast::{Item, SourceFile};
+use eclexia_ast::SourceFile;
 use eclexia_parser::parse;
 
 /// Formatter configuration.

@@ -4,7 +4,7 @@
 //! Benchmark runner for Eclexia programs.
 
 use eclexia_ast::{Attribute, Item, SourceFile};
-use eclexia_codegen::{Backend, BytecodeGenerator, VirtualMachine, VmValue};
+use eclexia_codegen::{Backend, BytecodeGenerator, VirtualMachine};
 use std::time::{Duration, Instant};
 
 /// A benchmark function with metadata.
@@ -16,6 +16,7 @@ pub struct BenchFunction {
 
 /// Benchmark statistics.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct BenchStats {
     pub iterations: usize,
     pub total_time: Duration,
@@ -63,6 +64,7 @@ impl BenchStats {
 
 /// Benchmark result.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum BenchResult {
     Success(BenchStats),
     Failed { error: String },

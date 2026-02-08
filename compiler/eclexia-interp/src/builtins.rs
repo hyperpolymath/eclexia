@@ -2019,7 +2019,7 @@ fn builtin_priority_queue_push(args: &[Value]) -> RuntimeResult<Value> {
                 Value::Array(arr) => {
                     arr.borrow_mut().push(args[2].clone());
                 }
-                _ => unreachable!(),
+                _ => return Err(RuntimeError::custom("internal error: priority queue entry is not an array")),
             }
             Ok(Value::Unit)
         }
@@ -2383,6 +2383,7 @@ fn builtin_some(args: &[Value]) -> RuntimeResult<Value> {
 
 /// Construct a None variant of Option<T>.
 /// Usage: None()
+#[allow(dead_code)]
 fn builtin_none(args: &[Value]) -> RuntimeResult<Value> {
     if !args.is_empty() {
         return Err(RuntimeError::custom("None takes no arguments"));

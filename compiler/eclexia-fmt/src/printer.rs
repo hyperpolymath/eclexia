@@ -5,11 +5,11 @@
 
 use crate::FormatConfig;
 use eclexia_ast::*;
-use smol_str::SmolStr;
 
 /// Pretty printer for Eclexia AST.
 pub struct Printer<'a> {
     config: &'a FormatConfig,
+    #[allow(dead_code)]
     source: &'a str,
     output: String,
     indent_level: usize,
@@ -76,6 +76,12 @@ impl<'a> Printer<'a> {
             Item::TypeDef(typedef) => self.format_typedef(typedef, file),
             Item::Const(const_def) => self.format_const(const_def, file),
             Item::Import(import) => self.format_import(import),
+            Item::TraitDecl(decl) => self.format_trait_decl(decl, file),
+            Item::ImplBlock(block) => self.format_impl_block(block, file),
+            Item::ModuleDecl(decl) => self.format_module_decl(decl, file),
+            Item::EffectDecl(decl) => self.format_effect_decl(decl, file),
+            Item::StaticDecl(decl) => self.format_static_decl(decl, file),
+            Item::ExternBlock(block) => self.format_extern_block(block, file),
         }
     }
 
@@ -227,6 +233,350 @@ impl<'a> Printer<'a> {
         self.write(";");
     }
 
+    fn format_trait_decl(&mut self, decl: &TraitDecl, file: &SourceFile) {
+        self.format_visibility(&decl.visibility);
+        self.write("trait ");
+        self.write(decl.name.as_str());
+        self.format_type_params(&decl.type_params);
+        if !decl.super_traits.is_empty() {
+            self.write(": ");
+            for (i, bound) in decl.super_traits.iter().enumerate() {
+                if i > 0 {
+                    self.write(" + ");
+                }
+                self.format_trait_bound(bound, file);
+            }
+        }
+        self.format_where_clause(&decl.where_clause, file);
+        self.write(" {");
+        self.newline();
+        self.indent();
+
+        for item in &decl.items {
+            match item {
+                TraitItem::Method { sig, body, .. } => {
+                    self.write("fn ");
+                    self.format_fn_sig(sig, file);
+                    if let Some(block) = body {
+                        self.write(" ");
+                        self.format_block(block, file);
+                    } else {
+                        self.write(";");
+                    }
+                    self.newline();
+                }
+                TraitItem::AssocType { name, bounds, default, .. } => {
+                    self.write("type ");
+                    self.write(name.as_str());
+                    if !bounds.is_empty() {
+                        self.write(": ");
+                        for (i, bound) in bounds.iter().enumerate() {
+                            if i > 0 {
+                                self.write(" + ");
+                            }
+                            self.format_trait_bound(bound, file);
+                        }
+                    }
+                    if let Some(ty) = default {
+                        self.write(" = ");
+                        self.format_type(*ty, file);
+                    }
+                    self.write(";");
+                    self.newline();
+                }
+                TraitItem::AssocConst { name, ty, default, .. } => {
+                    self.write("const ");
+                    self.write(name.as_str());
+                    self.write(": ");
+                    self.format_type(*ty, file);
+                    if let Some(val) = default {
+                        self.write(" = ");
+                        self.format_expr(*val, file);
+                    }
+                    self.write(";");
+                    self.newline();
+                }
+            }
+        }
+
+        self.dedent();
+        self.write("}");
+    }
+
+    fn format_impl_block(&mut self, block: &ImplBlock, file: &SourceFile) {
+        self.write("impl");
+        self.format_type_params(&block.type_params);
+        if let Some(trait_path) = &block.trait_path {
+            self.write(" ");
+            for (i, segment) in trait_path.iter().enumerate() {
+                if i > 0 {
+                    self.write("::");
+                }
+                self.write(segment.as_str());
+            }
+            self.write(" for ");
+        } else {
+            self.write(" ");
+        }
+        self.format_type(block.self_ty, file);
+        self.format_where_clause(&block.where_clause, file);
+        self.write(" {");
+        self.newline();
+        self.indent();
+
+        for item in &block.items {
+            match item {
+                ImplItem::Method { visibility, sig, body, .. } => {
+                    self.format_visibility(visibility);
+                    self.write("fn ");
+                    self.format_fn_sig(sig, file);
+                    self.write(" ");
+                    self.format_block(body, file);
+                    self.newline();
+                }
+                ImplItem::AssocType { name, ty, .. } => {
+                    self.write("type ");
+                    self.write(name.as_str());
+                    self.write(" = ");
+                    self.format_type(*ty, file);
+                    self.write(";");
+                    self.newline();
+                }
+                ImplItem::AssocConst { name, ty, value, .. } => {
+                    self.write("const ");
+                    self.write(name.as_str());
+                    self.write(": ");
+                    self.format_type(*ty, file);
+                    self.write(" = ");
+                    self.format_expr(*value, file);
+                    self.write(";");
+                    self.newline();
+                }
+            }
+        }
+
+        self.dedent();
+        self.write("}");
+    }
+
+    fn format_module_decl(&mut self, decl: &ModuleDecl, file: &SourceFile) {
+        self.format_visibility(&decl.visibility);
+        self.write("mod ");
+        self.write(decl.name.as_str());
+        if let Some(items) = &decl.items {
+            self.write(" {");
+            self.newline();
+            self.indent();
+            for item in items {
+                self.format_item(item, file);
+                self.newline();
+            }
+            self.dedent();
+            self.write("}");
+        } else {
+            self.write(";");
+        }
+    }
+
+    fn format_effect_decl(&mut self, decl: &EffectDecl, file: &SourceFile) {
+        self.format_visibility(&decl.visibility);
+        self.write("effect ");
+        self.write(decl.name.as_str());
+        self.format_type_params(&decl.type_params);
+        self.write(" {");
+        self.newline();
+        self.indent();
+
+        for op in &decl.operations {
+            self.write("fn ");
+            self.write(op.name.as_str());
+            self.write("(");
+            for (i, param) in op.params.iter().enumerate() {
+                if i > 0 {
+                    self.write(", ");
+                }
+                self.write(param.name.as_str());
+                if let Some(ty) = param.ty {
+                    self.write(": ");
+                    self.format_type(ty, file);
+                }
+            }
+            self.write(")");
+            if let Some(ret_ty) = op.return_type {
+                self.write(" -> ");
+                self.format_type(ret_ty, file);
+            }
+            self.write(";");
+            self.newline();
+        }
+
+        self.dedent();
+        self.write("}");
+    }
+
+    fn format_static_decl(&mut self, decl: &StaticDecl, file: &SourceFile) {
+        self.format_visibility(&decl.visibility);
+        if decl.mutable {
+            self.write("static mut ");
+        } else {
+            self.write("static ");
+        }
+        self.write(decl.name.as_str());
+        self.write(": ");
+        self.format_type(decl.ty, file);
+        self.write(" = ");
+        self.format_expr(decl.value, file);
+        self.write(";");
+    }
+
+    fn format_extern_block(&mut self, block: &ExternBlock, file: &SourceFile) {
+        self.write("extern");
+        if let Some(abi) = &block.abi {
+            self.write(" \"");
+            self.write(abi.as_str());
+            self.write("\"");
+        }
+        self.write(" {");
+        self.newline();
+        self.indent();
+
+        for item in &block.items {
+            match item {
+                ExternItem::Fn(sig) => {
+                    self.write("fn ");
+                    self.format_fn_sig(sig, file);
+                    self.write(";");
+                    self.newline();
+                }
+                ExternItem::Static { mutable, name, ty, .. } => {
+                    if *mutable {
+                        self.write("static mut ");
+                    } else {
+                        self.write("static ");
+                    }
+                    self.write(name.as_str());
+                    self.write(": ");
+                    self.format_type(*ty, file);
+                    self.write(";");
+                    self.newline();
+                }
+            }
+        }
+
+        self.dedent();
+        self.write("}");
+    }
+
+    /// Format a function signature (shared helper for traits, impls, extern)
+    fn format_fn_sig(&mut self, sig: &FunctionSig, file: &SourceFile) {
+        self.write(sig.name.as_str());
+        self.format_type_params(&sig.type_params);
+        self.write("(");
+        for (i, param) in sig.params.iter().enumerate() {
+            if i > 0 {
+                self.write(", ");
+            }
+            self.write(param.name.as_str());
+            if let Some(ty) = param.ty {
+                self.write(": ");
+                self.format_type(ty, file);
+            }
+        }
+        self.write(")");
+        if let Some(ret_ty) = sig.return_type {
+            self.write(" -> ");
+            self.format_type(ret_ty, file);
+        }
+        self.format_where_clause(&sig.where_clause, file);
+    }
+
+    /// Format type parameters: `<T, U: Trait>`
+    fn format_type_params(&mut self, params: &[TypeParam]) {
+        if params.is_empty() {
+            return;
+        }
+        self.write("<");
+        for (i, param) in params.iter().enumerate() {
+            if i > 0 {
+                self.write(", ");
+            }
+            self.write(param.name.as_str());
+            if !param.bounds.is_empty() {
+                self.write(": ");
+                for (j, bound) in param.bounds.iter().enumerate() {
+                    if j > 0 {
+                        self.write(" + ");
+                    }
+                    // Inline path formatting to avoid needing file
+                    for (k, segment) in bound.path.iter().enumerate() {
+                        if k > 0 {
+                            self.write("::");
+                        }
+                        self.write(segment.as_str());
+                    }
+                }
+            }
+        }
+        self.write(">");
+    }
+
+    /// Format a trait bound
+    fn format_trait_bound(&mut self, bound: &TraitBound, file: &SourceFile) {
+        for (i, segment) in bound.path.iter().enumerate() {
+            if i > 0 {
+                self.write("::");
+            }
+            self.write(segment.as_str());
+        }
+        if !bound.type_args.is_empty() {
+            self.write("<");
+            for (i, &arg) in bound.type_args.iter().enumerate() {
+                if i > 0 {
+                    self.write(", ");
+                }
+                self.format_type(arg, file);
+            }
+            self.write(">");
+        }
+    }
+
+    /// Format a where clause
+    fn format_where_clause(&mut self, preds: &[WherePredicate], file: &SourceFile) {
+        if preds.is_empty() {
+            return;
+        }
+        self.newline();
+        self.indent();
+        self.write("where");
+        self.newline();
+        self.indent();
+        for (i, pred) in preds.iter().enumerate() {
+            self.format_type(pred.ty, file);
+            self.write(": ");
+            for (j, bound) in pred.bounds.iter().enumerate() {
+                if j > 0 {
+                    self.write(" + ");
+                }
+                self.format_trait_bound(bound, file);
+            }
+            if i < preds.len() - 1 {
+                self.write(",");
+            }
+            self.newline();
+        }
+        self.dedent();
+        self.dedent();
+    }
+
+    /// Format visibility modifier
+    fn format_visibility(&mut self, vis: &Visibility) {
+        match vis {
+            Visibility::Public => self.write("pub "),
+            Visibility::PubCrate => self.write("pub(crate) "),
+            Visibility::Private => {}
+        }
+    }
+
     fn format_block(&mut self, block: &Block, file: &SourceFile) {
         self.write("{");
         self.newline();
@@ -252,9 +602,12 @@ impl<'a> Printer<'a> {
         let stmt = &file.stmts[stmt_id];
 
         match &stmt.kind {
-            StmtKind::Let { name, ty, value } => {
+            StmtKind::Let { pattern, mutable, ty, value } => {
                 self.write("let ");
-                self.write(name.as_str());
+                if *mutable {
+                    self.write("mut ");
+                }
+                self.format_pattern(pattern);
                 if let Some(ty_id) = ty {
                     self.write(": ");
                     self.format_type(*ty_id, file);
@@ -276,7 +629,7 @@ impl<'a> Printer<'a> {
                 self.write("return;");
             }
             StmtKind::Assign { target, value } => {
-                self.write(target.as_str());
+                self.format_expr(*target, file);
                 self.write(" = ");
                 self.format_expr(*value, file);
                 self.write(";");
@@ -287,13 +640,42 @@ impl<'a> Printer<'a> {
                 self.write(" ");
                 self.format_block(body, file);
             }
-            StmtKind::For { name, iter, body } => {
+            StmtKind::For { pattern, iter, body } => {
                 self.write("for ");
-                self.write(name.as_str());
+                self.format_pattern(pattern);
                 self.write(" in ");
                 self.format_expr(*iter, file);
                 self.write(" ");
                 self.format_block(body, file);
+            }
+            StmtKind::Loop { label, body } => {
+                if let Some(lbl) = label {
+                    self.write("'");
+                    self.write(lbl.as_str());
+                    self.write(": ");
+                }
+                self.write("loop ");
+                self.format_block(body, file);
+            }
+            StmtKind::Break { label, value } => {
+                self.write("break");
+                if let Some(lbl) = label {
+                    self.write(" '");
+                    self.write(lbl.as_str());
+                }
+                if let Some(val) = value {
+                    self.write(" ");
+                    self.format_expr(*val, file);
+                }
+                self.write(";");
+            }
+            StmtKind::Continue { label } => {
+                self.write("continue");
+                if let Some(lbl) = label {
+                    self.write(" '");
+                    self.write(lbl.as_str());
+                }
+                self.write(";");
             }
         }
     }
@@ -435,6 +817,105 @@ impl<'a> Printer<'a> {
                 self.write(" as ");
                 self.format_type(*target_ty, file);
             }
+            ExprKind::ArrayRepeat { value, count } => {
+                self.write("[");
+                self.format_expr(*value, file);
+                self.write("; ");
+                self.format_expr(*count, file);
+                self.write("]");
+            }
+            ExprKind::Try(expr) => {
+                self.format_expr(*expr, file);
+                self.write("?");
+            }
+            ExprKind::Borrow { expr, mutable } => {
+                if *mutable {
+                    self.write("&mut ");
+                } else {
+                    self.write("&");
+                }
+                self.format_expr(*expr, file);
+            }
+            ExprKind::Deref(expr) => {
+                self.write("*");
+                self.format_expr(*expr, file);
+            }
+            ExprKind::AsyncBlock(block) => {
+                self.write("async ");
+                self.format_block(block, file);
+            }
+            ExprKind::Await(expr) => {
+                self.format_expr(*expr, file);
+                self.write(".await");
+            }
+            ExprKind::Handle { expr, handlers } => {
+                self.write("handle ");
+                self.format_expr(*expr, file);
+                self.write(" {");
+                self.newline();
+                self.indent();
+                for handler in handlers {
+                    self.write(handler.effect_name.as_str());
+                    self.write(".");
+                    self.write(handler.op_name.as_str());
+                    self.write("(");
+                    for (i, param) in handler.params.iter().enumerate() {
+                        if i > 0 {
+                            self.write(", ");
+                        }
+                        self.write(param.name.as_str());
+                        if let Some(ty) = param.ty {
+                            self.write(": ");
+                            self.format_type(ty, file);
+                        }
+                    }
+                    if let Some(resume) = &handler.resume_param {
+                        if !handler.params.is_empty() {
+                            self.write(", ");
+                        }
+                        self.write("resume ");
+                        self.write(resume.as_str());
+                    }
+                    self.write(") ");
+                    self.format_block(&handler.body, file);
+                    self.newline();
+                }
+                self.dedent();
+                self.write("}");
+            }
+            ExprKind::ReturnExpr(Some(expr)) => {
+                self.write("return ");
+                self.format_expr(*expr, file);
+            }
+            ExprKind::ReturnExpr(None) => {
+                self.write("return");
+            }
+            ExprKind::BreakExpr { label, value } => {
+                self.write("break");
+                if let Some(lbl) = label {
+                    self.write(" '");
+                    self.write(lbl.as_str());
+                }
+                if let Some(val) = value {
+                    self.write(" ");
+                    self.format_expr(*val, file);
+                }
+            }
+            ExprKind::ContinueExpr { label } => {
+                self.write("continue");
+                if let Some(lbl) = label {
+                    self.write(" '");
+                    self.write(lbl.as_str());
+                }
+            }
+            ExprKind::PathExpr(segments) => {
+                for (i, segment) in segments.iter().enumerate() {
+                    if i > 0 {
+                        self.write("::");
+                    }
+                    self.write(segment.as_str());
+                }
+            }
             ExprKind::Error => self.write("/* error */"),
         }
     }
@@ -485,6 +966,74 @@ impl<'a> Printer<'a> {
                     }
                     self.write(")");
                 }
+            }
+            Pattern::Struct { name, fields, rest } => {
+                self.write(name.as_str());
+                self.write(" { ");
+                for (i, field) in fields.iter().enumerate() {
+                    if i > 0 {
+                        self.write(", ");
+                    }
+                    self.write(field.name.as_str());
+                    if let Some(pat) = &field.pattern {
+                        self.write(": ");
+                        self.format_pattern(pat);
+                    }
+                }
+                if *rest {
+                    if !fields.is_empty() {
+                        self.write(", ");
+                    }
+                    self.write("..");
+                }
+                self.write(" }");
+            }
+            Pattern::Slice(patterns) => {
+                self.write("[");
+                for (i, pat) in patterns.iter().enumerate() {
+                    if i > 0 {
+                        self.write(", ");
+                    }
+                    self.format_pattern(pat);
+                }
+                self.write("]");
+            }
+            Pattern::Or(patterns) => {
+                for (i, pat) in patterns.iter().enumerate() {
+                    if i > 0 {
+                        self.write(" | ");
+                    }
+                    self.format_pattern(pat);
+                }
+            }
+            Pattern::Range { start, end, inclusive } => {
+                if let Some(s) = start {
+                    self.format_pattern(s);
+                }
+                if *inclusive {
+                    self.write("..=");
+                } else {
+                    self.write("..");
+                }
+                if let Some(e) = end {
+                    self.format_pattern(e);
+                }
+            }
+            Pattern::Rest => {
+                self.write("..");
+            }
+            Pattern::Binding { name, pattern } => {
+                self.write(name.as_str());
+                self.write(" @ ");
+                self.format_pattern(pattern);
+            }
+            Pattern::Reference { pattern, mutable } => {
+                if *mutable {
+                    self.write("&mut ");
+                } else {
+                    self.write("&");
+                }
+                self.format_pattern(pattern);
             }
         }
     }
@@ -542,6 +1091,18 @@ impl<'a> Printer<'a> {
                 self.write(", ");
                 self.write(&format!("{:?}", dimension));
                 self.write(">");
+            }
+            TypeKind::Reference { ty, mutable } => {
+                if *mutable {
+                    self.write("&mut ");
+                } else {
+                    self.write("&");
+                }
+                self.format_type(*ty, file);
+            }
+            TypeKind::Optional(ty) => {
+                self.format_type(*ty, file);
+                self.write("?");
             }
             TypeKind::Infer => self.write("_"),
             TypeKind::Error => self.write("/* error */"),

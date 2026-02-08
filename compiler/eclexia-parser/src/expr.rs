@@ -11,6 +11,7 @@ use crate::{Parser, ParseResult, ParseError};
 /// Operator precedence levels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
+#[allow(dead_code)]
 pub enum Precedence {
     None = 0,
     Assignment = 1,   // =
@@ -79,7 +80,7 @@ impl<'src> Parser<'src> {
                     TokenKind::Minus => UnaryOp::Neg,
                     TokenKind::Bang | TokenKind::Not => UnaryOp::Not,
                     TokenKind::Tilde => UnaryOp::BitNot,
-                    _ => unreachable!(),
+                    _ => return Err(ParseError::custom(token.span, "internal error: unexpected unary operator")),
                 };
                 let operand = self.parse_expr_prec(file, Precedence::Unary)?;
                 let span = token.span.merge(file.exprs[operand].span);
@@ -88,6 +89,70 @@ impl<'src> Parser<'src> {
                     kind: ExprKind::Unary { op, operand },
                 };
                 Ok(file.exprs.alloc(expr))
+            }
+
+            // Borrow: &expr or &mut expr
+            TokenKind::Amp => {
+                self.advance();
+                let mutable = if self.check(TokenKind::Mut) {
+                    self.advance();
+                    true
+                } else {
+                    false
+                };
+                let operand = self.parse_expr_prec(file, Precedence::Unary)?;
+                let span = token.span.merge(file.exprs[operand].span);
+                let expr = Expr {
+                    span,
+                    kind: ExprKind::Borrow { expr: operand, mutable },
+                };
+                Ok(file.exprs.alloc(expr))
+            }
+
+            // Dereference: *expr
+            TokenKind::Star => {
+                self.advance();
+                let operand = self.parse_expr_prec(file, Precedence::Unary)?;
+                let span = token.span.merge(file.exprs[operand].span);
+                let expr = Expr {
+                    span,
+                    kind: ExprKind::Deref(operand),
+                };
+                Ok(file.exprs.alloc(expr))
+            }
+
+            // Open range prefix: ..expr or ..=expr
+            TokenKind::DotDot | TokenKind::DotDotEq => {
+                let inclusive = matches!(token.kind, TokenKind::DotDotEq);
+                self.advance();
+                let op = if inclusive { BinaryOp::RangeInclusive } else { BinaryOp::Range };
+                // Check if there's an operand (..b vs just ..)
+                if self.check(TokenKind::Semi) || self.check(TokenKind::RBrace)
+                    || self.check(TokenKind::RParen) || self.check(TokenKind::RBracket)
+                    || self.check(TokenKind::Comma) || self.is_eof()
+                {
+                    // Full range: ..
+                    let unit = file.exprs.alloc(Expr {
+                        span: token.span,
+                        kind: ExprKind::Literal(Literal::Unit),
+                    });
+                    let range_expr = Expr {
+                        span: token.span,
+                        kind: ExprKind::Binary { op, lhs: unit, rhs: unit },
+                    };
+                    return Ok(file.exprs.alloc(range_expr));
+                }
+                let rhs = self.parse_expr_prec(file, Precedence::Comparison)?;
+                let lhs = file.exprs.alloc(Expr {
+                    span: token.span,
+                    kind: ExprKind::Literal(Literal::Unit),
+                });
+                let span = token.span.merge(file.exprs[rhs].span);
+                let range_expr = Expr {
+                    span,
+                    kind: ExprKind::Binary { op, lhs, rhs },
+                };
+                return Ok(file.exprs.alloc(range_expr));
             }
 
             // Primary expressions
@@ -101,7 +166,8 @@ impl<'src> Parser<'src> {
 
         let kind = match token.kind {
             // Literals
-            TokenKind::Integer(n) => ExprKind::Literal(Literal::Int(n)),
+            TokenKind::Integer(n) | TokenKind::HexInteger(n)
+            | TokenKind::OctalInteger(n) | TokenKind::BinaryInteger(n) => ExprKind::Literal(Literal::Int(n)),
             TokenKind::Float(f) => ExprKind::Literal(Literal::Float(f)),
             TokenKind::String(s) => ExprKind::Literal(Literal::String(s)),
             TokenKind::Char(c) => ExprKind::Literal(Literal::Char(c)),
@@ -154,20 +220,33 @@ impl<'src> Parser<'src> {
                 }
             }
 
-            // Array literal
+            // Array literal or array repeat [value; count]
             TokenKind::LBracket => {
-                let mut elems = Vec::new();
-                if !self.check(TokenKind::RBracket) {
-                    loop {
-                        elems.push(self.parse_expr(file)?);
-                        if !self.check(TokenKind::Comma) {
-                            break;
-                        }
+                if self.check(TokenKind::RBracket) {
+                    self.advance();
+                    ExprKind::Array(Vec::new())
+                } else {
+                    let first = self.parse_expr(file)?;
+                    if self.check(TokenKind::Semi) {
+                        // Array repeat: [value; count]
                         self.advance();
+                        let count = self.parse_expr(file)?;
+                        self.expect(TokenKind::RBracket)?;
+                        ExprKind::ArrayRepeat { value: first, count }
+                    } else {
+                        // Array literal: [a, b, c]
+                        let mut elems = vec![first];
+                        while self.check(TokenKind::Comma) {
+                            self.advance();
+                            if self.check(TokenKind::RBracket) {
+                                break;
+                            }
+                            elems.push(self.parse_expr(file)?);
+                        }
+                        self.expect(TokenKind::RBracket)?;
+                        ExprKind::Array(elems)
                     }
                 }
-                self.expect(TokenKind::RBracket)?;
-                ExprKind::Array(elems)
             }
 
             // Block expression
@@ -234,7 +313,96 @@ impl<'src> Parser<'src> {
                 ExprKind::Lambda { params, body }
             }
 
-            // Lambda with pipe syntax: |x, y| expr
+            // Async block: async { ... }
+            TokenKind::Async => {
+                let block = self.parse_block(file)?;
+                ExprKind::AsyncBlock(block)
+            }
+
+            // Handle expression: handle expr { effect_name::op(params) => body, ... }
+            TokenKind::Handle => {
+                let expr = self.parse_expr_no_struct(file)?;
+                self.expect(TokenKind::LBrace)?;
+                let mut handlers = Vec::new();
+                while !self.check(TokenKind::RBrace) && !self.is_eof() {
+                    let handler_start = self.peek().span;
+                    let effect_name = self.expect_ident()?;
+                    // Optional :: separator
+                    let op_name = if self.check(TokenKind::ColonColon) {
+                        self.advance();
+                        self.expect_ident()?
+                    } else {
+                        effect_name.clone()
+                    };
+                    self.expect(TokenKind::LParen)?;
+                    let params = self.parse_params(file)?;
+                    self.expect(TokenKind::RParen)?;
+                    // Optional resume parameter: resume k =>
+                    let resume_param = if self.check_ident("resume") {
+                        self.advance();
+                        Some(self.expect_ident()?)
+                    } else {
+                        None
+                    };
+                    self.expect(TokenKind::FatArrow)?;
+                    let handler_body = self.parse_block(file)?;
+                    handlers.push(EffectHandler {
+                        span: handler_start.merge(handler_body.span),
+                        effect_name,
+                        op_name,
+                        params,
+                        resume_param,
+                        body: handler_body,
+                    });
+                    if !self.check(TokenKind::Comma) { break; }
+                    self.advance();
+                }
+                self.expect(TokenKind::RBrace)?;
+                ExprKind::Handle { expr, handlers }
+            }
+
+            // Return as expression
+            TokenKind::Return => {
+                let value = if !self.check(TokenKind::Semi) && !self.check(TokenKind::RBrace)
+                    && !self.check(TokenKind::Comma)
+                {
+                    Some(self.parse_expr(file)?)
+                } else {
+                    None
+                };
+                ExprKind::ReturnExpr(value)
+            }
+
+            // Break as expression
+            TokenKind::Break => {
+                let label = if matches!(self.peek().kind, TokenKind::Ident(ref s) if s.starts_with('\'')) {
+                    let s = self.expect_ident()?;
+                    Some(s)
+                } else {
+                    None
+                };
+                let value = if !self.check(TokenKind::Semi) && !self.check(TokenKind::RBrace)
+                    && !self.check(TokenKind::Comma)
+                {
+                    Some(self.parse_expr(file)?)
+                } else {
+                    None
+                };
+                ExprKind::BreakExpr { label, value }
+            }
+
+            // Continue as expression
+            TokenKind::Continue => {
+                let label = if matches!(self.peek().kind, TokenKind::Ident(ref s) if s.starts_with('\'')) {
+                    let s = self.expect_ident()?;
+                    Some(s)
+                } else {
+                    None
+                };
+                ExprKind::ContinueExpr { label }
+            }
+
+            // Lambda with pipe syntax: |x, y| expr  or  |x: T| -> U { body }
             TokenKind::Pipe => {
                 let mut params = Vec::new();
 
@@ -263,6 +431,15 @@ impl<'src> Parser<'src> {
                 }
 
                 self.expect(TokenKind::Pipe)?;
+
+                // Optional return type: -> Type
+                if self.check(TokenKind::Arrow) {
+                    self.advance();
+                    let _return_ty = self.parse_type(file)?;
+                    // Return type is consumed but not stored in Lambda AST
+                    // (type checker infers it; stored type is informational)
+                }
+
                 let body = self.parse_expr(file)?;
                 ExprKind::Lambda { params, body }
             }
@@ -315,9 +492,21 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse postfix operations WITHOUT struct literals (for use in contexts where { starts a block).
+    #[allow(dead_code)]
     fn parse_postfix_no_struct(&mut self, file: &mut SourceFile, mut expr: ExprId) -> ParseResult<ExprId> {
         loop {
             match self.peek().kind {
+                // Try operator: expr?
+                TokenKind::Question => {
+                    self.advance();
+                    let span = file.exprs[expr].span.merge(self.previous_span());
+                    let try_expr = Expr {
+                        span,
+                        kind: ExprKind::Try(expr),
+                    };
+                    expr = file.exprs.alloc(try_expr);
+                }
+
                 // Function call
                 TokenKind::LParen => {
                     self.advance();
@@ -341,44 +530,54 @@ impl<'src> Parser<'src> {
                     expr = file.exprs.alloc(call_expr);
                 }
 
-                // Field access or method call
+                // Field access, method call, or .await
                 TokenKind::Dot => {
                     self.advance();
-                    let field = self.expect_ident()?;
-
-                    if self.check(TokenKind::LParen) {
-                        // Method call
+                    if self.check_ident("await") {
                         self.advance();
-                        let mut args = Vec::new();
-                        if !self.check(TokenKind::RParen) {
-                            loop {
-                                args.push(self.parse_expr(file)?);
-                                if !self.check(TokenKind::Comma) {
-                                    break;
-                                }
-                                self.advance();
-                            }
-                        }
-                        let end = self.expect(TokenKind::RParen)?;
-
-                        let span = file.exprs[expr].span.merge(end);
-                        let method_expr = Expr {
-                            span,
-                            kind: ExprKind::MethodCall {
-                                receiver: expr,
-                                method: field,
-                                args,
-                            },
-                        };
-                        expr = file.exprs.alloc(method_expr);
-                    } else {
-                        // Field access
                         let span = file.exprs[expr].span.merge(self.previous_span());
-                        let field_expr = Expr {
+                        let await_expr = Expr {
                             span,
-                            kind: ExprKind::Field { expr, field },
+                            kind: ExprKind::Await(expr),
                         };
-                        expr = file.exprs.alloc(field_expr);
+                        expr = file.exprs.alloc(await_expr);
+                    } else {
+                        let field = self.expect_ident()?;
+
+                        if self.check(TokenKind::LParen) {
+                            // Method call
+                            self.advance();
+                            let mut args = Vec::new();
+                            if !self.check(TokenKind::RParen) {
+                                loop {
+                                    args.push(self.parse_expr(file)?);
+                                    if !self.check(TokenKind::Comma) {
+                                        break;
+                                    }
+                                    self.advance();
+                                }
+                            }
+                            let end = self.expect(TokenKind::RParen)?;
+
+                            let span = file.exprs[expr].span.merge(end);
+                            let method_expr = Expr {
+                                span,
+                                kind: ExprKind::MethodCall {
+                                    receiver: expr,
+                                    method: field,
+                                    args,
+                                },
+                            };
+                            expr = file.exprs.alloc(method_expr);
+                        } else {
+                            // Field access
+                            let span = file.exprs[expr].span.merge(self.previous_span());
+                            let field_expr = Expr {
+                                span,
+                                kind: ExprKind::Field { expr, field },
+                            };
+                            expr = file.exprs.alloc(field_expr);
+                        }
                     }
                 }
 
@@ -431,44 +630,66 @@ impl<'src> Parser<'src> {
                     expr = file.exprs.alloc(call_expr);
                 }
 
-                // Field access or method call
+                // Try operator: expr?
+                TokenKind::Question => {
+                    self.advance();
+                    let span = file.exprs[expr].span.merge(self.previous_span());
+                    let try_expr = Expr {
+                        span,
+                        kind: ExprKind::Try(expr),
+                    };
+                    expr = file.exprs.alloc(try_expr);
+                }
+
+                // Field access, method call, or .await
                 TokenKind::Dot => {
                     self.advance();
-                    let field = self.expect_ident()?;
-
-                    if self.check(TokenKind::LParen) {
-                        // Method call
+                    // Check for .await
+                    if self.check_ident("await") {
                         self.advance();
-                        let mut args = Vec::new();
-                        if !self.check(TokenKind::RParen) {
-                            loop {
-                                args.push(self.parse_expr(file)?);
-                                if !self.check(TokenKind::Comma) {
-                                    break;
-                                }
-                                self.advance();
-                            }
-                        }
-                        let end = self.expect(TokenKind::RParen)?;
-
-                        let span = file.exprs[expr].span.merge(end);
-                        let method_expr = Expr {
-                            span,
-                            kind: ExprKind::MethodCall {
-                                receiver: expr,
-                                method: field,
-                                args,
-                            },
-                        };
-                        expr = file.exprs.alloc(method_expr);
-                    } else {
-                        // Field access
                         let span = file.exprs[expr].span.merge(self.previous_span());
-                        let field_expr = Expr {
+                        let await_expr = Expr {
                             span,
-                            kind: ExprKind::Field { expr, field },
+                            kind: ExprKind::Await(expr),
                         };
-                        expr = file.exprs.alloc(field_expr);
+                        expr = file.exprs.alloc(await_expr);
+                    } else {
+                        let field = self.expect_ident()?;
+
+                        if self.check(TokenKind::LParen) {
+                            // Method call
+                            self.advance();
+                            let mut args = Vec::new();
+                            if !self.check(TokenKind::RParen) {
+                                loop {
+                                    args.push(self.parse_expr(file)?);
+                                    if !self.check(TokenKind::Comma) {
+                                        break;
+                                    }
+                                    self.advance();
+                                }
+                            }
+                            let end = self.expect(TokenKind::RParen)?;
+
+                            let span = file.exprs[expr].span.merge(end);
+                            let method_expr = Expr {
+                                span,
+                                kind: ExprKind::MethodCall {
+                                    receiver: expr,
+                                    method: field,
+                                    args,
+                                },
+                            };
+                            expr = file.exprs.alloc(method_expr);
+                        } else {
+                            // Field access
+                            let span = file.exprs[expr].span.merge(self.previous_span());
+                            let field_expr = Expr {
+                                span,
+                                kind: ExprKind::Field { expr, field },
+                            };
+                            expr = file.exprs.alloc(field_expr);
+                        }
                     }
                 }
 
@@ -499,10 +720,10 @@ impl<'src> Parser<'src> {
                         break;
                     }
 
-                    // Extract the struct name
+                    // Extract the struct name - safe: guarded by matches! check above
                     let name = match &file.exprs[expr].kind {
                         ExprKind::Var(n) => n.clone(),
-                        _ => unreachable!(),
+                        _ => return Err(ParseError::custom(file.exprs[expr].span, "internal error: expected identifier for struct literal")),
                     };
 
                     self.advance(); // consume {
@@ -596,6 +817,7 @@ impl<'src> Parser<'src> {
 
             // Range
             TokenKind::DotDot => BinaryOp::Range,
+            TokenKind::DotDotEq => BinaryOp::RangeInclusive,
 
             _ => return Err(ParseError::unexpected_token(token, "operator")),
         };
@@ -643,14 +865,55 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a pattern.
-    fn parse_pattern(&mut self) -> ParseResult<Pattern> {
+    pub(crate) fn parse_pattern(&mut self) -> ParseResult<Pattern> {
+        let mut pat = self.parse_single_pattern()?;
+
+        // Check for or-pattern: pat1 | pat2 | pat3
+        if self.check(TokenKind::Pipe) {
+            let mut alternatives = vec![pat];
+            while self.check(TokenKind::Pipe) {
+                self.advance();
+                alternatives.push(self.parse_single_pattern()?);
+            }
+            pat = Pattern::Or(alternatives);
+        }
+
+        Ok(pat)
+    }
+
+    /// Parse a single pattern (without or).
+    fn parse_single_pattern(&mut self) -> ParseResult<Pattern> {
         let token = self.advance();
 
-        match token.kind {
-            TokenKind::Underscore => Ok(Pattern::Wildcard),
+        let pat = match token.kind {
+            TokenKind::Underscore => Pattern::Wildcard,
+            // Rest pattern: ..
+            TokenKind::DotDot => Pattern::Rest,
+            // Ref pattern: ref name or ref mut name
+            TokenKind::Ref => {
+                let mutable = if self.check(TokenKind::Mut) {
+                    self.advance();
+                    true
+                } else {
+                    false
+                };
+                let name = self.expect_ident()?;
+                Pattern::Reference { pattern: Box::new(Pattern::Var(name)), mutable }
+            }
+            // Reference pattern: &pat or &mut pat
+            TokenKind::Amp => {
+                let mutable = if self.check(TokenKind::Mut) {
+                    self.advance();
+                    true
+                } else {
+                    false
+                };
+                let inner = self.parse_single_pattern()?;
+                Pattern::Reference { pattern: Box::new(inner), mutable }
+            }
             TokenKind::Ident(name) => {
                 if self.check(TokenKind::LParen) {
-                    // Constructor pattern
+                    // Constructor pattern: Name(p1, p2)
                     self.advance();
                     let mut fields = Vec::new();
                     if !self.check(TokenKind::RParen) {
@@ -663,16 +926,71 @@ impl<'src> Parser<'src> {
                         }
                     }
                     self.expect(TokenKind::RParen)?;
-                    Ok(Pattern::Constructor { name, fields })
+                    Pattern::Constructor { name, fields }
+                } else if self.check(TokenKind::LBrace) {
+                    // Struct pattern: Name { x, y: pat, .. }
+                    self.advance();
+                    let mut field_pats = Vec::new();
+                    let mut rest = false;
+                    if !self.check(TokenKind::RBrace) {
+                        loop {
+                            if self.check(TokenKind::DotDot) {
+                                self.advance();
+                                rest = true;
+                                break;
+                            }
+                            let field_start = self.peek().span;
+                            let field_name = self.expect_ident()?;
+                            let field_pattern = if self.check(TokenKind::Colon) {
+                                self.advance();
+                                Some(self.parse_pattern()?)
+                            } else {
+                                None
+                            };
+                            field_pats.push(FieldPattern {
+                                span: field_start.merge(self.previous_span()),
+                                name: field_name,
+                                pattern: field_pattern,
+                            });
+                            if !self.check(TokenKind::Comma) {
+                                break;
+                            }
+                            self.advance();
+                        }
+                    }
+                    self.expect(TokenKind::RBrace)?;
+                    Pattern::Struct { name, fields: field_pats, rest }
+                } else if self.check(TokenKind::At) {
+                    // Binding pattern: name @ pattern
+                    self.advance();
+                    let inner = self.parse_single_pattern()?;
+                    Pattern::Binding { name, pattern: Box::new(inner) }
                 } else {
-                    Ok(Pattern::Var(name))
+                    Pattern::Var(name)
                 }
             }
-            TokenKind::Integer(n) => Ok(Pattern::Literal(Literal::Int(n))),
-            TokenKind::Float(f) => Ok(Pattern::Literal(Literal::Float(f))),
-            TokenKind::String(s) => Ok(Pattern::Literal(Literal::String(s))),
-            TokenKind::True => Ok(Pattern::Literal(Literal::Bool(true))),
-            TokenKind::False => Ok(Pattern::Literal(Literal::Bool(false))),
+            TokenKind::Integer(n) | TokenKind::HexInteger(n)
+            | TokenKind::OctalInteger(n) | TokenKind::BinaryInteger(n) => {
+                let lit_pat = Pattern::Literal(Literal::Int(n));
+                // Check for range pattern: 1..5 or 1..=5
+                if self.check(TokenKind::DotDot) || self.check(TokenKind::DotDotEq) {
+                    let inclusive = self.check(TokenKind::DotDotEq);
+                    self.advance();
+                    let end_pat = self.parse_single_pattern()?;
+                    Pattern::Range {
+                        start: Some(Box::new(lit_pat)),
+                        end: Some(Box::new(end_pat)),
+                        inclusive,
+                    }
+                } else {
+                    lit_pat
+                }
+            }
+            TokenKind::Float(f) => Pattern::Literal(Literal::Float(f)),
+            TokenKind::String(s) => Pattern::Literal(Literal::String(s)),
+            TokenKind::Char(c) => Pattern::Literal(Literal::Char(c)),
+            TokenKind::True => Pattern::Literal(Literal::Bool(true)),
+            TokenKind::False => Pattern::Literal(Literal::Bool(false)),
             TokenKind::LParen => {
                 let mut patterns = Vec::new();
                 if !self.check(TokenKind::RParen) {
@@ -685,10 +1003,27 @@ impl<'src> Parser<'src> {
                     }
                 }
                 self.expect(TokenKind::RParen)?;
-                Ok(Pattern::Tuple(patterns))
+                Pattern::Tuple(patterns)
             }
-            _ => Err(ParseError::unexpected_token(token, "pattern")),
-        }
+            // Slice pattern: [a, b, ..]
+            TokenKind::LBracket => {
+                let mut patterns = Vec::new();
+                if !self.check(TokenKind::RBracket) {
+                    loop {
+                        patterns.push(self.parse_pattern()?);
+                        if !self.check(TokenKind::Comma) {
+                            break;
+                        }
+                        self.advance();
+                    }
+                }
+                self.expect(TokenKind::RBracket)?;
+                Pattern::Slice(patterns)
+            }
+            _ => return Err(ParseError::unexpected_token(token, "pattern")),
+        };
+
+        Ok(pat)
     }
 
     /// Get the precedence of the current token.
@@ -699,7 +1034,7 @@ impl<'src> Parser<'src> {
             TokenKind::EqEq | TokenKind::BangEq => Precedence::Equality,
             TokenKind::As => Precedence::Cast,
             TokenKind::Lt | TokenKind::Le | TokenKind::Gt | TokenKind::Ge => Precedence::Comparison,
-            TokenKind::DotDot => Precedence::Comparison,
+            TokenKind::DotDot | TokenKind::DotDotEq => Precedence::Comparison,
             TokenKind::Pipe => Precedence::BitOr,
             TokenKind::Caret => Precedence::BitXor,
             TokenKind::Amp => Precedence::BitAnd,

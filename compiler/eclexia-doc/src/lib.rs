@@ -6,10 +6,8 @@
 //! Generates HTML documentation from Eclexia source files,
 //! similar to rustdoc for Rust.
 
-use eclexia_ast::{Function, Item, SourceFile, TypeDef, Expr};
+use eclexia_ast::{Function, Item, SourceFile, TypeDef};
 use smol_str::SmolStr;
-use std::collections::HashMap;
-use std::path::Path;
 
 /// Documentation for a single item
 #[derive(Debug, Clone)]

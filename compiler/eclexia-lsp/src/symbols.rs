@@ -3,7 +3,7 @@
 
 //! Symbol resolution and scope tracking for LSP features.
 
-use eclexia_ast::{Ident, Item, SourceFile, ExprId, StmtId, ExprKind, StmtKind, Block};
+use eclexia_ast::{Ident, Item, SourceFile, ExprId, StmtId, ExprKind, StmtKind, Block, Pattern, ExternItem, ImplItem};
 use eclexia_ast::span::Span;
 use std::collections::HashMap;
 
@@ -29,6 +29,13 @@ pub enum SymbolKind {
     Const,
     Variable,
     Parameter,
+    Method,
+    Field,
+    EnumVariant,
+    Module,
+    Static,
+    Effect,
+    Trait,
 }
 
 /// A scope containing symbol bindings
@@ -39,6 +46,7 @@ pub struct Scope {
     /// Symbols defined in this scope
     symbols: HashMap<Ident, Symbol>,
     /// Span of this scope
+    #[allow(dead_code)]
     span: Span,
 }
 
@@ -197,8 +205,208 @@ impl SymbolTable {
                 };
                 self.define_symbol(symbol);
             }
-            Item::Import(_) => {
-                // TODO: Handle imports
+            Item::Import(import) => {
+                // Register the imported name (last segment or alias)
+                let name = import.alias.clone().unwrap_or_else(|| {
+                    import.path.last().cloned().unwrap_or_default()
+                });
+                if !name.is_empty() {
+                    let symbol = Symbol {
+                        name,
+                        kind: SymbolKind::Variable,
+                        definition_span: import.span,
+                        doc: None,
+                    };
+                    self.define_symbol(symbol);
+                    // Add references for each path segment
+                    for segment in &import.path {
+                        self.references.push(SymbolReference {
+                            name: segment.clone(),
+                            span: import.span,
+                            kind: ReferenceKind::Read,
+                        });
+                    }
+                }
+            }
+            Item::TraitDecl(trait_decl) => {
+                let doc = extract_doc_comment(source, trait_decl.span.start as usize);
+                let symbol = Symbol {
+                    name: trait_decl.name.clone(),
+                    kind: SymbolKind::Trait,
+                    definition_span: trait_decl.span,
+                    doc,
+                };
+                self.define_symbol(symbol);
+
+                // Enter trait scope and index trait methods
+                self.enter_scope(trait_decl.span);
+                for item in &trait_decl.items {
+                    match item {
+                        eclexia_ast::TraitItem::Method { sig, body, .. } => {
+                            let method_doc = extract_doc_comment(source, sig.span.start as usize);
+                            let method_sym = Symbol {
+                                name: sig.name.clone(),
+                                kind: SymbolKind::Method,
+                                definition_span: sig.span,
+                                doc: method_doc,
+                            };
+                            self.define_symbol(method_sym);
+                            if let Some(body) = body {
+                                self.enter_scope(body.span);
+                                for param in &sig.params {
+                                    self.define_symbol(Symbol {
+                                        name: param.name.clone(),
+                                        kind: SymbolKind::Parameter,
+                                        definition_span: param.span,
+                                        doc: None,
+                                    });
+                                }
+                                self.collect_block_references(body, file);
+                                self.exit_scope();
+                            }
+                        }
+                        eclexia_ast::TraitItem::AssocType { name, span, .. } => {
+                            self.define_symbol(Symbol {
+                                name: name.clone(),
+                                kind: SymbolKind::TypeDef,
+                                definition_span: *span,
+                                doc: None,
+                            });
+                        }
+                        eclexia_ast::TraitItem::AssocConst { name, span, .. } => {
+                            self.define_symbol(Symbol {
+                                name: name.clone(),
+                                kind: SymbolKind::Const,
+                                definition_span: *span,
+                                doc: None,
+                            });
+                        }
+                    }
+                }
+                self.exit_scope();
+            }
+            Item::ImplBlock(impl_block) => {
+                // Enter impl scope and index all methods/assoc items
+                self.enter_scope(impl_block.span);
+                for item in &impl_block.items {
+                    match item {
+                        ImplItem::Method { sig, body, .. } => {
+                            let method_doc = extract_doc_comment(source, sig.span.start as usize);
+                            let method_sym = Symbol {
+                                name: sig.name.clone(),
+                                kind: SymbolKind::Method,
+                                definition_span: sig.span,
+                                doc: method_doc,
+                            };
+                            self.define_symbol(method_sym);
+
+                            // Enter method body scope
+                            self.enter_scope(body.span);
+                            for param in &sig.params {
+                                self.define_symbol(Symbol {
+                                    name: param.name.clone(),
+                                    kind: SymbolKind::Parameter,
+                                    definition_span: param.span,
+                                    doc: None,
+                                });
+                            }
+                            self.collect_block_references(body, file);
+                            self.exit_scope();
+                        }
+                        ImplItem::AssocType { span, name, .. } => {
+                            self.define_symbol(Symbol {
+                                name: name.clone(),
+                                kind: SymbolKind::TypeDef,
+                                definition_span: *span,
+                                doc: None,
+                            });
+                        }
+                        ImplItem::AssocConst { span, name, .. } => {
+                            self.define_symbol(Symbol {
+                                name: name.clone(),
+                                kind: SymbolKind::Const,
+                                definition_span: *span,
+                                doc: None,
+                            });
+                        }
+                    }
+                }
+                self.exit_scope();
+            }
+            Item::ModuleDecl(module_decl) => {
+                let doc = extract_doc_comment(source, module_decl.span.start as usize);
+                let symbol = Symbol {
+                    name: module_decl.name.clone(),
+                    kind: SymbolKind::Module,
+                    definition_span: module_decl.span,
+                    doc,
+                };
+                self.define_symbol(symbol);
+
+                // If inline module, enter scope and process items
+                if let Some(items) = &module_decl.items {
+                    self.enter_scope(module_decl.span);
+                    for item in items {
+                        self.collect_item(item, file, source);
+                    }
+                    self.exit_scope();
+                }
+            }
+            Item::EffectDecl(effect_decl) => {
+                let doc = extract_doc_comment(source, effect_decl.span.start as usize);
+                let symbol = Symbol {
+                    name: effect_decl.name.clone(),
+                    kind: SymbolKind::Effect,
+                    definition_span: effect_decl.span,
+                    doc,
+                };
+                self.define_symbol(symbol);
+
+                // Index effect operations as methods
+                self.enter_scope(effect_decl.span);
+                for op in &effect_decl.operations {
+                    self.define_symbol(Symbol {
+                        name: op.name.clone(),
+                        kind: SymbolKind::Method,
+                        definition_span: op.span,
+                        doc: None,
+                    });
+                }
+                self.exit_scope();
+            }
+            Item::StaticDecl(static_decl) => {
+                let doc = extract_doc_comment(source, static_decl.span.start as usize);
+                let symbol = Symbol {
+                    name: static_decl.name.clone(),
+                    kind: SymbolKind::Static,
+                    definition_span: static_decl.span,
+                    doc,
+                };
+                self.define_symbol(symbol);
+            }
+            Item::ExternBlock(extern_block) => {
+                // Index extern function signatures and statics
+                for item in &extern_block.items {
+                    match item {
+                        ExternItem::Fn(sig) => {
+                            let fn_doc = extract_doc_comment(source, sig.span.start as usize);
+                            self.define_symbol(Symbol {
+                                name: sig.name.clone(),
+                                kind: SymbolKind::Function,
+                                definition_span: sig.span,
+                                doc: fn_doc,
+                            });
+                        }
+                        ExternItem::Static { span, name, .. } => {
+                            self.define_symbol(Symbol {
+                                name: name.clone(),
+                                kind: SymbolKind::Static,
+                                definition_span: *span,
+                                doc: None,
+                            });
+                        }
+                    }
+                }
             }
         }
     }
@@ -275,15 +483,9 @@ impl SymbolTable {
     fn collect_stmt_references(&mut self, stmt_id: StmtId, file: &SourceFile) {
         let stmt = &file.stmts[stmt_id];
         match &stmt.kind {
-            StmtKind::Let { name, value, .. } => {
-                // Define the variable in current scope
-                let var_symbol = Symbol {
-                    name: name.clone(),
-                    kind: SymbolKind::Variable,
-                    definition_span: stmt.span,
-                    doc: None,
-                };
-                self.define_symbol(var_symbol);
+            StmtKind::Let { pattern, value, .. } => {
+                // Define all variables bound by the pattern
+                self.collect_pattern_bindings(pattern, stmt.span);
 
                 // Collect references from the value expression
                 self.collect_expr_references(*value, file);
@@ -299,18 +501,12 @@ impl SymbolTable {
                 self.collect_expr_references(*condition, file);
                 self.collect_block_references(body, file);
             }
-            StmtKind::For { name, iter, body } => {
+            StmtKind::For { pattern, iter, body } => {
                 // Enter for-loop scope
                 self.enter_scope(body.span);
 
-                // Define loop variable in for-loop scope
-                let loop_var = Symbol {
-                    name: name.clone(),
-                    kind: SymbolKind::Variable,
-                    definition_span: stmt.span,
-                    doc: None,
-                };
-                self.define_symbol(loop_var);
+                // Define all variables bound by the pattern in for-loop scope
+                self.collect_pattern_bindings(pattern, stmt.span);
 
                 // Collect references from iterator and body
                 self.collect_expr_references(*iter, file);
@@ -319,10 +515,23 @@ impl SymbolTable {
                 // Exit for-loop scope
                 self.exit_scope();
             }
-            StmtKind::Assign { target: _, value } => {
+            StmtKind::Assign { target, value } => {
+                // Collect references from target expression (field/index/var)
+                self.collect_expr_references(*target, file);
                 // Collect references from the value expression
                 self.collect_expr_references(*value, file);
             }
+            StmtKind::Loop { body, .. } => {
+                self.enter_scope(body.span);
+                self.collect_block_references(body, file);
+                self.exit_scope();
+            }
+            StmtKind::Break { value, .. } => {
+                if let Some(expr_id) = value {
+                    self.collect_expr_references(*expr_id, file);
+                }
+            }
+            StmtKind::Continue { .. } => {}
         }
     }
 
@@ -350,14 +559,26 @@ impl SymbolTable {
                     self.collect_expr_references(arg, file);
                 }
             }
-            ExprKind::MethodCall { receiver, args, .. } => {
+            ExprKind::MethodCall { receiver, method, args } => {
                 self.collect_expr_references(*receiver, file);
+                // Add reference to the method name
+                self.references.push(SymbolReference {
+                    name: method.clone(),
+                    span: expr.span,
+                    kind: ReferenceKind::Call,
+                });
                 for &arg in args {
                     self.collect_expr_references(arg, file);
                 }
             }
-            ExprKind::Field { expr, .. } => {
-                self.collect_expr_references(*expr, file);
+            ExprKind::Field { expr: inner, field } => {
+                self.collect_expr_references(*inner, file);
+                // Add reference to the field name
+                self.references.push(SymbolReference {
+                    name: field.clone(),
+                    span: expr.span,
+                    kind: ReferenceKind::Read,
+                });
             }
             ExprKind::Index { expr, index } => {
                 self.collect_expr_references(*expr, file);
@@ -373,17 +594,31 @@ impl SymbolTable {
             ExprKind::Match { scrutinee, arms } => {
                 self.collect_expr_references(*scrutinee, file);
                 for arm in arms {
-                    self.collect_expr_references(arm.body, file);
+                    // Each arm gets its own scope for pattern bindings
+                    self.enter_scope(expr.span);
+                    self.collect_pattern_bindings(&arm.pattern, expr.span);
                     if let Some(guard) = arm.guard {
                         self.collect_expr_references(guard, file);
                     }
+                    self.collect_expr_references(arm.body, file);
+                    self.exit_scope();
                 }
             }
             ExprKind::Block(block) => {
                 self.collect_block_references(block, file);
             }
-            ExprKind::Lambda { body, .. } => {
+            ExprKind::Lambda { params, body } => {
+                self.enter_scope(expr.span);
+                for param in params {
+                    self.define_symbol(Symbol {
+                        name: param.name.clone(),
+                        kind: SymbolKind::Parameter,
+                        definition_span: param.span,
+                        doc: None,
+                    });
+                }
                 self.collect_expr_references(*body, file);
+                self.exit_scope();
             }
             ExprKind::Tuple(exprs) | ExprKind::Array(exprs) => {
                 for &e in exprs {
@@ -395,7 +630,124 @@ impl SymbolTable {
                     self.collect_expr_references(*expr, file);
                 }
             }
-            _ => {} // Literals, errors, etc.
+            ExprKind::ArrayRepeat { value, count } => {
+                self.collect_expr_references(*value, file);
+                self.collect_expr_references(*count, file);
+            }
+            ExprKind::Try(expr_id) | ExprKind::Deref(expr_id) | ExprKind::Await(expr_id) => {
+                self.collect_expr_references(*expr_id, file);
+            }
+            ExprKind::Borrow { expr, .. } => {
+                self.collect_expr_references(*expr, file);
+            }
+            ExprKind::AsyncBlock(block) => {
+                self.collect_block_references(block, file);
+            }
+            ExprKind::Handle { expr, handlers } => {
+                self.collect_expr_references(*expr, file);
+                for handler in handlers {
+                    self.collect_block_references(&handler.body, file);
+                }
+            }
+            ExprKind::ReturnExpr(opt_expr) => {
+                if let Some(expr_id) = opt_expr {
+                    self.collect_expr_references(*expr_id, file);
+                }
+            }
+            ExprKind::BreakExpr { value, .. } => {
+                if let Some(expr_id) = value {
+                    self.collect_expr_references(*expr_id, file);
+                }
+            }
+            ExprKind::ContinueExpr { .. } => {}
+            ExprKind::PathExpr(segments) => {
+                // Add references for each path segment
+                for segment in segments {
+                    self.references.push(SymbolReference {
+                        name: segment.clone(),
+                        span: expr.span,
+                        kind: ReferenceKind::Read,
+                    });
+                }
+            }
+            ExprKind::Cast { expr: inner, .. } => {
+                self.collect_expr_references(*inner, file);
+            }
+            _ => {} // Literals, errors
+        }
+    }
+
+    /// Collect all variable bindings from a pattern
+    fn collect_pattern_bindings(&mut self, pattern: &Pattern, span: Span) {
+        match pattern {
+            Pattern::Var(name) => {
+                self.define_symbol(Symbol {
+                    name: name.clone(),
+                    kind: SymbolKind::Variable,
+                    definition_span: span,
+                    doc: None,
+                });
+            }
+            Pattern::Tuple(pats) | Pattern::Slice(pats) | Pattern::Or(pats) => {
+                for pat in pats {
+                    self.collect_pattern_bindings(pat, span);
+                }
+            }
+            Pattern::Constructor { name, fields } => {
+                // Add reference to the constructor name
+                self.references.push(SymbolReference {
+                    name: name.clone(),
+                    span,
+                    kind: ReferenceKind::Read,
+                });
+                for field in fields {
+                    self.collect_pattern_bindings(field, span);
+                }
+            }
+            Pattern::Struct { name, fields, .. } => {
+                // Add reference to the struct type name
+                self.references.push(SymbolReference {
+                    name: name.clone(),
+                    span,
+                    kind: ReferenceKind::Read,
+                });
+                for field_pat in fields {
+                    if let Some(ref pat) = field_pat.pattern {
+                        self.collect_pattern_bindings(pat, span);
+                    } else {
+                        // Shorthand: `Point { x, y }` binds x and y as variables
+                        self.define_symbol(Symbol {
+                            name: field_pat.name.clone(),
+                            kind: SymbolKind::Variable,
+                            definition_span: field_pat.span,
+                            doc: None,
+                        });
+                    }
+                }
+            }
+            Pattern::Binding { name, pattern: inner } => {
+                // name @ pattern -- bind name and recurse into the inner pattern
+                self.define_symbol(Symbol {
+                    name: name.clone(),
+                    kind: SymbolKind::Variable,
+                    definition_span: span,
+                    doc: None,
+                });
+                self.collect_pattern_bindings(inner, span);
+            }
+            Pattern::Range { start, end, .. } => {
+                if let Some(pat) = start {
+                    self.collect_pattern_bindings(pat, span);
+                }
+                if let Some(pat) = end {
+                    self.collect_pattern_bindings(pat, span);
+                }
+            }
+            Pattern::Reference { pattern: inner, .. } => {
+                self.collect_pattern_bindings(inner, span);
+            }
+            // Wildcard, Literal, Rest don't bind names
+            Pattern::Wildcard | Pattern::Literal(_) | Pattern::Rest => {}
         }
     }
 

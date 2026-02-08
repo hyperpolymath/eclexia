@@ -25,6 +25,10 @@ pub struct LoweringContext<'hir> {
     current_block: Option<BlockId>,
     /// Function name map (for resolving function calls)
     function_names: FxHashMap<SmolStr, SmolStr>,
+    /// Loop stack for break/continue resolution: (label, header_block, exit_block)
+    loop_stack: Vec<(Option<SmolStr>, BlockId, BlockId)>,
+    /// Counter for generating unique lambda function names
+    lambda_counter: u32,
 }
 
 impl<'hir> LoweringContext<'hir> {
@@ -52,10 +56,13 @@ impl<'hir> LoweringContext<'hir> {
             next_local: 0,
             current_block: None,
             function_names,
+            loop_stack: Vec::new(),
+            lambda_counter: 0,
         }
     }
 
     /// Allocate a new local variable
+    #[allow(dead_code)]
     fn alloc_local(&mut self, name: SmolStr, ty: Ty, mutable: bool) -> LocalId {
         let id = self.next_local;
         self.next_local += 1;
@@ -73,6 +80,7 @@ impl<'hir> LoweringContext<'hir> {
     }
 
     /// Get MIR local from HIR local
+    #[allow(dead_code)]
     fn get_local(&self, hir_local: hir::LocalId) -> Option<LocalId> {
         self.local_map.get(&hir_local).copied()
     }
@@ -153,8 +161,10 @@ impl<'hir> LoweringContext<'hir> {
                     }
                 }
             }
-            hir::Item::TypeDef(_) | hir::Item::Const(_) => {
-                // Type definitions and constants are already resolved
+            hir::Item::TypeDef(_) | hir::Item::Const(_)
+            | hir::Item::TraitDecl { .. } | hir::Item::ImplBlock { .. }
+            | hir::Item::Module { .. } | hir::Item::Static { .. } => {
+                // Type definitions, constants, and declarations don't produce MIR functions
             }
         }
     }
@@ -181,7 +191,7 @@ impl<'hir> LoweringContext<'hir> {
             })
             .collect();
 
-        let mut mir_func = Function {
+        let mir_func = Function {
             span: func.span,
             name: func.name.clone(),
             params,
@@ -283,13 +293,22 @@ impl<'hir> LoweringContext<'hir> {
             }
             hir::StmtKind::Assign { place, value } => {
                 let mir_value = self.lower_expr(*value);
-                // Only handle local assignments for now
-                if let hir::Place::Local(local) = place {
-                    let mir_local = self.local_map[local];
-                    self.emit(stmt.span, InstructionKind::Assign {
-                        target: mir_local,
-                        value: mir_value,
-                    });
+                match place {
+                    hir::Place::Local(local) => {
+                        let mir_local = self.local_map[local];
+                        self.emit(stmt.span, InstructionKind::Assign {
+                            target: mir_local,
+                            value: mir_value,
+                        });
+                    }
+                    hir::Place::Field { .. } | hir::Place::Index { .. } => {
+                        // Lower the place to a pointer value, then store
+                        let ptr_val = self.lower_place(place);
+                        self.emit(stmt.span, InstructionKind::Store {
+                            ptr: ptr_val,
+                            value: mir_value,
+                        });
+                    }
                 }
             }
             hir::StmtKind::Expr(expr) => {
@@ -299,19 +318,75 @@ impl<'hir> LoweringContext<'hir> {
                 let value = expr.map(|e| self.lower_expr(e));
                 self.terminate(Terminator::Return(value));
             }
+            hir::StmtKind::InfiniteLoop { label, body } => {
+                // Create loop header and body blocks
+                let loop_header = self.alloc_block(SmolStr::new("loop_header"));
+                let loop_body = self.alloc_block(SmolStr::new("loop_body"));
+                let loop_exit = self.alloc_block(SmolStr::new("loop_exit"));
+
+                // Push loop onto stack for break/continue resolution
+                self.loop_stack.push((label.clone(), loop_header, loop_exit));
+
+                self.terminate(Terminator::Goto(loop_header));
+
+                // Set up header to branch to body
+                self.current_block = Some(loop_header);
+                self.terminate(Terminator::Goto(loop_body));
+
+                self.current_block = Some(loop_body);
+                self.lower_body(body);
+                self.terminate(Terminator::Goto(loop_header));
+
+                // Pop loop from stack
+                self.loop_stack.pop();
+
+                self.current_block = Some(loop_exit);
+            }
+            hir::StmtKind::Break { label, value } => {
+                // Evaluate break value if present (for side effects)
+                if let Some(val_expr) = value {
+                    self.lower_expr(*val_expr);
+                }
+                // Find the matching loop exit block on the stack
+                let exit_block = self.find_loop_exit(label.as_ref());
+                if let Some(exit) = exit_block {
+                    self.terminate(Terminator::Goto(exit));
+                    // Create a new unreachable block for any code after break
+                    let dead_block = self.alloc_block(SmolStr::new("post_break"));
+                    self.current_block = Some(dead_block);
+                }
+            }
+            hir::StmtKind::Continue { label } => {
+                // Find the matching loop header block on the stack
+                let header_block = self.find_loop_header(label.as_ref());
+                if let Some(header) = header_block {
+                    self.terminate(Terminator::Goto(header));
+                    // Create a new unreachable block for any code after continue
+                    let dead_block = self.alloc_block(SmolStr::new("post_continue"));
+                    self.current_block = Some(dead_block);
+                }
+            }
         }
     }
 
-    /// Lower a place (lvalue)
+    /// Lower a place (lvalue) to a value suitable for Store instructions
     fn lower_place(&mut self, place: &hir::Place) -> Value {
         match place {
             hir::Place::Local(local) => Value::Local(self.local_map[local]),
-            hir::Place::Field { .. } | hir::Place::Index { .. } => {
-                // TODO: Implement field/index places
-                Value::Constant(self.mir.constants.alloc(Constant {
-                    ty: Ty::Primitive(PrimitiveTy::Unit),
-                    kind: ConstantKind::Unit,
-                }))
+            hir::Place::Field { base, field } => {
+                let base_val = self.lower_place(base);
+                Value::Field {
+                    base: Box::new(base_val),
+                    field: field.clone(),
+                }
+            }
+            hir::Place::Index { base, index } => {
+                let base_val = self.lower_place(base);
+                let index_val = self.lower_expr(*index);
+                Value::Index {
+                    base: Box::new(base_val),
+                    index: Box::new(index_val),
+                }
             }
         }
     }
@@ -487,13 +562,405 @@ impl<'hir> LoweringContext<'hir> {
                 self.current_block = Some(merge_block);
                 Value::Local(result_local)
             }
-            _ => {
-                // TODO: Implement other expression kinds
+            hir::ExprKind::Loop { condition, body } => {
+                // While loop: condition + body
+                let loop_header = self.alloc_block(SmolStr::new("while_header"));
+                let loop_body = self.alloc_block(SmolStr::new("while_body"));
+                let loop_exit = self.alloc_block(SmolStr::new("while_exit"));
+
+                // Push loop onto stack (while loops have no label)
+                self.loop_stack.push((None, loop_header, loop_exit));
+
+                self.terminate(Terminator::Goto(loop_header));
+
+                self.current_block = Some(loop_header);
+                let cond_val = self.lower_expr(*condition);
+                self.terminate(Terminator::Branch {
+                    condition: cond_val,
+                    then_block: loop_body,
+                    else_block: loop_exit,
+                });
+
+                self.current_block = Some(loop_body);
+                self.lower_body(body);
+                self.terminate(Terminator::Goto(loop_header));
+
+                // Pop loop from stack
+                self.loop_stack.pop();
+
+                self.current_block = Some(loop_exit);
                 Value::Constant(self.mir.constants.alloc(Constant {
                     ty: Ty::Primitive(PrimitiveTy::Unit),
                     kind: ConstantKind::Unit,
                 }))
             }
+
+            hir::ExprKind::Block(body) => {
+                // Lower block: evaluate statements, return final expression
+                for &stmt_id in &body.stmts {
+                    self.lower_stmt(stmt_id);
+                }
+                if let Some(expr_id) = body.expr {
+                    self.lower_expr(expr_id)
+                } else {
+                    Value::Constant(self.mir.constants.alloc(Constant {
+                        ty: Ty::Primitive(PrimitiveTy::Unit),
+                        kind: ConstantKind::Unit,
+                    }))
+                }
+            }
+
+            hir::ExprKind::Tuple(elems) | hir::ExprKind::Array(elems) => {
+                // Allocate a result temporary for the aggregate
+                let result_local = self.next_local;
+                self.next_local += 1;
+
+                if let Some(f) = &mut self.current_function {
+                    f.locals.push(Local {
+                        id: result_local,
+                        name: SmolStr::new(&format!("aggregate{}", result_local)),
+                        ty: expr.ty.clone(),
+                        mutable: false,
+                    });
+                }
+
+                // Evaluate each element and assign to indexed positions
+                for (i, &elem) in elems.iter().enumerate() {
+                    let elem_val = self.lower_expr(elem);
+                    // Store each element value to the aggregate via indexed Store
+                    let idx_const = self.mir.constants.alloc(Constant {
+                        ty: Ty::Primitive(PrimitiveTy::Int),
+                        kind: ConstantKind::Int(i as i64),
+                    });
+                    self.emit(expr.span, InstructionKind::Store {
+                        ptr: Value::Index {
+                            base: Box::new(Value::Local(result_local)),
+                            index: Box::new(Value::Constant(idx_const)),
+                        },
+                        value: elem_val,
+                    });
+                }
+
+                Value::Local(result_local)
+            }
+
+            hir::ExprKind::Field { expr: base, field } => {
+                let base_val = self.lower_expr(*base);
+                Value::Field {
+                    base: Box::new(base_val),
+                    field: field.clone(),
+                }
+            }
+
+            hir::ExprKind::Index { expr: base, index } => {
+                let base_val = self.lower_expr(*base);
+                let index_val = self.lower_expr(*index);
+                Value::Index {
+                    base: Box::new(base_val),
+                    index: Box::new(index_val),
+                }
+            }
+
+            hir::ExprKind::Cast { expr: inner, target_ty } => {
+                let inner_val = self.lower_expr(*inner);
+                Value::Cast {
+                    value: Box::new(inner_val),
+                    target_ty: target_ty.clone(),
+                }
+            }
+
+            hir::ExprKind::Try(inner) => {
+                // Try operator: evaluate inner, branch on ok/err
+                let inner_val = self.lower_expr(*inner);
+
+                // Allocate a temporary for the result
+                let result_local = self.next_local;
+                self.next_local += 1;
+                if let Some(f) = &mut self.current_function {
+                    f.locals.push(Local {
+                        id: result_local,
+                        name: SmolStr::new(&format!("try_result{}", result_local)),
+                        ty: expr.ty.clone(),
+                        mutable: true,
+                    });
+                }
+
+                // Assign inner value to temporary (the ok path unwraps)
+                self.emit(expr.span, InstructionKind::Assign {
+                    target: result_local,
+                    value: inner_val.clone(),
+                });
+
+                // Create ok/err/merge blocks
+                let ok_block = self.alloc_block(SmolStr::new("try_ok"));
+                let err_block = self.alloc_block(SmolStr::new("try_err"));
+                let merge_block = self.alloc_block(SmolStr::new("try_merge"));
+
+                // Branch: for now use the inner value as the condition
+                // (non-error values are truthy, error values are falsy)
+                self.terminate(Terminator::Branch {
+                    condition: inner_val,
+                    then_block: ok_block,
+                    else_block: err_block,
+                });
+
+                // Ok path: result is already assigned, continue
+                self.current_block = Some(ok_block);
+                self.terminate(Terminator::Goto(merge_block));
+
+                // Err path: propagate error by returning early
+                self.current_block = Some(err_block);
+                self.terminate(Terminator::Return(Some(Value::Local(result_local))));
+
+                // Merge block: continue with unwrapped value
+                self.current_block = Some(merge_block);
+                Value::Local(result_local)
+            }
+
+            hir::ExprKind::Borrow { expr: inner, .. } => {
+                // Borrow: evaluate inner (no actual borrow tracking in MIR yet)
+                self.lower_expr(*inner)
+            }
+
+            hir::ExprKind::Deref(inner) => {
+                // Deref: evaluate inner (no actual deref in MIR yet)
+                let inner_val = self.lower_expr(*inner);
+                Value::Load { ptr: Box::new(inner_val) }
+            }
+
+            hir::ExprKind::ArrayRepeat { value, count } => {
+                // Array repeat: evaluate value and count
+                self.lower_expr(*value);
+                self.lower_expr(*count);
+                Value::Constant(self.mir.constants.alloc(Constant {
+                    ty: expr.ty.clone(),
+                    kind: ConstantKind::Unit,
+                }))
+            }
+
+            hir::ExprKind::InfiniteLoop { label, body } => {
+                // Create loop basic blocks
+                let loop_header = self.alloc_block(SmolStr::new("loop_header"));
+                let loop_body = self.alloc_block(SmolStr::new("loop_body"));
+                let loop_exit = self.alloc_block(SmolStr::new("loop_exit"));
+
+                // Push loop onto stack for break/continue resolution
+                self.loop_stack.push((label.clone(), loop_header, loop_exit));
+
+                self.terminate(Terminator::Goto(loop_header));
+
+                self.current_block = Some(loop_header);
+                self.terminate(Terminator::Goto(loop_body));
+
+                self.current_block = Some(loop_body);
+                self.lower_body(body);
+                self.terminate(Terminator::Goto(loop_header));
+
+                // Pop loop from stack
+                self.loop_stack.pop();
+
+                self.current_block = Some(loop_exit);
+                Value::Constant(self.mir.constants.alloc(Constant {
+                    ty: Ty::Primitive(PrimitiveTy::Unit),
+                    kind: ConstantKind::Unit,
+                }))
+            }
+
+            hir::ExprKind::ReturnExpr(opt_expr) => {
+                let value = opt_expr.map(|e| self.lower_expr(e));
+                self.terminate(Terminator::Return(value));
+                Value::Constant(self.mir.constants.alloc(Constant {
+                    ty: Ty::Primitive(PrimitiveTy::Unit),
+                    kind: ConstantKind::Unit,
+                }))
+            }
+
+            hir::ExprKind::BreakExpr { label, value } => {
+                // Evaluate break value if present (for side effects)
+                if let Some(val_expr) = value {
+                    self.lower_expr(*val_expr);
+                }
+                // Find the matching loop exit block on the stack
+                let exit_block = self.find_loop_exit(label.as_ref());
+                if let Some(exit) = exit_block {
+                    self.terminate(Terminator::Goto(exit));
+                    // Create a new unreachable block for any code after break
+                    let dead_block = self.alloc_block(SmolStr::new("post_break_expr"));
+                    self.current_block = Some(dead_block);
+                }
+                Value::Constant(self.mir.constants.alloc(Constant {
+                    ty: Ty::Primitive(PrimitiveTy::Unit),
+                    kind: ConstantKind::Unit,
+                }))
+            }
+
+            hir::ExprKind::ContinueExpr { label } => {
+                // Find the matching loop header block on the stack
+                let header_block = self.find_loop_header(label.as_ref());
+                if let Some(header) = header_block {
+                    self.terminate(Terminator::Goto(header));
+                    // Create a new unreachable block for any code after continue
+                    let dead_block = self.alloc_block(SmolStr::new("post_continue_expr"));
+                    self.current_block = Some(dead_block);
+                }
+                Value::Constant(self.mir.constants.alloc(Constant {
+                    ty: Ty::Primitive(PrimitiveTy::Unit),
+                    kind: ConstantKind::Unit,
+                }))
+            }
+
+            hir::ExprKind::Lambda { params, body } => {
+                // Generate a unique name for the lambda function
+                let lambda_name = SmolStr::new(&format!("__lambda_{}", self.lambda_counter));
+                self.lambda_counter += 1;
+
+                // Save the current lowering state
+                let saved_function = self.current_function.take();
+                let saved_block = self.current_block.take();
+                let saved_local_map = std::mem::take(&mut self.local_map);
+                let saved_next_local = self.next_local;
+                self.next_local = 0;
+
+                // Lower parameters for the lambda
+                let mir_params: Vec<Local> = params
+                    .iter()
+                    .map(|p| {
+                        let id = self.next_local;
+                        self.next_local += 1;
+                        self.local_map.insert(p.local, id);
+                        Local {
+                            id,
+                            name: p.name.clone(),
+                            ty: p.ty.clone(),
+                            mutable: false,
+                        }
+                    })
+                    .collect();
+
+                // Create the lambda MIR function
+                let lambda_func = Function {
+                    span: expr.span,
+                    name: lambda_name.clone(),
+                    params: mir_params,
+                    return_ty: expr.ty.clone(),
+                    locals: Vec::new(),
+                    basic_blocks: Arena::new(),
+                    entry_block: BlockId::from_raw(la_arena::RawIdx::from_u32(0)),
+                    resource_constraints: Vec::new(),
+                    is_adaptive: false,
+                };
+
+                self.current_function = Some(lambda_func);
+
+                // Create entry block for the lambda
+                let entry = self.alloc_block(SmolStr::new("lambda_entry"));
+                if let Some(func) = &mut self.current_function {
+                    func.entry_block = entry;
+                }
+                self.current_block = Some(entry);
+
+                // Lower the lambda body
+                self.lower_body(body);
+
+                // Extract the completed lambda function and add to MIR
+                if let Some(lambda_fn) = self.current_function.take() {
+                    self.mir.functions.push(lambda_fn);
+                }
+
+                // Restore the previous lowering state
+                self.current_function = saved_function;
+                self.current_block = saved_block;
+                self.local_map = saved_local_map;
+                self.next_local = saved_next_local;
+
+                // Return a function reference constant
+                Value::Constant(self.mir.constants.alloc(Constant {
+                    ty: expr.ty.clone(),
+                    kind: ConstantKind::Function(lambda_name),
+                }))
+            }
+
+            hir::ExprKind::Struct { name, fields } => {
+                // Lower struct construction: evaluate each field expression
+                // Allocate a result temporary for the struct
+                let result_local = self.next_local;
+                self.next_local += 1;
+
+                if let Some(f) = &mut self.current_function {
+                    f.locals.push(Local {
+                        id: result_local,
+                        name: SmolStr::new(&format!("struct_{}", name)),
+                        ty: expr.ty.clone(),
+                        mutable: false,
+                    });
+                }
+
+                // Evaluate each field value and emit a Store for each field
+                for (field_name, field_expr) in fields {
+                    let field_val = self.lower_expr(*field_expr);
+                    self.emit(expr.span, InstructionKind::Store {
+                        ptr: Value::Field {
+                            base: Box::new(Value::Local(result_local)),
+                            field: field_name.clone(),
+                        },
+                        value: field_val,
+                    });
+                }
+
+                Value::Local(result_local)
+            }
+
+            hir::ExprKind::Assign { target, value } => {
+                // Lower assignment expression: evaluate value and assign to target local
+                let mir_value = self.lower_expr(*value);
+                if let Some(&mir_local) = self.local_map.get(target) {
+                    self.emit(expr.span, InstructionKind::Assign {
+                        target: mir_local,
+                        value: mir_value,
+                    });
+                    Value::Local(mir_local)
+                } else {
+                    // Target local not found in map; return unit
+                    Value::Constant(self.mir.constants.alloc(Constant {
+                        ty: Ty::Primitive(PrimitiveTy::Unit),
+                        kind: ConstantKind::Unit,
+                    }))
+                }
+            }
+        }
+    }
+
+    /// Find the exit block for a loop, matching by label if provided.
+    /// Searches the loop stack from top (innermost) to bottom (outermost).
+    fn find_loop_exit(&self, label: Option<&SmolStr>) -> Option<BlockId> {
+        if let Some(lbl) = label {
+            // Find by matching label
+            for (loop_label, _header, exit) in self.loop_stack.iter().rev() {
+                if loop_label.as_ref() == Some(lbl) {
+                    return Some(*exit);
+                }
+            }
+            None
+        } else {
+            // No label: use the innermost loop
+            self.loop_stack.last().map(|(_, _, exit)| *exit)
+        }
+    }
+
+    /// Find the header block for a loop, matching by label if provided.
+    /// Searches the loop stack from top (innermost) to bottom (outermost).
+    fn find_loop_header(&self, label: Option<&SmolStr>) -> Option<BlockId> {
+        if let Some(lbl) = label {
+            // Find by matching label
+            for (loop_label, header, _exit) in self.loop_stack.iter().rev() {
+                if loop_label.as_ref() == Some(lbl) {
+                    return Some(*header);
+                }
+            }
+            None
+        } else {
+            // No label: use the innermost loop
+            self.loop_stack.last().map(|(_, header, _)| *header)
         }
     }
 
@@ -504,7 +971,7 @@ impl<'hir> LoweringContext<'hir> {
             hir::BinaryOp::Mul => BinaryOp::Mul,
             hir::BinaryOp::Div => BinaryOp::Div,
             hir::BinaryOp::Rem => BinaryOp::Rem,
-            hir::BinaryOp::Pow => BinaryOp::Mul, // TODO: Implement Pow properly
+            hir::BinaryOp::Pow => BinaryOp::Pow,
             hir::BinaryOp::Eq => BinaryOp::Eq,
             hir::BinaryOp::Ne => BinaryOp::Ne,
             hir::BinaryOp::Lt => BinaryOp::Lt,

@@ -9,7 +9,7 @@
 //! - Detects version conflicts
 //! - Resolves dependencies to concrete versions
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::cmp::Ordering;
 use std::fmt;
 

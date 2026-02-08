@@ -10,10 +10,14 @@ mod commands;
 mod repl;
 mod test_runner;
 mod bench_runner;
+#[allow(dead_code)]
 mod package;
+#[allow(dead_code)]
 mod resolver;
 mod registry;
+#[allow(dead_code)]
 mod cache;
+#[allow(dead_code)]
 mod lockfile;
 mod package_manager;
 

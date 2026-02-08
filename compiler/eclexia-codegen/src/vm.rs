@@ -7,6 +7,7 @@
 
 use crate::bytecode::{BytecodeModule, Instruction};
 use eclexia_ast::dimension::Dimension;
+use eclexia_ast::types::{Ty, PrimitiveTy};
 use smol_str::SmolStr;
 use std::collections::{HashMap, HashSet};
 
@@ -19,7 +20,9 @@ pub enum Value {
     Float(f64),
     String(String),
     Char(char),
-    Function(usize), // Function index
+    Function(usize),          // Function index
+    Range(i64, i64),           // Exclusive range (start..end)
+    RangeInclusive(i64, i64),  // Inclusive range (start..=end)
 }
 
 impl Value {
@@ -357,7 +360,7 @@ impl VirtualMachine {
             };
 
             // Debug
-            if !self.debug_mode {
+            if self.debug_mode {
                 eprintln!("Exec: func={}, ip={}, inst={:?}, stack={}, locals={}, call_depth={}",
                          func_idx, ip, inst, self.stack.len(), self.locals.len(), call_depth_before);
             }
@@ -712,15 +715,17 @@ impl VirtualMachine {
 
             // Range
             Instruction::Range => {
-                // TODO: Implement proper Range value type
-                // For now, just error
-                Err(VmError::InvalidInstruction("Range operator not yet fully implemented in VM".to_string()))
+                let end = self.pop()?.as_int()?;
+                let start = self.pop()?.as_int()?;
+                self.push(Value::Range(start, end))?;
+                Ok(ExecutionResult::Continue)
             }
 
             Instruction::RangeInclusive => {
-                // TODO: Implement proper Range value type
-                // For now, just error
-                Err(VmError::InvalidInstruction("RangeInclusive operator not yet fully implemented in VM".to_string()))
+                let end = self.pop()?.as_int()?;
+                let start = self.pop()?.as_int()?;
+                self.push(Value::RangeInclusive(start, end))?;
+                Ok(ExecutionResult::Continue)
             }
 
             // Control flow
@@ -767,8 +772,23 @@ impl VirtualMachine {
                 Ok(ExecutionResult::Continue)
             }
 
-            Instruction::CallIndirect(_arg_count) => {
-                Err(VmError::InvalidInstruction("CallIndirect not yet implemented".to_string()))
+            Instruction::CallIndirect(arg_count) => {
+                let func_val = self.pop()?;
+                let func_idx = match func_val {
+                    Value::Function(idx) => idx,
+                    _ => return Err(VmError::TypeError(
+                        "CallIndirect requires a Function value on the stack".to_string()
+                    )),
+                };
+
+                let mut args = Vec::new();
+                for _ in 0..*arg_count {
+                    args.push(self.pop()?);
+                }
+                args.reverse();
+
+                self.call_function(func_idx, &args)?;
+                Ok(ExecutionResult::Continue)
             }
 
             // Resource tracking
@@ -789,8 +809,38 @@ impl VirtualMachine {
             }
 
             // Type operations
-            Instruction::Cast { from: _, to: _ } => {
-                // Type casts - for now, values are already in the right form
+            Instruction::Cast { from: _, to } => {
+                let value = self.pop()?;
+                let converted = match to {
+                    Ty::Primitive(PrimitiveTy::Int) => {
+                        Value::Int(value.as_int()?)
+                    }
+                    Ty::Primitive(PrimitiveTy::Float) => {
+                        Value::Float(value.as_float()?)
+                    }
+                    Ty::Primitive(PrimitiveTy::Bool) => {
+                        Value::Bool(value.as_bool()?)
+                    }
+                    Ty::Primitive(PrimitiveTy::String) => {
+                        let s = match &value {
+                            Value::Int(i) => format!("{}", i),
+                            Value::Float(f) => format!("{}", f),
+                            Value::Bool(b) => format!("{}", b),
+                            Value::Char(c) => format!("{}", c),
+                            Value::String(s) => s.clone(),
+                            Value::Unit => "()".to_string(),
+                            Value::Function(idx) => format!("<function {}>", idx),
+                            Value::Range(start, end) => format!("{}..{}", start, end),
+                            Value::RangeInclusive(start, end) => format!("{}..={}", start, end),
+                        };
+                        Value::String(s)
+                    }
+                    _ => {
+                        // For unsupported or identity casts, pass through
+                        value
+                    }
+                };
+                self.push(converted)?;
                 Ok(ExecutionResult::Continue)
             }
 
@@ -798,6 +848,42 @@ impl VirtualMachine {
             Instruction::DebugPrint => {
                 let value = self.peek()?;
                 println!("DEBUG: {:?}", value);
+                Ok(ExecutionResult::Continue)
+            }
+
+            // Push function reference
+            Instruction::PushFunction(idx) => {
+                self.push(Value::Function(*idx))?;
+                Ok(ExecutionResult::Continue)
+            }
+
+            // Field access (simplified: fields not resolved in VM yet, leave base on stack)
+            Instruction::FieldAccess(_field) => {
+                // Base value is already on the stack; in a full implementation
+                // we would resolve the field. For now, leave the base value as-is.
+                Ok(ExecutionResult::Continue)
+            }
+
+            // Index access (simplified: pop index and base, push base back)
+            Instruction::IndexAccess => {
+                let _index = self.pop()?;
+                // Base value remains on the stack. In a full implementation,
+                // we would perform the index operation on the base value.
+                Ok(ExecutionResult::Continue)
+            }
+
+            // Exponentiation
+            Instruction::PowInt => {
+                let b = self.pop()?.as_int()?;
+                let a = self.pop()?.as_int()?;
+                self.push(Value::Int(a.wrapping_pow(b as u32)))?;
+                Ok(ExecutionResult::Continue)
+            }
+
+            Instruction::PowFloat => {
+                let b = self.pop()?.as_float()?;
+                let a = self.pop()?.as_float()?;
+                self.push(Value::Float(a.powf(b)))?;
                 Ok(ExecutionResult::Continue)
             }
 

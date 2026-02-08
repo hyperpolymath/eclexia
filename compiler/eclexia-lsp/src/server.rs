@@ -62,6 +62,14 @@ fn format_type(ty_id: TypeId, file: &SourceFile) -> String {
             None => format!("[{}]", format_type(*elem, file)),
         },
         TypeKind::Resource { base, .. } => base.to_string(),
+        TypeKind::Reference { ty, mutable } => {
+            if *mutable {
+                format!("&mut {}", format_type(*ty, file))
+            } else {
+                format!("&{}", format_type(*ty, file))
+            }
+        }
+        TypeKind::Optional(ty) => format!("{}?", format_type(*ty, file)),
         TypeKind::Infer => "_".to_string(),
         TypeKind::Error => "?".to_string(),
     }
@@ -135,6 +143,7 @@ struct Document {
     /// The document text
     text: String,
     /// Document version
+    #[allow(dead_code)]
     version: i32,
     /// Symbol table for this document
     symbols: Option<SymbolTable>,
@@ -435,6 +444,13 @@ impl LanguageServer for EclexiaLanguageServer {
                         crate::symbols::SymbolKind::Const => "constant",
                         crate::symbols::SymbolKind::Variable => "variable",
                         crate::symbols::SymbolKind::Parameter => "parameter",
+                        crate::symbols::SymbolKind::Method => "method",
+                        crate::symbols::SymbolKind::Field => "field",
+                        crate::symbols::SymbolKind::EnumVariant => "enum variant",
+                        crate::symbols::SymbolKind::Module => "module",
+                        crate::symbols::SymbolKind::Static => "static",
+                        crate::symbols::SymbolKind::Effect => "effect",
+                        crate::symbols::SymbolKind::Trait => "trait",
                     };
                     hover_text.push_str(&format!("\n\n*{}*", kind_str));
 
@@ -519,6 +535,13 @@ impl LanguageServer for EclexiaLanguageServer {
                         crate::symbols::SymbolKind::Const => CompletionItemKind::CONSTANT,
                         crate::symbols::SymbolKind::Variable => CompletionItemKind::VARIABLE,
                         crate::symbols::SymbolKind::Parameter => CompletionItemKind::VARIABLE,
+                        crate::symbols::SymbolKind::Method => CompletionItemKind::METHOD,
+                        crate::symbols::SymbolKind::Field => CompletionItemKind::FIELD,
+                        crate::symbols::SymbolKind::EnumVariant => CompletionItemKind::ENUM_MEMBER,
+                        crate::symbols::SymbolKind::Module => CompletionItemKind::MODULE,
+                        crate::symbols::SymbolKind::Static => CompletionItemKind::VARIABLE,
+                        crate::symbols::SymbolKind::Effect => CompletionItemKind::INTERFACE,
+                        crate::symbols::SymbolKind::Trait => CompletionItemKind::INTERFACE,
                     };
 
                     let detail = symbol.doc.clone();
@@ -681,6 +704,13 @@ impl LanguageServer for EclexiaLanguageServer {
                         crate::symbols::SymbolKind::Const => SymbolKind::CONSTANT,
                         crate::symbols::SymbolKind::Variable => SymbolKind::VARIABLE,
                         crate::symbols::SymbolKind::Parameter => SymbolKind::VARIABLE,
+                        crate::symbols::SymbolKind::Method => SymbolKind::METHOD,
+                        crate::symbols::SymbolKind::Field => SymbolKind::FIELD,
+                        crate::symbols::SymbolKind::EnumVariant => SymbolKind::ENUM_MEMBER,
+                        crate::symbols::SymbolKind::Module => SymbolKind::MODULE,
+                        crate::symbols::SymbolKind::Static => SymbolKind::VARIABLE,
+                        crate::symbols::SymbolKind::Effect => SymbolKind::INTERFACE,
+                        crate::symbols::SymbolKind::Trait => SymbolKind::INTERFACE,
                     };
 
                     #[allow(deprecated)]

@@ -81,6 +81,12 @@ pub enum Instruction {
     Shr,
     BitNot,
 
+    // Exponentiation
+    /// Integer power (a ** b)
+    PowInt,
+    /// Float power (a ** b)
+    PowFloat,
+
     // Range
     /// Create range (start..end)
     Range,
@@ -109,6 +115,15 @@ pub enum Instruction {
 
     /// Call indirect (function on stack)
     CallIndirect(u32), // arg_count
+
+    /// Push a function reference onto the stack
+    PushFunction(usize), // function index
+
+    /// Access a field on the top-of-stack value
+    FieldAccess(SmolStr),
+
+    /// Index into the top-of-stack value (index on top, base below)
+    IndexAccess,
 
     // Resource tracking
     /// Track resource consumption
@@ -297,7 +312,7 @@ impl BytecodeGenerator {
 
     /// Generate bytecode for a MIR instruction
     fn generate_instruction(
-        &self,
+        &mut self,
         inst: &MirInstruction,
         out: &mut Vec<Instruction>,
         mir: &MirFile,
@@ -367,8 +382,11 @@ impl BytecodeGenerator {
                 out.push(Instruction::Nop);
             }
 
-            InstructionKind::Store { .. } => {
-                return Err(CodegenError::UnsupportedFeature("Store instruction".to_string()));
+            InstructionKind::Store { ptr: _, value } => {
+                // Generate the value onto the stack, then emit a Nop since we
+                // don't have memory addressing in the stack VM yet.
+                self.generate_value(value, out, mir, mir_func)?;
+                out.push(Instruction::Nop);
             }
         }
 
@@ -377,7 +395,7 @@ impl BytecodeGenerator {
 
     /// Generate bytecode for a value
     fn generate_value(
-        &self,
+        &mut self,
         value: &Value,
         out: &mut Vec<Instruction>,
         mir: &MirFile,
@@ -396,16 +414,17 @@ impl BytecodeGenerator {
                     ConstantKind::Int(i) => out.push(Instruction::PushInt(*i)),
                     ConstantKind::Float(f) => out.push(Instruction::PushFloat(*f)),
                     ConstantKind::Bool(b) => out.push(Instruction::PushBool(*b)),
-                    ConstantKind::String(_s) => {
-                        // This is a read-only borrow, we can't mutate context here
-                        // We'll need to handle this differently
-                        out.push(Instruction::PushString(0)); // Placeholder
+                    ConstantKind::String(s) => {
+                        let idx = self.context.intern_string(s);
+                        out.push(Instruction::PushString(idx));
                     }
                     ConstantKind::Char(c) => out.push(Instruction::PushInt(*c as i64)),
                     ConstantKind::Unit => out.push(Instruction::PushUnit),
                     ConstantKind::Resource { value, .. } => out.push(Instruction::PushFloat(*value)),
-                    ConstantKind::Function(_) => {
-                        return Err(CodegenError::UnsupportedFeature("Function constant as value".to_string()));
+                    ConstantKind::Function(name) => {
+                        let func_idx = self.context.function_map.get(name)
+                            .ok_or_else(|| CodegenError::MissingFunction(name.clone()))?;
+                        out.push(Instruction::PushFunction(*func_idx));
                     }
                 }
             }
@@ -421,19 +440,30 @@ impl BytecodeGenerator {
                 self.generate_unary_op(*op, operand, mir_func, mir, out)?;
             }
 
-            Value::Load { ptr: _ } => {
-                return Err(CodegenError::UnsupportedFeature("Load instruction".to_string()));
+            Value::Load { ptr } => {
+                // Generate the pointer value onto the stack. In our stack-based
+                // VM model, the value is already represented on the stack.
+                self.generate_value(ptr, out, mir, mir_func)?;
             }
 
-            Value::Field { .. } | Value::Index { .. } => {
-                return Err(CodegenError::UnsupportedFeature("Field/Index access".to_string()));
+            Value::Field { base, field } => {
+                self.generate_value(base, out, mir, mir_func)?;
+                out.push(Instruction::FieldAccess(field.clone()));
+            }
+
+            Value::Index { base, index } => {
+                self.generate_value(base, out, mir, mir_func)?;
+                self.generate_value(index, out, mir, mir_func)?;
+                out.push(Instruction::IndexAccess);
             }
 
             Value::Cast { value, target_ty } => {
                 self.generate_value(value, out, mir, mir_func)?;
-                // Determine source type (would need type inference here)
+                // Determine source type from the value being cast
+                let from_ty = self.get_value_type(value, mir_func, mir)
+                    .unwrap_or(Ty::Primitive(PrimitiveTy::Int));
                 out.push(Instruction::Cast {
-                    from: Ty::Primitive(PrimitiveTy::Int), // Placeholder
+                    from: from_ty,
                     to: target_ty.clone(),
                 });
             }
@@ -491,6 +521,8 @@ impl BytecodeGenerator {
             (BinaryOp::Div, false) => Instruction::DivInt,
             (BinaryOp::Div, true) => Instruction::DivFloat,
             (BinaryOp::Rem, _) => Instruction::RemInt, // Remainder is int-only
+            (BinaryOp::Pow, false) => Instruction::PowInt,
+            (BinaryOp::Pow, true) => Instruction::PowFloat,
             (BinaryOp::Eq, false) => Instruction::EqInt,
             (BinaryOp::Eq, true) => Instruction::EqFloat,
             (BinaryOp::Ne, false) => Instruction::NeInt,
@@ -579,8 +611,31 @@ impl BytecodeGenerator {
                 });
             }
 
-            Terminator::Switch { .. } => {
-                return Err(CodegenError::UnsupportedFeature("Switch terminator".to_string()));
+            Terminator::Switch { value, targets, default } => {
+                // Generate the switch value onto the stack
+                self.generate_value(value, out, mir, mir_func)?;
+
+                // For each case target, emit: Dup, PushInt(case_value), EqInt, JumpIf(target)
+                for (case_val, target_block) in targets {
+                    out.push(Instruction::Dup);
+                    out.push(Instruction::PushInt(*case_val));
+                    out.push(Instruction::EqInt);
+                    let jump_idx = out.len();
+                    out.push(Instruction::JumpIf(0)); // Placeholder
+                    self.jump_fixups.push(JumpFixup {
+                        instruction_idx: jump_idx,
+                        target_block: *target_block,
+                    });
+                }
+
+                // Pop the remaining switch value and jump to default
+                out.push(Instruction::Pop);
+                let default_idx = out.len();
+                out.push(Instruction::Jump(0)); // Placeholder
+                self.jump_fixups.push(JumpFixup {
+                    instruction_idx: default_idx,
+                    target_block: *default,
+                });
             }
 
             Terminator::Unreachable => {

@@ -71,6 +71,30 @@ pub enum Item {
     TypeDef(TypeDef),
     /// Constant definition
     Const(Const),
+    /// Trait declaration (placeholder for future use)
+    TraitDecl {
+        span: Span,
+        name: SmolStr,
+    },
+    /// Impl block (placeholder for future use)
+    ImplBlock {
+        span: Span,
+        self_ty_name: SmolStr,
+    },
+    /// Module declaration
+    Module {
+        span: Span,
+        name: SmolStr,
+        items: Vec<Item>,
+    },
+    /// Static variable
+    Static {
+        span: Span,
+        name: SmolStr,
+        ty: Ty,
+        value: ExprId,
+        mutable: bool,
+    },
 }
 
 /// A function definition
@@ -245,6 +269,20 @@ pub enum StmtKind {
     Expr(ExprId),
     /// Return from function
     Return(Option<ExprId>),
+    /// Infinite loop
+    InfiniteLoop {
+        label: Option<SmolStr>,
+        body: Body,
+    },
+    /// Break from loop
+    Break {
+        label: Option<SmolStr>,
+        value: Option<ExprId>,
+    },
+    /// Continue loop
+    Continue {
+        label: Option<SmolStr>,
+    },
 }
 
 /// A place (lvalue)
@@ -355,6 +393,44 @@ pub enum ExprKind {
     Assign {
         target: LocalId,
         value: ExprId,
+    },
+
+    /// Try operator (expr?)
+    Try(ExprId),
+
+    /// Borrow (&expr or &mut expr)
+    Borrow {
+        expr: ExprId,
+        mutable: bool,
+    },
+
+    /// Dereference (*expr)
+    Deref(ExprId),
+
+    /// Array repeat [value; count]
+    ArrayRepeat {
+        value: ExprId,
+        count: ExprId,
+    },
+
+    /// Infinite loop as expression
+    InfiniteLoop {
+        label: Option<SmolStr>,
+        body: Body,
+    },
+
+    /// Return as expression
+    ReturnExpr(Option<ExprId>),
+
+    /// Break as expression
+    BreakExpr {
+        label: Option<SmolStr>,
+        value: Option<ExprId>,
+    },
+
+    /// Continue as expression
+    ContinueExpr {
+        label: Option<SmolStr>,
     },
 }
 

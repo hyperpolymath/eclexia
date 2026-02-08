@@ -100,6 +100,48 @@ pub enum TokenKind {
     Not,
     #[token("as")]
     As,
+    #[token("pub")]
+    Pub,
+    #[token("module")]
+    Module,
+    #[token("mod")]
+    Mod,
+    #[token("loop")]
+    Loop,
+    #[token("effect")]
+    Effect,
+    #[token("handle")]
+    Handle,
+    #[token("use")]
+    Use,
+    #[token("where")]
+    Where,
+    #[token("self", priority = 5)]
+    SelfLower,
+    #[token("Self", priority = 5)]
+    SelfUpper,
+    #[token("static")]
+    Static,
+    #[token("extern")]
+    Extern,
+    #[token("case")]
+    Case,
+    #[token("do")]
+    Do,
+    #[token("energy")]
+    Energy,
+    #[token("latency")]
+    Latency,
+    #[token("memory")]
+    Memory,
+    #[token("unit")]
+    Unit,
+    #[token("carbon")]
+    Carbon,
+    #[token("ref")]
+    Ref,
+    #[token("super")]
+    Super,
 
     // === Eclexia-specific keywords ===
     #[token("@solution")]
@@ -122,6 +164,18 @@ pub enum TokenKind {
     Maximize,
 
     // === Literals ===
+    /// Hex integer literal (0xFF)
+    #[regex(r"0[xX][0-9a-fA-F][0-9a-fA-F_]*", |lex| parse_hex(lex.slice()), priority = 5)]
+    HexInteger(i64),
+
+    /// Octal integer literal (0o77)
+    #[regex(r"0[oO][0-7][0-7_]*", |lex| parse_octal(lex.slice()), priority = 5)]
+    OctalInteger(i64),
+
+    /// Binary integer literal (0b1010)
+    #[regex(r"0[bB][01][01_]*", |lex| parse_binary(lex.slice()), priority = 5)]
+    BinaryInteger(i64),
+
     /// Integer literal (possibly with unit suffix)
     #[regex(r"[0-9][0-9_]*", |lex| parse_int(lex.slice()))]
     Integer(i64),
@@ -139,9 +193,37 @@ pub enum TokenKind {
     #[regex(r#""([^"\\]|\\.)*""#, |lex| parse_string(lex.slice()))]
     String(SmolStr),
 
+    /// Raw string literal: r"..." (no escape processing)
+    #[regex(r#"r"[^"]*""#, |lex| {
+        let s = lex.slice();
+        SmolStr::new(&s[2..s.len()-1])
+    })]
+    RawString(SmolStr),
+
+    /// Raw string literal with hashes: r#"..."#
+    #[regex(r####"r#"([^"]|"[^#])*"#"####, |lex| {
+        let s = lex.slice();
+        SmolStr::new(&s[3..s.len()-2])
+    })]
+    RawStringHash(SmolStr),
+
     /// Character literal
     #[regex(r"'([^'\\]|\\.)'", |lex| parse_char(lex.slice()))]
     Char(char),
+
+    /// Doc comment (///)
+    #[regex(r"///[^\n]*", |lex| {
+        let s = lex.slice();
+        SmolStr::new(s[3..].trim())
+    })]
+    DocComment(SmolStr),
+
+    /// Block doc comment (/** ... */)
+    #[regex(r"/\*\*([^*]|\*[^/])*\*/", |lex| {
+        let s = lex.slice();
+        SmolStr::new(&s[3..s.len()-2].trim())
+    })]
+    BlockDocComment(SmolStr),
 
     // === Identifiers ===
     // Note: Keywords take priority. Single underscore is handled separately.
@@ -202,6 +284,30 @@ pub enum TokenKind {
     #[token(">>")]
     GtGt,
 
+    // === Compound assignment ===
+    #[token("+=")]
+    PlusEq,
+    #[token("-=")]
+    MinusEq,
+    #[token("*=")]
+    StarEq,
+    #[token("/=")]
+    SlashEq,
+    #[token("%=")]
+    PercentEq,
+    #[token("^=")]
+    CaretEq,
+    #[token("<<=")]
+    LtLtEq,
+    #[token(">>=")]
+    GtGtEq,
+    #[token("&=")]
+    AmpEq,
+    #[token("|=")]
+    PipeEq,
+    #[token("**=")]
+    StarStarEq,
+
     // === Punctuation ===
     #[token("=")]
     Eq,
@@ -215,6 +321,8 @@ pub enum TokenKind {
     Comma,
     #[token(".")]
     Dot,
+    #[token("..=")]
+    DotDotEq,
     #[token("..")]
     DotDot,
     #[token("...")]
@@ -265,6 +373,21 @@ fn parse_int(s: &str) -> i64 {
     s.replace('_', "").parse().unwrap_or(0)
 }
 
+fn parse_hex(s: &str) -> i64 {
+    let s = &s[2..]; // skip 0x/0X
+    i64::from_str_radix(&s.replace('_', ""), 16).unwrap_or(0)
+}
+
+fn parse_octal(s: &str) -> i64 {
+    let s = &s[2..]; // skip 0o/0O
+    i64::from_str_radix(&s.replace('_', ""), 8).unwrap_or(0)
+}
+
+fn parse_binary(s: &str) -> i64 {
+    let s = &s[2..]; // skip 0b/0B
+    i64::from_str_radix(&s.replace('_', ""), 2).unwrap_or(0)
+}
+
 fn parse_float(s: &str) -> f64 {
     s.replace('_', "").parse().unwrap_or(0.0)
 }
@@ -303,6 +426,47 @@ fn parse_string(s: &str) -> SmolStr {
                 Some('\\') => result.push('\\'),
                 Some('"') => result.push('"'),
                 Some('0') => result.push('\0'),
+                Some('x') => {
+                    // Hex escape: \xHH
+                    let mut hex = String::new();
+                    for _ in 0..2 {
+                        if let Some(&c) = chars.peek() {
+                            if c.is_ascii_hexdigit() {
+                                hex.push(c);
+                                chars.next();
+                            }
+                        }
+                    }
+                    if let Ok(val) = u32::from_str_radix(&hex, 16) {
+                        if let Some(ch) = char::from_u32(val) {
+                            result.push(ch);
+                        }
+                    }
+                }
+                Some('u') => {
+                    // Unicode escape: \u{XXXX}
+                    if chars.peek() == Some(&'{') {
+                        chars.next(); // consume {
+                        let mut hex = String::new();
+                        while let Some(&c) = chars.peek() {
+                            if c == '}' {
+                                chars.next();
+                                break;
+                            }
+                            if c.is_ascii_hexdigit() {
+                                hex.push(c);
+                                chars.next();
+                            } else {
+                                break;
+                            }
+                        }
+                        if let Ok(val) = u32::from_str_radix(&hex, 16) {
+                            if let Some(ch) = char::from_u32(val) {
+                                result.push(ch);
+                            }
+                        }
+                    }
+                }
                 Some(c) => result.push(c),
                 None => break,
             }
@@ -316,7 +480,7 @@ fn parse_string(s: &str) -> SmolStr {
 
 fn parse_char(s: &str) -> char {
     let inner = &s[1..s.len() - 1];
-    let mut chars = inner.chars();
+    let mut chars = inner.chars().peekable();
 
     match chars.next() {
         Some('\\') => match chars.next() {
@@ -326,6 +490,47 @@ fn parse_char(s: &str) -> char {
             Some('\\') => '\\',
             Some('\'') => '\'',
             Some('0') => '\0',
+            Some('x') => {
+                // Hex escape: \xHH
+                let mut hex = String::new();
+                for _ in 0..2 {
+                    if let Some(&c) = chars.peek() {
+                        if c.is_ascii_hexdigit() {
+                            hex.push(c);
+                            chars.next();
+                        }
+                    }
+                }
+                u32::from_str_radix(&hex, 16)
+                    .ok()
+                    .and_then(char::from_u32)
+                    .unwrap_or('\0')
+            }
+            Some('u') => {
+                // Unicode escape: \u{XXXX}
+                if chars.peek() == Some(&'{') {
+                    chars.next();
+                    let mut hex = String::new();
+                    while let Some(&c) = chars.peek() {
+                        if c == '}' {
+                            chars.next();
+                            break;
+                        }
+                        if c.is_ascii_hexdigit() {
+                            hex.push(c);
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    u32::from_str_radix(&hex, 16)
+                        .ok()
+                        .and_then(char::from_u32)
+                        .unwrap_or('\0')
+                } else {
+                    'u'
+                }
+            }
             Some(c) => c,
             None => '\0',
         },
@@ -531,6 +736,136 @@ mod tests {
         assert!(matches!(tokens[1].kind, TokenKind::Ident(_)));
         assert!(matches!(tokens[2].kind, TokenKind::Eq));
         assert!(matches!(tokens[3].kind, TokenKind::Integer(5)));
+    }
+
+    #[test]
+    fn test_new_keywords() {
+        let source = "pub module mod loop effect handle use where static extern";
+        let tokens: Vec<_> = Lexer::new(source).collect();
+        assert!(matches!(tokens[0].kind, TokenKind::Pub));
+        assert!(matches!(tokens[1].kind, TokenKind::Module));
+        assert!(matches!(tokens[2].kind, TokenKind::Mod));
+        assert!(matches!(tokens[3].kind, TokenKind::Loop));
+        assert!(matches!(tokens[4].kind, TokenKind::Effect));
+        assert!(matches!(tokens[5].kind, TokenKind::Handle));
+        assert!(matches!(tokens[6].kind, TokenKind::Use));
+        assert!(matches!(tokens[7].kind, TokenKind::Where));
+        assert!(matches!(tokens[8].kind, TokenKind::Static));
+        assert!(matches!(tokens[9].kind, TokenKind::Extern));
+    }
+
+    #[test]
+    fn test_self_tokens() {
+        let source = "self Self";
+        let tokens: Vec<_> = Lexer::new(source).collect();
+        assert!(matches!(tokens[0].kind, TokenKind::SelfLower));
+        assert!(matches!(tokens[1].kind, TokenKind::SelfUpper));
+    }
+
+    #[test]
+    fn test_compound_assignment() {
+        let source = "+= -= *= /= %=";
+        let tokens: Vec<_> = Lexer::new(source).collect();
+        assert!(matches!(tokens[0].kind, TokenKind::PlusEq));
+        assert!(matches!(tokens[1].kind, TokenKind::MinusEq));
+        assert!(matches!(tokens[2].kind, TokenKind::StarEq));
+        assert!(matches!(tokens[3].kind, TokenKind::SlashEq));
+        assert!(matches!(tokens[4].kind, TokenKind::PercentEq));
+    }
+
+    #[test]
+    fn test_inclusive_range() {
+        let source = ".. ..=";
+        let tokens: Vec<_> = Lexer::new(source).collect();
+        assert!(matches!(tokens[0].kind, TokenKind::DotDot));
+        assert!(matches!(tokens[1].kind, TokenKind::DotDotEq));
+    }
+
+    #[test]
+    fn test_hex_octal_binary_literals() {
+        let source = "0xFF 0o77 0b1010 0x1A_2B";
+        let tokens: Vec<_> = Lexer::new(source).collect();
+        assert!(matches!(tokens[0].kind, TokenKind::HexInteger(255)));
+        assert!(matches!(tokens[1].kind, TokenKind::OctalInteger(63)));
+        assert!(matches!(tokens[2].kind, TokenKind::BinaryInteger(10)));
+        assert!(matches!(tokens[3].kind, TokenKind::HexInteger(6699)));
+    }
+
+    #[test]
+    fn test_new_keywords_stage1() {
+        let source = "case do energy latency memory unit carbon ref super";
+        let tokens: Vec<_> = Lexer::new(source).collect();
+        assert!(matches!(tokens[0].kind, TokenKind::Case));
+        assert!(matches!(tokens[1].kind, TokenKind::Do));
+        assert!(matches!(tokens[2].kind, TokenKind::Energy));
+        assert!(matches!(tokens[3].kind, TokenKind::Latency));
+        assert!(matches!(tokens[4].kind, TokenKind::Memory));
+        assert!(matches!(tokens[5].kind, TokenKind::Unit));
+        assert!(matches!(tokens[6].kind, TokenKind::Carbon));
+        assert!(matches!(tokens[7].kind, TokenKind::Ref));
+        assert!(matches!(tokens[8].kind, TokenKind::Super));
+    }
+
+    #[test]
+    fn test_caret_eq_compound_assignment() {
+        let source = "^= <<= >>= &= |= **=";
+        let tokens: Vec<_> = Lexer::new(source).collect();
+        assert!(matches!(tokens[0].kind, TokenKind::CaretEq));
+        assert!(matches!(tokens[1].kind, TokenKind::LtLtEq));
+        assert!(matches!(tokens[2].kind, TokenKind::GtGtEq));
+        assert!(matches!(tokens[3].kind, TokenKind::AmpEq));
+        assert!(matches!(tokens[4].kind, TokenKind::PipeEq));
+        assert!(matches!(tokens[5].kind, TokenKind::StarStarEq));
+    }
+
+    #[test]
+    fn test_raw_strings() {
+        let source = r##"r"hello\nworld" r#"hash"raw"#"##;
+        let tokens: Vec<_> = Lexer::new(source).collect();
+        if let TokenKind::RawString(s) = &tokens[0].kind {
+            assert_eq!(s.as_str(), "hello\\nworld");
+        } else {
+            panic!("Expected raw string, got {:?}", tokens[0].kind);
+        }
+        if let TokenKind::RawStringHash(s) = &tokens[1].kind {
+            assert_eq!(s.as_str(), "hash\"raw");
+        } else {
+            panic!("Expected raw string hash, got {:?}", tokens[1].kind);
+        }
+    }
+
+    #[test]
+    fn test_hex_escape_in_string() {
+        let source = r#""\x41\x42""#;
+        let tokens: Vec<_> = Lexer::new(source).collect();
+        if let TokenKind::String(s) = &tokens[0].kind {
+            assert_eq!(s.as_str(), "AB");
+        } else {
+            panic!("Expected string literal");
+        }
+    }
+
+    #[test]
+    fn test_unicode_escape_in_string() {
+        let source = r#""\u{03C0}""#;
+        let tokens: Vec<_> = Lexer::new(source).collect();
+        if let TokenKind::String(s) = &tokens[0].kind {
+            assert_eq!(s.as_str(), "\u{03C0}"); // π
+        } else {
+            panic!("Expected string literal");
+        }
+    }
+
+    #[test]
+    fn test_doc_comments() {
+        let source = "/// This is a doc comment\nlet x = 5";
+        let tokens: Vec<_> = Lexer::new(source).collect();
+        if let TokenKind::DocComment(s) = &tokens[0].kind {
+            assert_eq!(s.as_str(), "This is a doc comment");
+        } else {
+            panic!("Expected doc comment, got {:?}", tokens[0].kind);
+        }
+        assert!(matches!(tokens[1].kind, TokenKind::Let));
     }
 
     #[test]

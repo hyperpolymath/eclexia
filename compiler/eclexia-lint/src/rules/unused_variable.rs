@@ -4,7 +4,7 @@
 //! Unused variable detection.
 
 use crate::{Diagnostic, LintContext, LintRule, Severity};
-use eclexia_ast::{ExprId, ExprKind, Item, StmtKind};
+use eclexia_ast::{ExprId, ExprKind, Item, Pattern, StmtKind};
 use std::collections::HashSet;
 
 pub struct UnusedVariableRule;
@@ -33,8 +33,11 @@ impl LintRule for UnusedVariableRule {
                 // Collect defined variables from let statements
                 for &stmt_id in &func.body.stmts {
                     let stmt = &ctx.file.stmts[stmt_id];
-                    if let StmtKind::Let { name, .. } = &stmt.kind {
-                        defined_vars.insert((name.clone(), stmt.span));
+                    if let StmtKind::Let { pattern, .. } = &stmt.kind {
+                        // Extract variable name from pattern
+                        if let Pattern::Var(name) = pattern {
+                            defined_vars.insert((name.clone(), stmt.span));
+                        }
                     }
                 }
 
@@ -95,9 +98,20 @@ fn collect_used_vars(stmt_id: eclexia_ast::StmtId, ctx: &LintContext, used: &mut
                 collect_used_vars(stmt_id, ctx, used);
             }
         }
+        StmtKind::Loop { body, .. } => {
+            for &stmt_id in &body.stmts {
+                collect_used_vars(stmt_id, ctx, used);
+            }
+        }
+        StmtKind::Break { value, .. } => {
+            if let Some(expr_id) = value {
+                collect_used_vars_expr(*expr_id, ctx, used);
+            }
+        }
+        StmtKind::Continue { .. } => {}
         StmtKind::Assign { target, value } => {
-            // Mark target as used
-            used.insert(target.clone());
+            // Mark variables in target expression as used
+            collect_used_vars_expr(*target, ctx, used);
             collect_used_vars_expr(*value, ctx, used);
         }
     }

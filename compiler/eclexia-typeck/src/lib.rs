@@ -16,7 +16,7 @@ mod error;
 
 use eclexia_ast::types::{Ty, TypeVar, PrimitiveTy};
 use eclexia_ast::dimension::Dimension;
-use eclexia_ast::{SourceFile, Item, Function, AdaptiveFunction, ExprId, StmtId, ExprKind, StmtKind, BinaryOp, UnaryOp, Literal, Block, Constraint, ConstraintKind};
+use eclexia_ast::{SourceFile, Item, Function, AdaptiveFunction, ExprId, StmtId, ExprKind, StmtKind, BinaryOp, UnaryOp, Literal, Block, Constraint, ConstraintKind, Pattern};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
@@ -264,7 +264,119 @@ impl<'a> TypeChecker<'a> {
                 let ty = self.fresh_var();
                 self.env.insert_mono(c.name.clone(), ty);
             }
-            Item::TypeDef(_) | Item::Import(_) => {}
+            Item::TypeDef(td) => {
+                self.collect_typedef_info(td);
+            }
+            Item::Import(_) => {}
+            Item::TraitDecl(t) => {
+                self.collect_trait_info(t);
+            }
+            Item::ImplBlock(i) => {
+                self.collect_impl_info(i);
+            }
+            Item::ModuleDecl(m) => {
+                // Recursively collect signatures from module items
+                if let Some(items) = &m.items {
+                    for item in items {
+                        self.collect_item_signature(item);
+                    }
+                }
+            }
+            Item::StaticDecl(s) => {
+                let ty = self.resolve_ast_type(s.ty);
+                self.env.insert_mono(s.name.clone(), ty);
+            }
+            Item::EffectDecl(_) | Item::ExternBlock(_) => {}
+        }
+    }
+
+    /// Collect struct field information from a type definition.
+    fn collect_typedef_info(&mut self, td: &eclexia_ast::TypeDef) {
+        match &td.kind {
+            eclexia_ast::TypeDefKind::Struct(fields) => {
+                let field_info: Vec<(SmolStr, Ty)> = fields
+                    .iter()
+                    .map(|f| {
+                        let ty = self.resolve_ast_type(f.ty);
+                        (f.name.clone(), ty)
+                    })
+                    .collect();
+                self.env.register_struct(td.name.clone(), field_info);
+            }
+            eclexia_ast::TypeDefKind::Enum(variants) => {
+                // Register each variant as a constructor function
+                for v in variants {
+                    if let Some(fields) = &v.fields {
+                        let param_tys: Vec<Ty> = fields.iter().map(|&f| self.resolve_ast_type(f)).collect();
+                        let constructor_ty = Ty::Function {
+                            params: param_tys,
+                            ret: Box::new(Ty::Named { name: td.name.clone(), args: vec![] }),
+                        };
+                        self.env.insert_mono(v.name.clone(), constructor_ty);
+                    } else {
+                        // Unit variant: just a value of the enum type
+                        self.env.insert_mono(v.name.clone(), Ty::Named { name: td.name.clone(), args: vec![] });
+                    }
+                }
+            }
+            eclexia_ast::TypeDefKind::Alias(target) => {
+                let target_ty = self.resolve_ast_type(*target);
+                self.env.insert_mono(td.name.clone(), target_ty);
+            }
+        }
+    }
+
+    /// Collect trait method information.
+    fn collect_trait_info(&mut self, t: &eclexia_ast::TraitDecl) {
+        let mut methods = Vec::new();
+        for item in &t.items {
+            if let eclexia_ast::TraitItem::Method { sig, .. } = item {
+                let ty = self.function_sig_type(sig);
+                methods.push((sig.name.clone(), ty));
+            }
+        }
+        self.env.register_trait(t.name.clone(), methods);
+    }
+
+    /// Collect impl block method information.
+    fn collect_impl_info(&mut self, i: &eclexia_ast::ImplBlock) {
+        let self_ty_name = match &self.file.types[i.self_ty].kind {
+            eclexia_ast::TypeKind::Named { name, .. } => name.clone(),
+            _ => return,
+        };
+
+        let mut methods = Vec::new();
+        for item in &i.items {
+            if let eclexia_ast::ImplItem::Method { sig, .. } = item {
+                let ty = self.function_sig_type(sig);
+                methods.push((sig.name.clone(), ty.clone()));
+                // Also register method globally as Type::method
+                let qualified_name = SmolStr::new(format!("{}::{}", self_ty_name, sig.name));
+                self.env.insert_mono(qualified_name, ty);
+            }
+        }
+        self.env.register_impl_methods(self_ty_name, methods);
+    }
+
+    /// Get function type from a FunctionSig.
+    fn function_sig_type(&mut self, sig: &eclexia_ast::FunctionSig) -> Ty {
+        let params: Vec<Ty> = sig.params.iter().map(|p| {
+            if let Some(ty_id) = p.ty {
+                self.resolve_ast_type(ty_id)
+            } else {
+                self.fresh_var()
+            }
+        }).collect();
+
+        let ret = if let Some(ty_id) = sig.return_type {
+            self.resolve_ast_type(ty_id)
+        } else {
+            self.fresh_var()
+        };
+
+        Ty::Function {
+            params,
+            ret: Box::new(ret),
         }
     }
 
@@ -370,6 +482,20 @@ impl<'a> TypeChecker<'a> {
                 };
                 Ty::Resource { base: base_ty, dimension: dimension.clone() }
             }
+            eclexia_ast::TypeKind::Reference { ty, mutable } => {
+                let inner_ty = self.resolve_ast_type(*ty);
+                Ty::Named {
+                    name: if *mutable { SmolStr::new("&mut") } else { SmolStr::new("&") },
+                    args: vec![inner_ty],
+                }
+            }
+            eclexia_ast::TypeKind::Optional(inner) => {
+                let inner_ty = self.resolve_ast_type(*inner);
+                Ty::Named {
+                    name: SmolStr::new("Option"),
+                    args: vec![inner_ty],
+                }
+            }
             eclexia_ast::TypeKind::Infer => self.fresh_var(),
             eclexia_ast::TypeKind::Error => Ty::Error,
         }
@@ -390,6 +516,42 @@ impl<'a> TypeChecker<'a> {
                 }
             }
             Item::TypeDef(_) | Item::Import(_) => {}
+            Item::ImplBlock(i) => {
+                // Type-check impl block method bodies
+                for impl_item in &i.items {
+                    if let eclexia_ast::ImplItem::Method { sig, body, .. } = impl_item {
+                        let mut body_env = self.env.child();
+                        for param in &sig.params {
+                            let ty = if let Some(ty_id) = param.ty {
+                                self.resolve_ast_type(ty_id)
+                            } else {
+                                self.fresh_var()
+                            };
+                            body_env.insert_mono(param.name.clone(), ty);
+                        }
+                        let old_env = std::mem::replace(&mut self.env, body_env);
+                        self.check_block(body);
+                        self.env = old_env;
+                    }
+                }
+            }
+            Item::ModuleDecl(m) => {
+                if let Some(items) = &m.items {
+                    for item in items {
+                        self.check_item(item);
+                    }
+                }
+            }
+            Item::StaticDecl(s) => {
+                let value_ty = self.infer_expr(s.value);
+                let declared_ty = self.resolve_ast_type(s.ty);
+                if let Err(e) = self.unify(&declared_ty, &value_ty, s.span) {
+                    self.errors.push(e);
+                }
+            }
+            Item::TraitDecl(_)
+            | Item::EffectDecl(_)
+            | Item::ExternBlock(_) => {}
         }
     }
 
@@ -478,18 +640,20 @@ impl<'a> TypeChecker<'a> {
         let stmt = &self.file.stmts[stmt_id];
 
         match &stmt.kind {
-            StmtKind::Let { name, ty, value } => {
+            StmtKind::Let { pattern, mutable: _, ty, value } => {
                 let inferred = self.infer_expr(*value);
-
-                if let Some(ty_id) = ty {
+                let binding_ty = if let Some(ty_id) = ty {
                     let declared = self.resolve_ast_type(*ty_id);
                     if let Err(e) = self.unify(&declared, &inferred, stmt.span) {
                         self.errors.push(e);
                     }
-                    self.env.insert_mono(name.clone(), declared);
+                    declared
                 } else {
-                    self.env.insert_mono(name.clone(), inferred);
-                }
+                    inferred
+                };
+
+                // Recursively bind pattern variables
+                self.bind_pattern(pattern, &binding_ty, stmt.span);
             }
             StmtKind::Expr(expr) => {
                 self.infer_expr(*expr);
@@ -506,7 +670,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 self.check_block(body);
             }
-            StmtKind::For { name, iter, body } => {
+            StmtKind::For { pattern, iter, body } => {
                 let iter_ty = self.infer_expr(*iter);
 
                 let elem_ty = match &iter_ty {
@@ -514,16 +678,17 @@ impl<'a> TypeChecker<'a> {
                     _ => {
                         self.errors.push(TypeError::Custom {
                             span: self.file.exprs[*iter].span,
-                            message: format!("expected array, found {}", iter_ty),
+                            message: format!("expected iterable, found {}", iter_ty),
                             hint: None,
                         });
                         Ty::Error
                     }
                 };
 
-                let mut loop_env = self.env.child();
-                loop_env.insert_mono(name.clone(), elem_ty);
+                let loop_env = self.env.child();
                 let old_env = std::mem::replace(&mut self.env, loop_env);
+                // Bind pattern variables in loop scope
+                self.bind_pattern(pattern, &elem_ty, stmt.span);
                 self.check_block(body);
                 self.env = old_env;
             }
@@ -531,19 +696,40 @@ impl<'a> TypeChecker<'a> {
                 // Type check the value
                 let value_ty = self.infer_expr(*value);
 
-                // Check that target variable exists and types match
-                if let Some(target_scheme) = self.env.lookup(target.as_str()) {
-                    let target_ty = target_scheme.ty.clone();
-                    if let Err(e) = self.unify(&target_ty, &value_ty, stmt.span) {
-                        self.errors.push(e);
+                // Look up the target expression to get the variable name
+                let target_expr = &self.file.exprs[*target];
+                match &target_expr.kind {
+                    ExprKind::Var(name) => {
+                        // Check that target variable exists and types match
+                        if let Some(target_scheme) = self.env.lookup(name.as_str()) {
+                            let target_ty = target_scheme.ty.clone();
+                            if let Err(e) = self.unify(&target_ty, &value_ty, stmt.span) {
+                                self.errors.push(e);
+                            }
+                        } else {
+                            self.errors.push(TypeError::Custom {
+                                span: stmt.span,
+                                message: format!("undefined variable: {}", name),
+                                hint: Some("variables must be declared with 'let' before assignment".to_string()),
+                            });
+                        }
                     }
-                } else {
-                    self.errors.push(TypeError::Custom {
-                        span: stmt.span,
-                        message: format!("undefined variable: {}", target),
-                        hint: Some("variables must be declared with 'let' before assignment".to_string()),
-                    });
+                    _ => {
+                        // For field/index assignment, just type-check both sides
+                        let _target_ty = self.infer_expr(*target);
+                    }
                 }
+            }
+            StmtKind::Loop { label: _, body } => {
+                self.check_block(body);
+            }
+            StmtKind::Break { label: _, value } => {
+                if let Some(e) = value {
+                    self.infer_expr(*e);
+                }
+            }
+            StmtKind::Continue { label: _ } => {
+                // Nothing to type-check
             }
         }
     }
@@ -692,8 +878,37 @@ impl<'a> TypeChecker<'a> {
 
             ExprKind::Field { expr: obj, field } => {
                 let obj_ty = self.infer_expr(*obj);
-                match obj_ty {
-                    Ty::Named { .. } => self.fresh_var(),
+                match &obj_ty {
+                    Ty::Named { name, .. } => {
+                        // Look up field type from struct definition
+                        if let Some(field_ty) = self.env.lookup_field(name.as_str(), field.as_str()) {
+                            field_ty
+                        } else {
+                            self.fresh_var()
+                        }
+                    }
+                    Ty::Tuple(elems) => {
+                        // Numeric field access on tuples (e.g., tuple.0)
+                        if let Ok(idx) = field.as_str().parse::<usize>() {
+                            if idx < elems.len() {
+                                elems[idx].clone()
+                            } else {
+                                self.errors.push(TypeError::Custom {
+                                    span: expr.span,
+                                    message: format!("tuple index {} out of bounds (tuple has {} elements)", idx, elems.len()),
+                                    hint: None,
+                                });
+                                Ty::Error
+                            }
+                        } else {
+                            self.errors.push(TypeError::Custom {
+                                span: expr.span,
+                                message: format!("cannot access field '{}' on tuple type", field),
+                                hint: Some("use numeric indices for tuples (e.g., .0, .1)".to_string()),
+                            });
+                            Ty::Error
+                        }
+                    }
                     _ => {
                         self.errors.push(TypeError::Custom {
                             span: expr.span,
@@ -717,28 +932,99 @@ impl<'a> TypeChecker<'a> {
                 Ty::Function { params: param_tys, ret: Box::new(ret_ty) }
             }
 
-            ExprKind::Match { scrutinee, arms: _ } => {
-                let _ = self.infer_expr(*scrutinee);
-                self.fresh_var()
+            ExprKind::Match { scrutinee, arms } => {
+                let scrut_ty = self.infer_expr(*scrutinee);
+
+                if arms.is_empty() {
+                    return Ty::Primitive(PrimitiveTy::Unit);
+                }
+
+                // Type check each arm
+                let mut result_ty: Option<Ty> = None;
+                for arm in arms {
+                    // Check pattern against scrutinee type
+                    self.check_pattern_type(&arm.pattern, &scrut_ty, expr.span);
+
+                    // Check guard if present
+                    if let Some(guard) = arm.guard {
+                        let guard_ty = self.infer_expr(guard);
+                        if let Err(e) = self.unify(&Ty::Primitive(PrimitiveTy::Bool), &guard_ty, expr.span) {
+                            self.errors.push(e);
+                        }
+                    }
+
+                    // Bind pattern variables and check body
+                    let arm_env = self.env.child();
+                    let old_env = std::mem::replace(&mut self.env, arm_env);
+                    self.bind_pattern(&arm.pattern, &scrut_ty, arm.span);
+                    let arm_ty = self.infer_expr(arm.body);
+                    self.env = old_env;
+
+                    // Unify all arm types
+                    if let Some(ref prev_ty) = result_ty {
+                        if let Err(e) = self.unify(prev_ty, &arm_ty, arm.span) {
+                            self.errors.push(e);
+                        }
+                    } else {
+                        result_ty = Some(arm_ty);
+                    }
+                }
+
+                result_ty.unwrap_or(Ty::Primitive(PrimitiveTy::Unit))
             }
 
             ExprKind::MethodCall { receiver, method, args } => {
                 let recv_ty = self.infer_expr(*receiver);
-                let _arg_tys: Vec<Ty> = args.iter().map(|a| self.infer_expr(*a)).collect();
+                let arg_tys: Vec<Ty> = args.iter().map(|a| self.infer_expr(*a)).collect();
 
-                // For method calls like println(args...), allow polymorphic usage
+                // 1. Check impl methods for the receiver type
+                let type_name = match &recv_ty {
+                    Ty::Named { name, .. } => Some(name.clone()),
+                    _ => None,
+                };
+                if let Some(ref tn) = type_name {
+                    if let Some(method_ty) = self.env.lookup_method(tn.as_str(), method.as_str()) {
+                        if let Ty::Function { params, ret } = &method_ty {
+                            // Check arg count (minus self param)
+                            let expected = if params.is_empty() { 0 } else { params.len().saturating_sub(1) };
+                            if !params.is_empty() && arg_tys.len() != expected {
+                                self.errors.push(TypeError::Custom {
+                                    span: expr.span,
+                                    message: format!("expected {} arguments, found {}", expected, arg_tys.len()),
+                                    hint: None,
+                                });
+                            }
+                            return (**ret).clone();
+                        }
+                        return method_ty;
+                    }
+                }
+
+                // 2. Check globally registered function
                 if let Some(scheme) = self.env.lookup(method.as_str()) {
                     if let Ty::Function { ret, .. } = &scheme.ty {
                         return (**ret).clone();
                     }
                 }
 
-                // Check if it's a common method
+                // 3. Built-in methods
                 match (method.as_str(), &recv_ty) {
                     ("to_string", _) => Ty::Primitive(PrimitiveTy::String),
                     ("len", Ty::Array { .. }) | ("len", Ty::Primitive(PrimitiveTy::String)) => {
                         Ty::Primitive(PrimitiveTy::Int)
                     }
+                    ("push", Ty::Array { elem, .. }) => {
+                        if let Some(arg) = arg_tys.first() {
+                            if let Err(e) = self.unify(elem, arg, expr.span) {
+                                self.errors.push(e);
+                            }
+                        }
+                        Ty::Primitive(PrimitiveTy::Unit)
+                    }
+                    ("pop", Ty::Array { elem, .. }) => (**elem).clone(),
+                    ("contains", Ty::Array { .. }) => Ty::Primitive(PrimitiveTy::Bool),
+                    ("is_empty", Ty::Array { .. }) => Ty::Primitive(PrimitiveTy::Bool),
+                    ("clone", _) => recv_ty.clone(),
                     _ => self.fresh_var()
                 }
             }
@@ -754,15 +1040,229 @@ impl<'a> TypeChecker<'a> {
                 Ty::Primitive(PrimitiveTy::Float)
             }
 
-            ExprKind::Cast { expr, target_ty } => {
-                self.infer_expr(*expr); // Type-check the expr
-                self.resolve_ast_type(*target_ty) // Return the target type
+            ExprKind::Cast { expr: inner, target_ty } => {
+                let source_ty = self.infer_expr(*inner);
+                let target = self.resolve_ast_type(*target_ty);
+
+                // Validate cast: numeric-to-numeric, or same type
+                let valid = match (&source_ty, &target) {
+                    (Ty::Primitive(s), Ty::Primitive(t)) => {
+                        s.is_numeric() && t.is_numeric()
+                            || s == t
+                            || (s.is_integer() && *t == PrimitiveTy::Char)
+                            || (*s == PrimitiveTy::Char && t.is_integer())
+                    }
+                    (Ty::Error, _) | (_, Ty::Error) => true,
+                    (Ty::Var(_), _) | (_, Ty::Var(_)) => true, // Allow casts involving type vars
+                    _ => false,
+                };
+
+                if !valid {
+                    self.errors.push(TypeError::Custom {
+                        span: expr.span,
+                        message: format!("cannot cast {} to {}", source_ty, target),
+                        hint: Some("casts are only valid between numeric types".to_string()),
+                    });
+                }
+                target
             }
+
+            ExprKind::ArrayRepeat { value, count } => {
+                let elem_ty = self.infer_expr(*value);
+                let count_ty = self.infer_expr(*count);
+                if let Err(e) = self.unify(&Ty::Primitive(PrimitiveTy::Int), &count_ty, expr.span) {
+                    self.errors.push(e);
+                }
+                Ty::Array { elem: Box::new(elem_ty), size: None }
+            }
+            ExprKind::Try(inner) => {
+                let inner_ty = self.infer_expr(*inner);
+                // Try operator unwraps Optional<T> → T or Result<T,E> → T
+                match &inner_ty {
+                    Ty::Named { name, args } if name.as_str() == "Option" || name.as_str() == "Result" => {
+                        args.first().cloned().unwrap_or(Ty::Primitive(PrimitiveTy::Unit))
+                    }
+                    _ => inner_ty, // Pass through for now
+                }
+            }
+            ExprKind::Borrow { expr: inner, mutable } => {
+                let inner_ty = self.infer_expr(*inner);
+                Ty::Named {
+                    name: if *mutable { SmolStr::new("&mut") } else { SmolStr::new("&") },
+                    args: vec![inner_ty],
+                }
+            }
+            ExprKind::Deref(inner) => {
+                let inner_ty = self.infer_expr(*inner);
+                // Dereference &T → T
+                match &inner_ty {
+                    Ty::Named { name, args } if (name.as_str() == "&" || name.as_str() == "&mut") && !args.is_empty() => {
+                        args[0].clone()
+                    }
+                    _ => inner_ty,
+                }
+            }
+            ExprKind::AsyncBlock(block) => {
+                // Not yet implemented: should return Future<T>
+                self.check_block(block)
+            }
+            ExprKind::Await(inner) => {
+                // Not yet implemented: should unwrap Future<T> to T
+                self.infer_expr(*inner)
+            }
+            ExprKind::Handle { expr: inner, handlers: _ } => {
+                // Not yet implemented: effect handling
+                self.infer_expr(*inner)
+            }
+            ExprKind::ReturnExpr(value) => {
+                if let Some(e) = value {
+                    self.infer_expr(*e);
+                }
+                // Return expressions diverge
+                Ty::Primitive(PrimitiveTy::Unit)
+            }
+            ExprKind::BreakExpr { label: _, value } => {
+                if let Some(e) = value {
+                    self.infer_expr(*e);
+                }
+                Ty::Primitive(PrimitiveTy::Unit)
+            }
+            ExprKind::ContinueExpr { label: _ } => {
+                Ty::Primitive(PrimitiveTy::Unit)
+            }
+            ExprKind::PathExpr(segments) => {
+                // Not yet implemented: path resolution
+                // Try looking up the last segment as a variable
+                if let Some(last) = segments.last() {
+                    if let Some(scheme) = self.env.lookup(last.as_str()) {
+                        return scheme.ty.clone();
+                    }
+                }
+                Ty::Error
+            }
+
             ExprKind::Error => Ty::Error,
         }
     }
 
-    /// Gbelaruset the type of a literal.
+    /// Recursively bind pattern variables to types in the environment.
+    fn bind_pattern(&mut self, pattern: &Pattern, ty: &Ty, span: eclexia_ast::span::Span) {
+        match pattern {
+            Pattern::Var(name) => {
+                self.env.insert_mono(name.clone(), ty.clone());
+            }
+            Pattern::Wildcard | Pattern::Rest => {}
+            Pattern::Tuple(pats) => {
+                if let Ty::Tuple(elem_tys) = ty {
+                    for (pat, elem_ty) in pats.iter().zip(elem_tys.iter()) {
+                        self.bind_pattern(pat, elem_ty, span);
+                    }
+                } else {
+                    // If not a tuple type, bind each sub-pattern to a fresh var
+                    for pat in pats {
+                        let fresh = self.fresh_var();
+                        self.bind_pattern(pat, &fresh, span);
+                    }
+                }
+            }
+            Pattern::Constructor { fields, .. } => {
+                for pat in fields {
+                    let fresh = self.fresh_var();
+                    self.bind_pattern(pat, &fresh, span);
+                }
+            }
+            Pattern::Struct { fields, .. } => {
+                for fp in fields {
+                    if let Some(ref inner_pat) = fp.pattern {
+                        let fresh = self.fresh_var();
+                        self.bind_pattern(inner_pat, &fresh, span);
+                    } else {
+                        // Shorthand: `Point { x, y }` → bind x, y
+                        let fresh = self.fresh_var();
+                        self.env.insert_mono(fp.name.clone(), fresh);
+                    }
+                }
+            }
+            Pattern::Binding { name, pattern: inner } => {
+                self.env.insert_mono(name.clone(), ty.clone());
+                self.bind_pattern(inner, ty, span);
+            }
+            Pattern::Reference { pattern: inner, .. } => {
+                // &pat → bind inner with the referenced type
+                let inner_ty = match ty {
+                    Ty::Named { name, args } if (name.as_str() == "&" || name.as_str() == "&mut") && !args.is_empty() => {
+                        args[0].clone()
+                    }
+                    _ => ty.clone(),
+                };
+                self.bind_pattern(inner, &inner_ty, span);
+            }
+            Pattern::Or(alternatives) => {
+                // For or-patterns, bind from the first alternative
+                if let Some(first) = alternatives.first() {
+                    self.bind_pattern(first, ty, span);
+                }
+            }
+            Pattern::Slice(pats) => {
+                let elem_ty = match ty {
+                    Ty::Array { elem, .. } => (**elem).clone(),
+                    _ => {
+                        let fresh = self.fresh_var();
+                        fresh
+                    }
+                };
+                for pat in pats {
+                    self.bind_pattern(pat, &elem_ty, span);
+                }
+            }
+            Pattern::Literal(_) | Pattern::Range { .. } => {}
+        }
+    }
+
+    /// Check that a pattern is consistent with a scrutinee type.
+    fn check_pattern_type(&mut self, pattern: &Pattern, scrut_ty: &Ty, span: eclexia_ast::span::Span) {
+        match pattern {
+            Pattern::Literal(lit) => {
+                let lit_ty = self.literal_type(lit);
+                if let Err(e) = self.unify(scrut_ty, &lit_ty, span) {
+                    self.errors.push(e);
+                }
+            }
+            Pattern::Constructor { name, .. } => {
+                // Check that constructor belongs to the scrutinee type
+                if let Some(scheme) = self.env.lookup(name.as_str()) {
+                    let constructor_ty = scheme.ty.clone();
+                    if let Ty::Function { ret, .. } = &constructor_ty {
+                        if let Err(e) = self.unify(scrut_ty, ret, span) {
+                            self.errors.push(e);
+                        }
+                    }
+                }
+            }
+            Pattern::Tuple(pats) => {
+                if let Ty::Tuple(elem_tys) = scrut_ty {
+                    if pats.len() != elem_tys.len() {
+                        self.errors.push(TypeError::Custom {
+                            span,
+                            message: format!("expected tuple of {} elements, found pattern with {}", elem_tys.len(), pats.len()),
+                            hint: None,
+                        });
+                    }
+                    for (pat, ty) in pats.iter().zip(elem_tys.iter()) {
+                        self.check_pattern_type(pat, ty, span);
+                    }
+                }
+            }
+            Pattern::Or(alts) => {
+                for alt in alts {
+                    self.check_pattern_type(alt, scrut_ty, span);
+                }
+            }
+            _ => {} // Var, Wildcard, Rest, Binding, Reference, Struct, Slice, Range - checked elsewhere
+        }
+    }
+
+    /// Get the type of a literal.
     fn literal_type(&self, lit: &Literal) -> Ty {
         match lit {
             Literal::Int(_) => Ty::Primitive(PrimitiveTy::Int),

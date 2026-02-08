@@ -3,7 +3,7 @@
 
 //! Test runner for Eclexia programs.
 
-use eclexia_ast::{Attribute, Function, Item, SourceFile};
+use eclexia_ast::{Attribute, Item, SourceFile};
 use eclexia_codegen::{Backend, BytecodeGenerator, VirtualMachine, VmValue};
 use std::time::Instant;
 
@@ -16,6 +16,7 @@ pub struct TestFunction {
 
 /// Test result.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum TestResult {
     Passed { duration_ms: f64 },
     Failed { error: String, duration_ms: f64 },

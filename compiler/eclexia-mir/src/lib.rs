@@ -315,6 +315,7 @@ pub enum BinaryOp {
     Mul,
     Div,
     Rem,
+    Pow,
 
     // Comparison
     Eq,
@@ -356,7 +357,7 @@ impl From<eclexia_hir::BinaryOp> for BinaryOp {
             eclexia_hir::BinaryOp::Mul => BinaryOp::Mul,
             eclexia_hir::BinaryOp::Div => BinaryOp::Div,
             eclexia_hir::BinaryOp::Rem => BinaryOp::Rem,
-            eclexia_hir::BinaryOp::Pow => BinaryOp::Mul, // Simplified
+            eclexia_hir::BinaryOp::Pow => BinaryOp::Pow,
             eclexia_hir::BinaryOp::Eq => BinaryOp::Eq,
             eclexia_hir::BinaryOp::Ne => BinaryOp::Ne,
             eclexia_hir::BinaryOp::Lt => BinaryOp::Lt,
