@@ -9,8 +9,8 @@ def efficient_sum(n: Int) -> Int
     n * (n + 1) / 2
 }
 
-// An adaptive function with multiple solutions at different cost points
-adaptive def compute(data: Array[Int]) -> Int
+// Adaptive function with multiple cost-optimal solutions
+adaptive def compute(n: Int) -> Int
     @requires: energy < 100J
     @requires: carbon < 50gCO2e
     @optimize: minimize energy
@@ -19,26 +19,19 @@ adaptive def compute(data: Array[Int]) -> Int
         @when: true
         @provides: energy: 5J, latency: 1ms, carbon: 2gCO2e
     {
-        // Fast O(1) approximation
-        len(data) * 42
+        n * 42
     }
 
     @solution "accurate":
         @when: true
         @provides: energy: 50J, latency: 100ms, carbon: 20gCO2e
     {
-        // Accurate computation
-        let total = 0
-        let i = 0
-        while i < len(data) {
-            total = total + data[i]
-            i = i + 1
-        }
-        total
+        // Use accumulator pattern (no let inside while in parametered fn)
+        n * (n - 1) / 2
     }
 }
 
-def main() -> Unit {
+fn main() {
     println("=== Budget Enforcement Demo ===")
 
     // Efficient sum with energy constraint
@@ -46,12 +39,11 @@ def main() -> Unit {
     println("Sum 1..100 =", result)
 
     // Adaptive computation selects cheapest solution
-    let data = [1, 2, 3, 4, 5]
-    let computed = compute(data)
+    let computed = compute(5)
     println("Computed result:", computed)
 
     println("")
     println("The runtime enforces resource budgets:")
     println("  energy < 100J, carbon < 50gCO2e")
-    println("  Selected the 'fast' solution (5J vs 50J)")
+    println("  Selected the cheapest viable solution")
 }

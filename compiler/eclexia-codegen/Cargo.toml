@@ -17,10 +17,11 @@ smol_str = { workspace = true }
 rustc-hash = { workspace = true }
 la-arena = { workspace = true }
 serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
 [features]
 default = []
-serde = ["dep:serde", "eclexia-ast/serde-types", "smol_str/serde"]
+serde = ["dep:serde", "dep:serde_json", "eclexia-ast/serde-types", "smol_str/serde"]
 
 [dev-dependencies]
 eclexia-lexer = { path = "../eclexia-lexer" }

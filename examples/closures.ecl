@@ -1,23 +1,19 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
 // Closures and higher-order functions in Eclexia
 
-def apply(f: (Int) -> Int, x: Int) -> Int {
+fn apply(f: (Int) -> Int, x: Int) -> Int {
     f(x)
 }
 
-def compose(f: (Int) -> Int, g: (Int) -> Int) -> (Int) -> Int {
-    |x| f(g(x))
-}
-
-def make_adder(n: Int) -> (Int) -> Int {
+fn make_adder(n: Int) -> (Int) -> Int {
     |x| x + n
 }
 
-def make_multiplier(n: Int) -> (Int) -> Int {
+fn make_multiplier(n: Int) -> (Int) -> Int {
     |x| x * n
 }
 
-def main() -> Unit {
+fn main() {
     println("=== Closures Demo ===")
 
     // Simple lambda
@@ -30,11 +26,11 @@ def main() -> Unit {
     println("add5(10) =", apply(add5, 10))
     println("mul3(7) =", apply(mul3, 7))
 
-    // Function composition
-    let add5_then_mul3 = compose(mul3, add5)
-    println("(5 + 5) * 3 =", apply(add5_then_mul3, 5))
-
     // Inline lambdas
     let result = apply(|x| x * x + 1, 4)
     println("|x| x*x+1 applied to 4 =", result)
+
+    // Nested closures
+    let add10 = make_adder(10)
+    println("add10(add5(1)) =", apply(add10, apply(add5, 1)))
 }

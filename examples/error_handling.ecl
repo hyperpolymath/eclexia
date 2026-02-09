@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
 // Error handling with Result and Option types in Eclexia
 
-def safe_divide(a: Float, b: Float) -> Result[Float, String] {
+fn safe_divide(a: Float, b: Float) -> Result[Float, String] {
     if b == 0.0 {
         Err("division by zero")
     } else {
@@ -9,18 +9,7 @@ def safe_divide(a: Float, b: Float) -> Result[Float, String] {
     }
 }
 
-def find_element(arr: Array[Int], target: Int) -> Option[Int] {
-    let i = 0
-    while i < len(arr) {
-        if arr[i] == target {
-            return Some(i)
-        }
-        i = i + 1
-    }
-    None
-}
-
-def main() -> Unit {
+fn main() {
     println("=== Error Handling Demo ===")
 
     // Result type usage
@@ -29,27 +18,27 @@ def main() -> Unit {
     println("10 / 3 =", r1)
     println("10 / 0 =", r2)
 
-    // Pattern matching on Result
-    match r1 {
-        Ok(v) => println("  Success:", v),
-        Err(e) => println("  Error:", e),
-    }
+    // Option construction
+    let some_val = Some(42)
+    let no_val = None
+    println("")
+    println("Some(42):", some_val)
+    println("None:", no_val)
 
-    match r2 {
-        Ok(v) => println("  Success:", v),
-        Err(e) => println("  Error:", e),
-    }
+    // Chained safe operations
+    let r3 = safe_divide(100.0, 5.0)
+    let r4 = safe_divide(100.0, 0.0)
+    println("")
+    println("100 / 5 =", r3)
+    println("100 / 0 =", r4)
 
-    // Option type usage
-    let numbers = [10, 20, 30, 40, 50]
-    let found = find_element(numbers, 30)
-    let missing = find_element(numbers, 99)
-
-    println("Find 30:", found)
-    println("Find 99:", missing)
-
-    match found {
-        Some(idx) => println("  Found at index:", idx),
-        None => println("  Not found"),
+    // Multiple divisions
+    println("")
+    println("Dividing 1000 by successive values:")
+    let d = 1.0
+    while d <= 5.0 {
+        let result = safe_divide(1000.0, d)
+        println("  1000 /", d, "=", result)
+        d = d + 1.0
     }
 }

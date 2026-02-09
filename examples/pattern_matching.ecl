@@ -1,54 +1,78 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
-// Pattern matching and destructuring in Eclexia
+// Pattern matching in Eclexia
 
-type Shape = enum {
-    Circle(Float),
-    Rectangle(Float, Float),
-    Triangle(Float, Float, Float),
+type Color = enum {
+    Red,
+    Green,
+    Blue,
 }
 
-def area(shape: Shape) -> Float {
-    match shape {
-        Circle(r) => 3.14159 * r * r,
-        Rectangle(w, h) => w * h,
-        Triangle(a, b, c) => {
-            // Heron's formula
-            let s = (a + b + c) / 2.0
-            let sq = s * (s - a) * (s - b) * (s - c)
-            // Approximate square root using Newton's method
-            let x = sq / 2.0
-            let x = (x + sq / x) / 2.0
-            let x = (x + sq / x) / 2.0
-            let x = (x + sq / x) / 2.0
-            x
-        },
+fn color_name(c: Color) -> String {
+    match c {
+        Red => "red",
+        Green => "green",
+        Blue => "blue",
     }
 }
 
-def describe(shape: Shape) -> String {
-    match shape {
-        Circle(_) => "circle",
-        Rectangle(_, _) => "rectangle",
-        Triangle(_, _, _) => "triangle",
-    }
-}
-
-def main() -> Unit {
-    println("=== Pattern Matching Demo ===")
-
-    let c = Circle(5.0)
-    let r = Rectangle(3.0, 4.0)
-
-    println("Shape:", describe(c), "area:", area(c))
-    println("Shape:", describe(r), "area:", area(r))
-
-    // Nested match with literals
-    let x = 42
-    let result = match x {
+fn classify(n: Int) -> String {
+    match n {
         0 => "zero",
         1 => "one",
-        42 => "the answer",
-        _ => "other",
+        2 => "two",
+        _ => "many",
     }
-    println("Match result:", result)
+}
+
+fn sign(x: Int) -> String {
+    if x > 0 {
+        "positive"
+    } else {
+        if x < 0 {
+            "negative"
+        } else {
+            "zero"
+        }
+    }
+}
+
+fn main() {
+    println("=== Pattern Matching Demo ===")
+
+    // Enum variant matching
+    println("Red:", color_name(Red))
+    println("Green:", color_name(Green))
+    println("Blue:", color_name(Blue))
+
+    // Integer literal matching with wildcard
+    println("")
+    println("classify(0):", classify(0))
+    println("classify(1):", classify(1))
+    println("classify(42):", classify(42))
+
+    // If-expression as pattern alternative
+    println("")
+    println("sign(5):", sign(5))
+    println("sign(-3):", sign(-3))
+    println("sign(0):", sign(0))
+
+    // Match on boolean
+    let flag = true
+    let desc = match flag {
+        true => "yes",
+        false => "no",
+    }
+    println("")
+    println("flag:", desc)
+
+    // Nested match
+    let x = 5
+    let result = match x {
+        0 => "nothing",
+        _ => match x {
+            1 => "single",
+            _ => "multiple",
+        },
+    }
+    println("nested match:", result)
 }

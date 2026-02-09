@@ -722,3 +722,83 @@ impl Default for BytecodeGenerator {
         Self::new()
     }
 }
+
+// ── .eclb bytecode file format ──────────────────────────────────────────────
+//
+// Header (8 bytes):
+//   [0..4]  magic: b"ECLB"
+//   [4]     format_version: u8 (currently 1)
+//   [5]     encoding: u8 (0 = JSON)
+//   [6..8]  reserved: [u8; 2]
+// Payload:
+//   JSON-encoded BytecodeModule
+
+/// Magic bytes identifying an .eclb file.
+pub const ECLB_MAGIC: &[u8; 4] = b"ECLB";
+
+/// Current format version.
+pub const ECLB_VERSION: u8 = 1;
+
+/// Encoding type for the payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum EclbEncoding {
+    Json = 0,
+}
+
+impl BytecodeModule {
+    /// Write this module to an .eclb file.
+    #[cfg(feature = "serde")]
+    pub fn write_eclb(&self, path: &std::path::Path) -> Result<(), String> {
+        let payload = serde_json::to_vec(self)
+            .map_err(|e| format!("failed to serialize bytecode: {}", e))?;
+
+        let mut out = Vec::with_capacity(8 + payload.len());
+        out.extend_from_slice(ECLB_MAGIC);
+        out.push(ECLB_VERSION);
+        out.push(EclbEncoding::Json as u8);
+        out.extend_from_slice(&[0u8; 2]); // reserved
+        out.extend_from_slice(&payload);
+
+        std::fs::write(path, &out)
+            .map_err(|e| format!("failed to write {}: {}", path.display(), e))?;
+        Ok(())
+    }
+
+    /// Read a BytecodeModule from an .eclb file.
+    #[cfg(feature = "serde")]
+    pub fn read_eclb(path: &std::path::Path) -> Result<Self, String> {
+        let data = std::fs::read(path)
+            .map_err(|e| format!("failed to read {}: {}", path.display(), e))?;
+
+        if data.len() < 8 {
+            return Err("file too small to be a valid .eclb".to_string());
+        }
+
+        if &data[0..4] != ECLB_MAGIC {
+            return Err("not a valid .eclb file (bad magic)".to_string());
+        }
+
+        let version = data[4];
+        if version != ECLB_VERSION {
+            return Err(format!(
+                "unsupported .eclb version {} (expected {})",
+                version, ECLB_VERSION
+            ));
+        }
+
+        let encoding = data[5];
+        if encoding != EclbEncoding::Json as u8 {
+            return Err(format!("unsupported .eclb encoding: {}", encoding));
+        }
+
+        let payload = &data[8..];
+        serde_json::from_slice(payload)
+            .map_err(|e| format!("failed to deserialize bytecode: {}", e))
+    }
+
+    /// Check if a file path looks like an .eclb bytecode file.
+    pub fn is_eclb_path(path: &std::path::Path) -> bool {
+        path.extension().and_then(|e| e.to_str()) == Some("eclb")
+    }
+}

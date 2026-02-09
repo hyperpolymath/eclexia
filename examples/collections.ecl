@@ -1,46 +1,28 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
 // Collection operations in Eclexia
 
-def sum_array(arr: Array[Int]) -> Int {
-    let total = 0
-    let i = 0
-    while i < len(arr) {
-        total = total + arr[i]
-        i = i + 1
-    }
-    total
-}
-
-def reverse_array(arr: Array[Int]) -> Array[Int] {
-    let result = []
-    let i = len(arr) - 1
-    while i >= 0 {
-        result = result + [arr[i]]
-        i = i - 1
-    }
-    result
-}
-
-def main() -> Unit {
+fn main() {
     println("=== Collections Demo ===")
 
-    // Array operations
+    // Array creation and indexing
     let numbers = [1, 2, 3, 4, 5]
     println("Array:", numbers)
     println("Length:", len(numbers))
-    println("Sum:", sum_array(numbers))
     println("First:", numbers[0])
     println("Last:", numbers[4])
 
-    // Array construction
-    let doubled = []
+    // Sum via loop
+    let sum = 0
     let i = 0
     while i < len(numbers) {
-        doubled = doubled + [numbers[i] * 2]
+        sum = sum + numbers[i]
         i = i + 1
     }
-    println("Doubled:", doubled)
-    println("Reversed:", reverse_array(numbers))
+    println("Sum:", sum)
+
+    // Array repeat
+    let zeros = [0; 5]
+    println("Zeros:", zeros)
 
     // HashMap operations
     let scores = hashmap_new()
@@ -53,6 +35,8 @@ def main() -> Unit {
     println("  Alice:", hashmap_get(scores, "Alice"))
     println("  Bob:", hashmap_get(scores, "Bob"))
     println("  Size:", hashmap_len(scores))
+    println("  Has 'Alice':", hashmap_contains(scores, "Alice"))
+    println("  Has 'Dave':", hashmap_contains(scores, "Dave"))
 
     // Tuple operations
     let point = (3, 4)

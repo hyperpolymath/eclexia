@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
 // Unicode identifiers in Eclexia
 
-def π() -> Float {
+fn π() -> Float {
     3.141592653589793
 }
 
-def τ() -> Float {
+fn τ() -> Float {
     2.0 * π()
 }
 
-def 面積(半径: Float) -> Float {
+fn 面積(半径: Float) -> Float {
     π() * 半径 * 半径
 }
 
-def αβγ(x: Float, y: Float, z: Float) -> Float {
+fn αβγ(x: Float, y: Float, z: Float) -> Float {
     x + y + z
 }
 
-def main() -> Unit {
+fn main() {
     println("=== Unicode Identifiers Demo ===")
 
     let r = 5.0
@@ -31,7 +31,7 @@ def main() -> Unit {
     let γ = 3.0
     println("α + β + γ =", αβγ(α, β, γ))
 
-    // Emoji-free but expressive math
+    // Math notation
     let Δx = 10.0
     let Δy = 20.0
     println("Δx =", Δx, "Δy =", Δy)

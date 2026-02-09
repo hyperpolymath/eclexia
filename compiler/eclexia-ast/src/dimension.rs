@@ -263,8 +263,8 @@ impl Dimension {
         self.pow(-1)
     }
 
-    /// Format the dimension as a string for error messages.
-    pub fn to_string(&self) -> String {
+    /// Format the dimension as a human-readable string for error messages.
+    pub fn format_dimension(&self) -> String {
         if self.is_dimensionless() {
             return "dimensionless".to_string();
         }
@@ -323,7 +323,7 @@ impl std::ops::Div for Dimension {
 
 impl std::fmt::Display for Dimension {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", self.format_dimension())
     }
 }
 

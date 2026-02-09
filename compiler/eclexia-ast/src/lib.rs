@@ -79,21 +79,16 @@ pub struct Attribute {
 // === Visibility ===
 
 /// Visibility modifier
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Visibility {
     /// No visibility modifier (private by default)
+    #[default]
     Private,
     /// `pub`
     Public,
     /// `pub(crate)`
     PubCrate,
-}
-
-impl Default for Visibility {
-    fn default() -> Self {
-        Visibility::Private
-    }
 }
 
 // === Path ===

@@ -52,19 +52,32 @@ pub fn build(input: &Path, _output: Option<&Path>, _target: &str) -> miette::Res
     println!("  {} functions compiled", module.functions.len());
 
     if let Some(output) = _output {
-        let json = serde_json::to_vec_pretty(&module)
-            .map_err(|e| miette::miette!("Failed to serialize bytecode: {}", e))?;
-        std::fs::write(output, &json)
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Failed to write bytecode to {}", output.display()))?;
-        println!("  Bytecode written to {}", output.display());
+        if eclexia_codegen::bytecode::BytecodeModule::is_eclb_path(output) {
+            // Binary .eclb format
+            module.write_eclb(output)
+                .map_err(|e| miette::miette!("{}", e))?;
+            println!("  Bytecode written to {} (.eclb binary)", output.display());
+        } else {
+            // JSON format for .json or any other extension
+            let json = serde_json::to_vec_pretty(&module)
+                .map_err(|e| miette::miette!("Failed to serialize bytecode: {}", e))?;
+            std::fs::write(output, &json)
+                .into_diagnostic()
+                .wrap_err_with(|| format!("Failed to write bytecode to {}", output.display()))?;
+            println!("  Bytecode written to {} (JSON)", output.display());
+        }
     }
 
     Ok(())
 }
 
-/// Build and run an Eclexia program.
+/// Build and run an Eclexia program (source .ecl or bytecode .eclb).
 pub fn run(input: &Path, observe_shadow: bool, carbon_report: bool) -> miette::Result<()> {
+    // If the input is a .eclb file, load and execute via VM
+    if eclexia_codegen::bytecode::BytecodeModule::is_eclb_path(input) {
+        return run_bytecode(input, observe_shadow, carbon_report);
+    }
+
     let source = std::fs::read_to_string(input)
         .into_diagnostic()
         .wrap_err_with(|| format!("Failed to read {}", input.display()))?;
@@ -100,7 +113,7 @@ pub fn run(input: &Path, observe_shadow: bool, carbon_report: bool) -> miette::R
 
     match eclexia_interp::run(&file) {
         Ok(result) => {
-            println!("\nResult: {}", result);
+            println!("\nResult: {:?}", result);
 
             if carbon_report {
                 // TODO: Extract actual resource usage from interpreter
@@ -113,6 +126,47 @@ pub fn run(input: &Path, observe_shadow: bool, carbon_report: bool) -> miette::R
         }
         Err(e) => {
             Err(miette::miette!("Runtime error: {}", e))
+        }
+    }
+}
+
+/// Run a pre-compiled .eclb bytecode file through the VM.
+fn run_bytecode(input: &Path, observe_shadow: bool, carbon_report: bool) -> miette::Result<()> {
+    use eclexia_codegen::bytecode::BytecodeModule;
+
+    println!("Loading bytecode from {}...", input.display());
+
+    let module = BytecodeModule::read_eclb(input)
+        .map_err(|e| miette::miette!("{}", e))?;
+
+    println!("  {} function(s), {} string(s)", module.functions.len(), module.strings.len());
+
+    if observe_shadow {
+        println!("Shadow price observation: λ_energy=1.0, λ_latency=1.0, λ_carbon=1.0");
+    }
+
+    // Execute through the VM
+    let mut vm = eclexia_codegen::VirtualMachine::new(module);
+    match vm.run() {
+        Ok(result) => {
+            println!("\nResult: {:?}", result);
+
+            if carbon_report {
+                let resources = vm.get_resource_usage();
+                println!("\n--- Carbon Report ---");
+                if resources.is_empty() {
+                    println!("  No resource usage tracked");
+                } else {
+                    for (name, amount) in &resources {
+                        println!("  {}: {:.4}", name, amount);
+                    }
+                }
+            }
+
+            Ok(())
+        }
+        Err(e) => {
+            Err(miette::miette!("VM error: {}", e))
         }
     }
 }

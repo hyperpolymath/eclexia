@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
 // Mathematical computations in Eclexia
 
-def factorial(n: Int) -> Int {
+fn factorial(n: Int) -> Int {
     if n <= 1 {
         1
     } else {
@@ -9,7 +9,7 @@ def factorial(n: Int) -> Int {
     }
 }
 
-def power(base: Int, exp: Int) -> Int {
+fn power(base: Int, exp: Int) -> Int {
     if exp == 0 {
         1
     } else {
@@ -17,7 +17,7 @@ def power(base: Int, exp: Int) -> Int {
     }
 }
 
-def gcd(a: Int, b: Int) -> Int {
+fn gcd(a: Int, b: Int) -> Int {
     if b == 0 {
         a
     } else {
@@ -25,27 +25,31 @@ def gcd(a: Int, b: Int) -> Int {
     }
 }
 
-def is_prime(n: Int) -> Bool {
-    if n < 2 {
-        false
+fn is_prime_helper(n: Int, i: Int) -> Bool {
+    if i * i > n {
+        true
     } else {
-        let i = 2
-        let result = true
-        while i * i <= n {
-            if n % i == 0 {
-                result = false
-            }
-            i = i + 1
+        if n % i == 0 {
+            false
+        } else {
+            is_prime_helper(n, i + 1)
         }
-        result
     }
 }
 
-def abs(x: Int) -> Int {
+fn is_prime(n: Int) -> Bool {
+    if n < 2 {
+        false
+    } else {
+        is_prime_helper(n, 2)
+    }
+}
+
+fn abs(x: Int) -> Int {
     if x < 0 { -x } else { x }
 }
 
-def main() -> Unit {
+fn main() {
     println("=== Math Showcase ===")
 
     // Factorials
