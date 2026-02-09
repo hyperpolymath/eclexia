@@ -1309,6 +1309,9 @@ impl<'a> TypeChecker<'a> {
                 }
                 Ty::Primitive(PrimitiveTy::Unit)
             }
+            ExprKind::MacroCall { .. } => {
+                self.fresh_var()
+            }
         }
     }
 

@@ -908,6 +908,13 @@ pub enum ExprKind {
     },
     /// Path expression (e.g., Foo::bar)
     PathExpr(Vec<Ident>),
+    /// Macro invocation (name!(args))
+    MacroCall {
+        /// Macro name
+        name: Ident,
+        /// Argument expressions
+        args: Vec<ExprId>,
+    },
     /// Error placeholder for recovery
     Error,
 }

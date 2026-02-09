@@ -300,8 +300,9 @@ impl Interpreter {
                 // Extern blocks: foreign function stubs
                 // Would need FFI integration; skip for now
             }
-            Item::MacroDef(_) => {
-                // Macro definitions: would need macro expansion; skip for now
+            Item::MacroDef(m) => {
+                // Register macro as a named value in the environment
+                self.global.define(m.name.clone(), Value::Macro(Rc::new(m.clone())));
             }
             Item::Error(_) => {
                 // Parse error placeholder: silently skip
@@ -648,7 +649,112 @@ impl Interpreter {
             ExprKind::Recv(_) => Err(RuntimeError::custom("recv not yet supported in interpreter")),
             ExprKind::Select { .. } => Err(RuntimeError::custom("select not yet supported in interpreter")),
             ExprKind::YieldExpr(_) => Err(RuntimeError::custom("yield not yet supported in interpreter")),
+            ExprKind::MacroCall { name, args } => {
+                // Look up the macro definition
+                let macro_val = env.get(name)
+                    .or_else(|| self.global.get(name))
+                    .ok_or_else(|| RuntimeError::undefined(name.to_string()))?;
+
+                if let Value::Macro(macro_def) = macro_val {
+                    // Evaluate arguments
+                    let arg_values: Vec<Value> = args.iter()
+                        .map(|a| self.eval_expr(*a, file, env))
+                        .collect::<RuntimeResult<Vec<_>>>()?;
+
+                    if macro_def.rules.is_empty() {
+                        return Err(RuntimeError::custom(format!("macro '{}' has no rules", name)));
+                    }
+
+                    // Use the first rule (v0.1: single-rule macros)
+                    let rule = &macro_def.rules[0];
+
+                    // Collect metavariable names from the pattern
+                    let meta_names: Vec<SmolStr> = rule.pattern.iter()
+                        .filter_map(|t| match t {
+                            MacroToken::MetaVar { name, .. } => Some(name.clone()),
+                            _ => None,
+                        })
+                        .collect();
+
+                    if meta_names.len() != arg_values.len() {
+                        return Err(RuntimeError::custom(format!(
+                            "macro '{}' expects {} arguments, got {}",
+                            name, meta_names.len(), arg_values.len()
+                        )));
+                    }
+
+                    // Build substitution: metavar → value
+                    let mut subst: HashMap<SmolStr, Value> = HashMap::new();
+                    for (var_name, val) in meta_names.iter().zip(arg_values.iter()) {
+                        subst.insert(var_name.clone(), val.clone());
+                    }
+
+                    // Expand template to source string
+                    let expanded_src = self.expand_macro_template(&rule.template, &subst);
+                    let source = format!("def __macro_expand__() -> _ {{ {} }}", expanded_src);
+
+                    let (expanded_file, errors) = eclexia_parser::parse(&source);
+                    if !errors.is_empty() {
+                        return Err(RuntimeError::custom(format!(
+                            "macro '{}' expansion error: {}",
+                            name, errors[0].format_with_source(&source)
+                        )));
+                    }
+
+                    // Evaluate the expanded code in a child environment
+                    let macro_env = env.child();
+                    for (var_name, val) in &subst {
+                        macro_env.define(var_name.clone(), val.clone());
+                    }
+
+                    for item in &expanded_file.items {
+                        if let Item::Function(f) = item {
+                            if f.name.as_str() == "__macro_expand__" {
+                                return match self.eval_block(&f.body, &expanded_file, &macro_env) {
+                                    Ok(v) => Ok(v),
+                                    Err(RuntimeError::Return(v)) => Ok(v),
+                                    Err(e) => Err(e),
+                                };
+                            }
+                        }
+                    }
+                    Err(RuntimeError::custom(format!("macro '{}' expansion failed", name)))
+                } else {
+                    // Not a macro - treat as function call
+                    let arg_values: Vec<Value> = args.iter()
+                        .map(|a| self.eval_expr(*a, file, env))
+                        .collect::<RuntimeResult<Vec<_>>>()?;
+                    self.call_value(&macro_val, &arg_values, file)
+                }
+            }
         }
+    }
+
+    /// Expand a macro template by substituting metavariable values.
+    fn expand_macro_template(&self, tokens: &[MacroToken], subst: &HashMap<SmolStr, Value>) -> String {
+        let mut result = String::new();
+        for token in tokens {
+            match token {
+                MacroToken::Literal(text) => {
+                    result.push_str(text);
+                    result.push(' ');
+                }
+                MacroToken::MetaVar { name, .. } => {
+                    if let Some(val) = subst.get(name) {
+                        result.push_str(&val.to_string());
+                    } else {
+                        result.push_str(name);
+                    }
+                    result.push(' ');
+                }
+                MacroToken::Repetition { tokens: inner, separator: _, kind: _ } => {
+                    // For v0.1, just expand inner tokens once
+                    let inner_expanded = self.expand_macro_template(inner, subst);
+                    result.push_str(&inner_expanded);
+                }
+            }
+        }
+        result
     }
 
     /// Evaluate a literal.
@@ -1622,6 +1728,7 @@ impl Interpreter {
             Value::AdaptiveFunction(_) => SmolStr::new("AdaptiveFunction"),
             Value::Builtin(_) => SmolStr::new("Builtin"),
             Value::Unit => SmolStr::new("Unit"),
+            Value::Macro(_) => SmolStr::new("Macro"),
         }
     }
 

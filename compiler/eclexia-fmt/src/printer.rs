@@ -927,6 +927,17 @@ impl<'a> Printer<'a> {
             ExprKind::Recv(_) => self.write("/* recv */"),
             ExprKind::Select { .. } => self.write("/* select */"),
             ExprKind::YieldExpr(_) => self.write("yield"),
+            ExprKind::MacroCall { name, args } => {
+                self.write(name.as_str());
+                self.write("!(");
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        self.write(", ");
+                    }
+                    self.format_expr(*arg, file);
+                }
+                self.write(")");
+            }
         }
     }
 

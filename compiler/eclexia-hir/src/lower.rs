@@ -1033,6 +1033,9 @@ impl<'a> LoweringContext<'a> {
                 let _val_id = val.map(|v| self.lower_expr(v));
                 ExprKind::Literal(Literal::Unit) // TODO: yield support in HIR
             }
+            ast::ExprKind::MacroCall { .. } => {
+                ExprKind::Literal(Literal::Unit) // TODO: macro expansion in HIR
+            }
         };
 
         self.hir.exprs.alloc(Expr {

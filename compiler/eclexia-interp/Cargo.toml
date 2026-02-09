@@ -12,6 +12,7 @@ repository.workspace = true
 
 [dependencies]
 eclexia-ast = { path = "../eclexia-ast" }
+eclexia-parser = { path = "../eclexia-parser" }
 smol_str = { workspace = true }
 rustc-hash = { workspace = true }
 thiserror = { workspace = true }

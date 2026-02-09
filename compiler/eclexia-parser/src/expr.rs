@@ -695,6 +695,34 @@ impl<'src> Parser<'src> {
     fn parse_postfix(&mut self, file: &mut SourceFile, mut expr: ExprId) -> ParseResult<ExprId> {
         loop {
             match self.peek().kind {
+                // Macro invocation: name!(args)
+                TokenKind::Bang if matches!(file.exprs[expr].kind, ExprKind::Var(_)) => {
+                    if let ExprKind::Var(name) = file.exprs[expr].kind.clone() {
+                        self.advance(); // consume !
+                        self.expect(TokenKind::LParen)?;
+                        let mut args = Vec::new();
+                        if !self.check(TokenKind::RParen) {
+                            loop {
+                                let arg = self.parse_expr(file)?;
+                                args.push(arg);
+                                if !self.check(TokenKind::Comma) {
+                                    break;
+                                }
+                                self.advance();
+                            }
+                        }
+                        let end = self.expect(TokenKind::RParen)?;
+                        let span = file.exprs[expr].span.merge(end);
+                        let macro_expr = Expr {
+                            span,
+                            kind: ExprKind::MacroCall { name, args },
+                        };
+                        expr = file.exprs.alloc(macro_expr);
+                    } else {
+                        break;
+                    }
+                }
+
                 // Function call
                 TokenKind::LParen => {
                     self.advance();

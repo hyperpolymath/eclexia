@@ -50,6 +50,8 @@ pub enum Value {
     AdaptiveFunction(Rc<AdaptiveFunction>),
     /// Built-in function
     Builtin(BuiltinFn),
+    /// Macro definition
+    Macro(Rc<eclexia_ast::MacroDef>),
     /// Option::Some
     Some(Box<Value>),
     /// Option::None
@@ -187,6 +189,7 @@ impl Value {
             Value::Function(_) => "Function",
             Value::AdaptiveFunction(_) => "AdaptiveFunction",
             Value::Builtin(_) => "Builtin",
+            Value::Macro(_) => "Macro",
             Value::Some(_) => "Option",
             Value::None => "Option",
         }
@@ -292,6 +295,7 @@ impl std::fmt::Display for Value {
             Value::Function(func) => write!(f, "<fn {}>", func.name),
             Value::AdaptiveFunction(func) => write!(f, "<adaptive fn {}>", func.name),
             Value::Builtin(b) => write!(f, "<builtin {}>", b.name),
+            Value::Macro(m) => write!(f, "<macro {} ({} rules)>", m.name, m.rules.len()),
             Value::Some(v) => write!(f, "Some({})", v),
             Value::None => write!(f, "None"),
         }

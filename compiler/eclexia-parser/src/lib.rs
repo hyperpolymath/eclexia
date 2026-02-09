@@ -128,6 +128,11 @@ impl<'src> Parser<'src> {
             TokenKind::Effect => self.parse_effect_decl(file).map(Item::EffectDecl),
             TokenKind::Static => self.parse_static_decl(file).map(Item::StaticDecl),
             TokenKind::Extern => self.parse_extern_block(file).map(Item::ExternBlock),
+            TokenKind::Macro => {
+                let mut m = self.parse_macro_def()?;
+                m.visibility = visibility;
+                Ok(Item::MacroDef(m))
+            }
             _ => Err(ParseError::unexpected_token(token.clone(), "item")),
         }
     }
@@ -1653,6 +1658,171 @@ impl<'src> Parser<'src> {
             abi,
             items,
         })
+    }
+
+    /// Parse a macro definition.
+    ///
+    /// Syntax: `macro name { (pattern) => { template }, ... }`
+    ///
+    /// Pattern tokens: literals, `$name:kind` metavariables, `$(...)*` repetitions.
+    /// Template tokens: literals, `$name` metavariable references.
+    fn parse_macro_def(&mut self) -> ParseResult<MacroDef> {
+        let start = self.expect(TokenKind::Macro)?;
+        let name = self.expect_ident()?;
+
+        self.expect(TokenKind::LBrace)?;
+
+        let mut rules = Vec::new();
+        while !self.check(TokenKind::RBrace) && !self.is_eof() {
+            let rule = self.parse_macro_rule()?;
+            rules.push(rule);
+
+            // Optional comma/semicolon between rules
+            if self.check(TokenKind::Comma) || self.check(TokenKind::Semi) {
+                self.advance();
+            }
+        }
+
+        let end = self.expect(TokenKind::RBrace)?;
+
+        Ok(MacroDef {
+            span: start.merge(end),
+            visibility: Visibility::Private, // overridden by caller
+            name,
+            rules,
+        })
+    }
+
+    /// Parse a single macro rule: `(pattern) => { template }` or `(pattern) => template`
+    fn parse_macro_rule(&mut self) -> ParseResult<MacroRule> {
+        let start = self.peek().span;
+
+        // Parse pattern (wrapped in parens or brackets)
+        self.expect(TokenKind::LParen)?;
+        let pattern = self.parse_macro_tokens(TokenKind::RParen)?;
+        self.expect(TokenKind::RParen)?;
+
+        // Arrow separator
+        self.expect(TokenKind::FatArrow)?;
+
+        // Parse template (wrapped in braces, parens, or brackets)
+        let template = if self.check(TokenKind::LBrace) {
+            self.advance();
+            let t = self.parse_macro_tokens(TokenKind::RBrace)?;
+            self.expect(TokenKind::RBrace)?;
+            t
+        } else if self.check(TokenKind::LParen) {
+            self.advance();
+            let t = self.parse_macro_tokens(TokenKind::RParen)?;
+            self.expect(TokenKind::RParen)?;
+            t
+        } else if self.check(TokenKind::LBracket) {
+            self.advance();
+            let t = self.parse_macro_tokens(TokenKind::RBracket)?;
+            self.expect(TokenKind::RBracket)?;
+            t
+        } else {
+            return Err(ParseError::custom(self.peek().span, "expected { or ( after => in macro rule"));
+        };
+
+        let span = start.merge(self.previous_span());
+        Ok(MacroRule { span, pattern, template })
+    }
+
+    /// Parse macro tokens (pattern or template) until a closing delimiter.
+    fn parse_macro_tokens(&mut self, closing: TokenKind) -> ParseResult<Vec<MacroToken>> {
+        let mut tokens = Vec::new();
+
+        while !self.check_discriminant(&closing) && !self.is_eof() {
+            if self.check(TokenKind::Dollar) {
+                self.advance();
+
+                if self.check(TokenKind::LParen) {
+                    // Repetition: $(...)*  $(...)+  $(...)?
+                    self.advance();
+                    let inner = self.parse_macro_tokens(TokenKind::RParen)?;
+                    self.expect(TokenKind::RParen)?;
+
+                    // Optional separator before repetition kind
+                    let separator = if self.check(TokenKind::Comma) {
+                        self.advance();
+                        Some(SmolStr::new(","))
+                    } else {
+                        None
+                    };
+
+                    let kind = if self.check(TokenKind::Star) {
+                        self.advance();
+                        RepetitionKind::ZeroOrMore
+                    } else if self.check(TokenKind::Plus) {
+                        self.advance();
+                        RepetitionKind::OneOrMore
+                    } else if self.check(TokenKind::Question) {
+                        self.advance();
+                        RepetitionKind::Optional
+                    } else {
+                        // Default to zero-or-more
+                        RepetitionKind::ZeroOrMore
+                    };
+
+                    tokens.push(MacroToken::Repetition {
+                        tokens: inner,
+                        separator,
+                        kind,
+                    });
+                } else if matches!(self.peek().kind, TokenKind::Ident(_)) {
+                    // Metavariable: $name or $name:kind
+                    let name = self.expect_ident()?;
+
+                    let kind = if self.check(TokenKind::Colon) {
+                        self.advance();
+                        let kind_name = self.expect_ident()?;
+                        match kind_name.as_str() {
+                            "expr" => MacroVarKind::Expr,
+                            "stmt" => MacroVarKind::Stmt,
+                            "ty" => MacroVarKind::Ty,
+                            "pat" => MacroVarKind::Pat,
+                            "ident" => MacroVarKind::Ident,
+                            "block" => MacroVarKind::Block,
+                            "literal" => MacroVarKind::Literal,
+                            "tt" => MacroVarKind::Tt,
+                            _ => {
+                                return Err(ParseError::custom(
+                                    self.previous_span(),
+                                    format!("unknown macro variable kind '{}', expected one of: expr, stmt, ty, pat, ident, block, literal, tt", kind_name),
+                                ));
+                            }
+                        }
+                    } else {
+                        // In template position, $name without :kind references a bound metavar
+                        MacroVarKind::Tt
+                    };
+
+                    tokens.push(MacroToken::MetaVar { name, kind });
+                } else {
+                    // Lone $ - treat as literal
+                    tokens.push(MacroToken::Literal(SmolStr::new("$")));
+                }
+            } else {
+                // Literal token - capture its text
+                let tok = self.advance();
+                let text = match &tok.kind {
+                    TokenKind::Ident(s) => s.clone(),
+                    TokenKind::Integer(n) => SmolStr::new(&n.to_string()),
+                    TokenKind::Float(f) => SmolStr::new(&f.to_string()),
+                    TokenKind::String(s) => SmolStr::new(&format!("\"{}\"", s)),
+                    _ => SmolStr::new(&format!("{:?}", tok.kind)),
+                };
+                tokens.push(MacroToken::Literal(text));
+            }
+        }
+
+        Ok(tokens)
+    }
+
+    /// Check if peek token has the same discriminant as the given token kind.
+    fn check_discriminant(&mut self, expected: &TokenKind) -> bool {
+        std::mem::discriminant(&self.peek().kind) == std::mem::discriminant(expected)
     }
 
     /// Parse a type parameter list: <T, U: Trait, V = Default> (returns simple Ident vec)

@@ -472,6 +472,9 @@ pub enum TokenKind {
     /// The `?` try/optional operator.
     #[token("?")]
     Question,
+    /// The `$` dollar sign (macro metavariables).
+    #[token("$")]
+    Dollar,
     /// The `_` wildcard/discard pattern.
     #[token("_", priority = 10)]
     Underscore,
