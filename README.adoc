@@ -1,10 +1,6 @@
 image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
 
 
-
-image:https://img.shields.io/badge/Philosophy-Palimpsest-indigo.svg[Palimpsest,link="https://github.com/hyperpolymath/palimpsest-license"]
-
-
 Eclexia: Economics-as-Code
 
 A programming language where economics is a first-class paradigm
@@ -447,22 +443,11 @@ If you use Eclexia in research, please cite:
 
 📜 License
 
-Eclexia is dual-licensed:
-Open Source (Core)
+License: PMPL-1.0-or-later (Palimpsest License)
 
-License: Apache 2.0
-
-Applies to: Core language, reference compiler, standard library
+Applies to: All Eclexia source code, compiler, standard library, tooling.
 
 See: LICENSE
-
-Commercial (Enterprise Features)
-
-License: Proprietary
-
-Applies to: Advanced optimizations, cloud services, enterprise support
-
-Contact: licensing@eclexia.org
 
 🚧 Roadmap
 
@@ -489,7 +474,7 @@ Phase 1: Core Compiler (Q4 2025) — Complete
   - ✅ Formatter (eclexia-fmt: functions, traits, impls, modules, effects)
   - ✅ Linter (configurable rules)
   - ✅ Interactive debugger (breakpoints, step, continue, stack/locals/callstack/resources inspection)
-✅ 233 library tests passing, zero warnings, 25 crates compiling
+✅ 246 library tests passing, zero warnings, 25 crates compiling
 ✅ Documentation (specification, getting started guide, whitepaper, theory)
 
 Phase 2: Ecosystem Foundation (Q1–Q2 2026) — In Progress
@@ -501,7 +486,7 @@ Phase 2: Ecosystem Foundation (Q1–Q2 2026) — In Progress
 🔄 Package registry (HTTP client exists, server not yet deployed)
 🔄 Playground / web REPL (not yet started)
 🔄 Eclexia website (not yet started)
-🔄 odds-and-sods-package-manager integration (adapter pattern identified)
+✅ odds-and-sods-package-manager integration (Eclexia registry adapter committed)
 🔄 Codebase annotation coverage improvement
 
 Phase 3: Advanced Compiler (Q3 2026)
@@ -600,7 +585,7 @@ We're targeting Beta release in Q2 2026.
 Patents
 
 Some aspects of Eclexia may be subject to patent protection. See IP_CLAIMS.md for details.
-Patent Grant: If you use Eclexia under the Apache 2.0 license, you receive a royalty-free patent license for patents embodied in the open-source code.
+Patent Grant: If you use Eclexia under the PMPL-1.0-or-later license, you receive a royalty-free patent license for patents embodied in the open-source code.
 Trademarks
 
 Eclexia™ is a trademark of Jonathan D.A. Jewell / Eclexia Project
@@ -631,6 +616,6 @@ Welcome to the future of programming. Welcome to Economics-as-Code. Welcome to E
 
 "The best way to predict the future is to invent it." — Alan Kay
 
-Last Updated: October 30, 2025
-Document Version: 1.0
+Last Updated: February 9, 2026
+Document Version: 1.1
 Repository: https://gitlab.com/eclexia-lang/eclexia

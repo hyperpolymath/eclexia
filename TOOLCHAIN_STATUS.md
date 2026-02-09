@@ -1,7 +1,7 @@
 # Eclexia Toolchain Status
 
 **Last Updated:** 2026-02-08
-**Overall Completion:** 100% (Production-Ready & Hardened)
+**Overall Completion:** Alpha — Core pipeline functional, backends and runtime stubs pending
 
 ## Core Compiler Pipeline
 

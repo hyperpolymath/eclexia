@@ -1732,8 +1732,15 @@ impl<'src> Parser<'src> {
     /// Parse macro tokens (pattern or template) until a closing delimiter.
     fn parse_macro_tokens(&mut self, closing: TokenKind) -> ParseResult<Vec<MacroToken>> {
         let mut tokens = Vec::new();
+        let mut brace_depth: u32 = 0;
+        let mut paren_depth: u32 = 0;
+        let mut bracket_depth: u32 = 0;
 
-        while !self.check_discriminant(&closing) && !self.is_eof() {
+        while !self.is_eof() {
+            // Only stop at closing token when all nesting is balanced
+            if self.check_discriminant(&closing) && brace_depth == 0 && paren_depth == 0 && bracket_depth == 0 {
+                break;
+            }
             if self.check(TokenKind::Dollar) {
                 self.advance();
 
@@ -1804,6 +1811,13 @@ impl<'src> Parser<'src> {
                     tokens.push(MacroToken::Literal(SmolStr::new("$")));
                 }
             } else {
+                // Track nesting depth for balanced delimiters
+                if self.check(TokenKind::LBrace) { brace_depth += 1; }
+                else if self.check(TokenKind::RBrace) && brace_depth > 0 { brace_depth -= 1; }
+                else if self.check(TokenKind::LParen) { paren_depth += 1; }
+                else if self.check(TokenKind::RParen) && paren_depth > 0 { paren_depth -= 1; }
+                else if self.check(TokenKind::LBracket) { bracket_depth += 1; }
+                else if self.check(TokenKind::RBracket) && bracket_depth > 0 { bracket_depth -= 1; }
                 // Literal token - capture its text
                 let tok = self.advance();
                 let text = match &tok.kind {
@@ -1811,6 +1825,62 @@ impl<'src> Parser<'src> {
                     TokenKind::Integer(n) => SmolStr::new(&n.to_string()),
                     TokenKind::Float(f) => SmolStr::new(&f.to_string()),
                     TokenKind::String(s) => SmolStr::new(&format!("\"{}\"", s)),
+                    TokenKind::Plus => SmolStr::new("+"),
+                    TokenKind::Minus => SmolStr::new("-"),
+                    TokenKind::Star => SmolStr::new("*"),
+                    TokenKind::Slash => SmolStr::new("/"),
+                    TokenKind::Percent => SmolStr::new("%"),
+                    TokenKind::Eq => SmolStr::new("="),
+                    TokenKind::EqEq => SmolStr::new("=="),
+                    TokenKind::BangEq => SmolStr::new("!="),
+                    TokenKind::Lt => SmolStr::new("<"),
+                    TokenKind::Gt => SmolStr::new(">"),
+                    TokenKind::Le => SmolStr::new("<="),
+                    TokenKind::Ge => SmolStr::new(">="),
+                    TokenKind::And => SmolStr::new("&&"),
+                    TokenKind::Or => SmolStr::new("||"),
+                    TokenKind::Bang => SmolStr::new("!"),
+                    TokenKind::LParen => SmolStr::new("("),
+                    TokenKind::RParen => SmolStr::new(")"),
+                    TokenKind::LBrace => SmolStr::new("{"),
+                    TokenKind::RBrace => SmolStr::new("}"),
+                    TokenKind::LBracket => SmolStr::new("["),
+                    TokenKind::RBracket => SmolStr::new("]"),
+                    TokenKind::Comma => SmolStr::new(","),
+                    TokenKind::Colon => SmolStr::new(":"),
+                    TokenKind::Semi => SmolStr::new(";"),
+                    TokenKind::Arrow => SmolStr::new("->"),
+                    TokenKind::FatArrow => SmolStr::new("=>"),
+                    TokenKind::Dot => SmolStr::new("."),
+                    TokenKind::DotDot => SmolStr::new(".."),
+                    TokenKind::Pipe => SmolStr::new("|"),
+                    // Keywords
+                    TokenKind::If => SmolStr::new("if"),
+                    TokenKind::Else => SmolStr::new("else"),
+                    TokenKind::Let => SmolStr::new("let"),
+                    TokenKind::Def => SmolStr::new("def"),
+                    TokenKind::Fn => SmolStr::new("fn"),
+                    TokenKind::Return => SmolStr::new("return"),
+                    TokenKind::While => SmolStr::new("while"),
+                    TokenKind::For => SmolStr::new("for"),
+                    TokenKind::In => SmolStr::new("in"),
+                    TokenKind::Match => SmolStr::new("match"),
+                    TokenKind::Struct => SmolStr::new("struct"),
+                    TokenKind::Trait => SmolStr::new("trait"),
+                    TokenKind::Impl => SmolStr::new("impl"),
+                    TokenKind::Pub => SmolStr::new("pub"),
+                    TokenKind::True => SmolStr::new("true"),
+                    TokenKind::False => SmolStr::new("false"),
+                    TokenKind::Mut => SmolStr::new("mut"),
+                    TokenKind::As => SmolStr::new("as"),
+                    TokenKind::Break => SmolStr::new("break"),
+                    TokenKind::Continue => SmolStr::new("continue"),
+                    TokenKind::Loop => SmolStr::new("loop"),
+                    TokenKind::Type => SmolStr::new("type"),
+                    TokenKind::Enum => SmolStr::new("enum"),
+                    TokenKind::Use => SmolStr::new("use"),
+                    TokenKind::Adaptive => SmolStr::new("adaptive"),
+                    TokenKind::Macro => SmolStr::new("macro"),
                     _ => SmolStr::new(&format!("{:?}", tok.kind)),
                 };
                 tokens.push(MacroToken::Literal(text));
