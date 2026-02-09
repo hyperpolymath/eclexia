@@ -18,16 +18,16 @@
 
   (current-position
     (phase "alpha")
-    (overall-completion 62)
+    (overall-completion 65)
     (components
       (lexer (completion 100) (status "complete - full tokenization with raw strings, hex/unicode escapes, doc comments"))
       (parser (completion 95) (status "3106 lines, 52 unwrap calls on untrusted input"))
       (hir (completion 95) (status "match desugaring, for-loops, effects all work"))
       (typeck (completion 97) (status "Robinson unification, generics, Resource<D> types, casts, concurrency stubs, extern block signatures"))
       (interp (completion 95) (status "tree-walking, 28 builtins, extern stubs, enum variant matching fixed"))
-      (mir (completion 90) (status "constant propagation, dead code elimination, block inlining"))
+      (mir (completion 95) (status "constant propagation, dead code elimination, block inlining, adaptive def lowering fixed"))
       (codegen (completion 95) (status "all instructions, .eclb binary format, serde derives"))
-      (vm (completion 90) (status "stack-based, 934 lines, .eclb loading, disasm command"))
+      (vm (completion 95) (status "stack-based, CallBuiltin dispatch (15+ builtins), .eclb loading, disasm")))
       (fmt (completion 95) (status "trait, impl, module, effect, static, extern formatting"))
       (lint (completion 90) (status "6 rules implemented"))
       (lsp (completion 80) (status "diagnostics, completion, go-to-def, no resource-type awareness"))
@@ -75,8 +75,7 @@
   (blockers-and-issues
     (critical)
     (high
-      ("3 reactive crates not yet wired into CLI (db, modules, tiered)"
-       "build command builtins limited to ~20 functions in VM dispatch"))
+      ("3 reactive crates not yet wired into CLI (db, modules, tiered)"))
     (medium
       ("code coverage at 17.92% (target 80%)"
        "22 formal verification theorems Admitted (not proven)"
@@ -87,17 +86,28 @@
 
   (critical-next-actions
     (immediate
-      ("wire remaining 5 reactive crates into CLI"
+      ("wire remaining 3 reactive crates into CLI (db, modules, tiered)"
        "connect shadow prices to real VM metrics"))
     (this-week
-      ("create more working example programs"
-       "increase code coverage toward 80%"))
+      ("increase code coverage toward 80%"
+       "fix 5 broken example programs (aspirational syntax)"))
     (this-month
       ("complete remaining formal proofs"
        "LLVM/Cranelift backend"
        "community building and ecosystem growth")))
 
   (session-history
+    ((date "2026-02-09")
+     (summary "Session 9: VM builtins, MIR adaptive fix, 5 new examples, STATE.scm update")
+     (changes
+       ("Added CallBuiltin instruction to bytecode pipeline (bytecode.rs, vm.rs, commands.rs)"
+        "VM now executes 15+ builtin functions (println, print, to_string, math, assert, range)"
+        "Fixed MIR lowering panic on adaptive def (missing params in local_map, clone-replace arena bug)"
+        "Fixed ExprKind::Local fallback for missing locals (graceful Unit instead of panic)"
+        "build --analyze now works on adaptive function files"
+        "Added 5 new example programs: macros, hashmaps, higher_order, recursion, type_system"
+        "24/29 examples now run successfully (up from 19/24)"
+        "271 lib tests + 32+19 conformance tests all passing")))
     ((date "2026-02-09")
      (summary "Sessions 6-8: .eclb format, doc honesty, unwrap fixes, verisimdb, reactive crate wiring, enum variant fix")
      (changes

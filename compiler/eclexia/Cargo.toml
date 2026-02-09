@@ -34,6 +34,7 @@ eclexia-absinterp = { path = "../eclexia-absinterp" }
 eclexia-comptime = { path = "../eclexia-comptime" }
 eclexia-effects = { path = "../eclexia-effects" }
 eclexia-specialize = { path = "../eclexia-specialize" }
+eclexia-modules = { path = "../eclexia-modules" }
 
 notify = { workspace = true }
 clap = { workspace = true }

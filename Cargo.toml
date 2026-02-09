@@ -91,6 +91,9 @@ tracing = "0.1"
 # Parallel compilation
 rayon = "1.10"
 
+# WASM backend
+wasm-encoder = "0.225"
+
 # Testing
 quickcheck = "1.0"
 proptest = "1.4"

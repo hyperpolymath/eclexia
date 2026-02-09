@@ -182,8 +182,76 @@ fn run_mir_analysis(mir: &eclexia_mir::MirFile, ast: &eclexia_ast::SourceFile) {
         println!("  Effect signatures: {} effect(s) registered", effect_registry.len());
     }
 
+    // Module import analysis
+    let imports = eclexia_modules::extract_imports(ast);
+    if !imports.is_empty() {
+        println!("  Module imports: {} import(s) detected", imports.len());
+        for import in &imports {
+            println!("    - {}", import.path);
+        }
+    }
+
+    // Tiered execution analysis
+    {
+        let mut tier_mgr = eclexia_tiered::tier::TierManager::new();
+
+        // Estimate hotness: functions with more instructions or recursion are hotter
+        for func in &mir.functions {
+            let instr_count: usize = func.basic_blocks.iter()
+                .map(|(_, bb)| bb.instructions.len())
+                .sum();
+
+            // Heuristic: more instructions → more likely hot
+            let estimated_calls = if func.is_adaptive { 200 }
+                else if instr_count > 50 { 1500 }
+                else if instr_count > 20 { 150 }
+                else { 5 };
+
+            for _ in 0..estimated_calls {
+                tier_mgr.record_call(&func.name);
+            }
+        }
+
+        // Report tier distribution
+        let mut has_tiers = false;
+        for tier in [
+            eclexia_tiered::tier::Tier::Interpreter,
+            eclexia_tiered::tier::Tier::Bytecode,
+            eclexia_tiered::tier::Tier::Cranelift,
+            eclexia_tiered::tier::Tier::Llvm,
+        ] {
+            let funcs_at_tier = tier_mgr.functions_at_tier(tier);
+            if !funcs_at_tier.is_empty() {
+                if !has_tiers {
+                    println!("  Tiered execution (estimated):");
+                    has_tiers = true;
+                }
+                println!("    {}: {} function(s)", tier, funcs_at_tier.len());
+            }
+        }
+    }
+
+    // Incremental compilation readiness (salsa database)
+    {
+        let db = eclexia_db::CompilerDatabase::new();
+        let source_text = format!("{:?}", ast); // Use AST debug repr as proxy
+        let source = eclexia_db::SourceFile::new(&db, source_text);
+        let all_diags = eclexia_db::queries::all_diagnostics(&db, source);
+        let errors: Vec<_> = all_diags.iter()
+            .filter(|d| d.severity == eclexia_db::DiagnosticSeverity::Error)
+            .collect();
+        let warnings: Vec<_> = all_diags.iter()
+            .filter(|d| d.severity == eclexia_db::DiagnosticSeverity::Warning)
+            .collect();
+        if !all_diags.is_empty() {
+            println!("  Incremental compilation (salsa): {} error(s), {} warning(s)",
+                errors.len(), warnings.len());
+        }
+    }
+
     if comptime_verdicts.is_empty() && !has_resources && budget_verdicts.is_empty()
         && total_adaptive == 0 && effect_registry.is_empty()
+        && imports.is_empty()
     {
         println!("  No resource constraints to analyze");
     }

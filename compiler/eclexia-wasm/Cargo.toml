@@ -15,6 +15,7 @@ eclexia-ast = { path = "../eclexia-ast" }
 eclexia-mir = { path = "../eclexia-mir" }
 eclexia-codegen = { path = "../eclexia-codegen" }
 
+wasm-encoder = { workspace = true }
 smol_str = { workspace = true }
 rustc-hash = { workspace = true }
 thiserror = { workspace = true }
