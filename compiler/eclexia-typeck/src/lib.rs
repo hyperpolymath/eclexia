@@ -230,6 +230,98 @@ impl<'a> TypeChecker<'a> {
             ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
         });
 
+        // Math builtins
+        env.insert_mono(SmolStr::new("abs"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Var(TypeVar::new(0))),
+        });
+        env.insert_mono(SmolStr::new("min"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0)), Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Var(TypeVar::new(0))),
+        });
+        env.insert_mono(SmolStr::new("max"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0)), Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Var(TypeVar::new(0))),
+        });
+        env.insert_mono(SmolStr::new("sqrt"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::Float)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Float)),
+        });
+        env.insert_mono(SmolStr::new("floor"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::Float)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+        });
+        env.insert_mono(SmolStr::new("ceil"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::Float)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+        });
+        env.insert_mono(SmolStr::new("round"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::Float)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+        });
+
+        // I/O builtins
+        env.insert_mono(SmolStr::new("read_file"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::String)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
+        });
+        env.insert_mono(SmolStr::new("write_file"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::String)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+        });
+        env.insert_mono(SmolStr::new("file_exists"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::String)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
+        });
+
+        // String builtins
+        env.insert_mono(SmolStr::new("str_trim"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::String)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
+        });
+        env.insert_mono(SmolStr::new("str_split"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::String)],
+            ret: Box::new(Ty::Array { elem: Box::new(Ty::Primitive(PrimitiveTy::String)), size: None }),
+        });
+        env.insert_mono(SmolStr::new("str_contains"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::String)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
+        });
+        env.insert_mono(SmolStr::new("uppercase"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::String)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
+        });
+        env.insert_mono(SmolStr::new("lowercase"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::String)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
+        });
+        env.insert_mono(SmolStr::new("starts_with"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::String)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
+        });
+        env.insert_mono(SmolStr::new("ends_with"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::String)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
+        });
+        env.insert_mono(SmolStr::new("replace"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::String)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
+        });
+        env.insert_mono(SmolStr::new("substring"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::Int), Ty::Primitive(PrimitiveTy::Int)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
+        });
+
+        // Time builtins
+        env.insert_mono(SmolStr::new("time_now"), Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Float)),
+        });
+        env.insert_mono(SmolStr::new("sleep"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::Int)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+        });
+
         // Collection builtins: Set operations
         env.insert_mono(SmolStr::new("set_union"), Ty::Function {
             params: vec![],
