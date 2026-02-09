@@ -1523,6 +1523,12 @@ impl<'a> TypeChecker<'a> {
                             lhs.clone()
                         } else if matches!(lhs, Ty::Primitive(PrimitiveTy::String)) && op == BinaryOp::Add {
                             Ty::Primitive(PrimitiveTy::String)
+                        } else if matches!(lhs, Ty::Var(_)) || matches!(rhs, Ty::Var(_)) {
+                            // Type variable (e.g. from macro expansion) — defer to runtime
+                            lhs.clone()
+                        } else if matches!(lhs, Ty::Error) || matches!(rhs, Ty::Error) {
+                            // Propagate error type without cascading
+                            Ty::Error
                         } else {
                             self.errors.push(TypeError::Custom {
                                 span,

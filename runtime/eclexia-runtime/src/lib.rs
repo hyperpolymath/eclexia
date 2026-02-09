@@ -12,10 +12,18 @@
 mod shadow_prices;
 mod resource_tracker;
 mod adaptive;
+mod scheduler;
+mod profiler;
+mod carbon;
+mod shadow;
 
 pub use shadow_prices::{ShadowPriceRegistry, ShadowPrice, PriceUpdate};
 pub use resource_tracker::{ResourceTracker, ResourceUsage, ResourceBudget};
 pub use adaptive::{AdaptiveDecisionEngine, SolutionCandidate, SelectionCriteria};
+pub use scheduler::{Scheduler, ScheduledTask, ScheduleDecision, SchedulerStats};
+pub use profiler::{Profiler, ProfileSpan};
+pub use carbon::{CarbonMonitor, CarbonSignal, CarbonReading};
+pub use shadow::{ShadowPriceEngine, ResourceConstraint, ShadowPriceResult};
 
 use eclexia_ast::dimension::Dimension;
 use smol_str::SmolStr;
