@@ -88,15 +88,13 @@ impl<'hir> LoweringContext<'hir> {
 
     /// Allocate a new basic block
     fn alloc_block(&mut self, label: SmolStr) -> BlockId {
-        if let Some(func) = &mut self.current_function {
-            func.basic_blocks.alloc(BasicBlock {
-                label,
-                instructions: Vec::new(),
-                terminator: Terminator::Unreachable,
-            })
-        } else {
-            panic!("No current function")
-        }
+        let func = self.current_function.as_mut()
+            .expect("BUG: alloc_block called without current function — this is an internal compiler error");
+        func.basic_blocks.alloc(BasicBlock {
+            label,
+            instructions: Vec::new(),
+            terminator: Terminator::Unreachable,
+        })
     }
 
     /// Emit an instruction to the current block
@@ -219,7 +217,8 @@ impl<'hir> LoweringContext<'hir> {
         self.lower_body(&func.body);
 
         // Extract function
-        self.current_function.take().unwrap()
+        self.current_function.take()
+            .expect("BUG: current_function is None after lowering — this is an internal compiler error")
     }
 
     /// Lower resource constraints
