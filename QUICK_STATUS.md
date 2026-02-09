@@ -70,7 +70,8 @@
 
 - **Native backends:** Cranelift, LLVM, WASM crates exist but only estimate sizes — no real codegen
 - **Runtime integration:** scheduler/profiler/carbon/shadow implemented but not wired to real system metrics
-- **Reactive compilation:** eclexia-absinterp and eclexia-comptime wired into `build --analyze`; remaining 5 crates not yet wired
+- **Reactive compilation:** 4/7 crates wired into `build --analyze` (absinterp, comptime, specialize, effects); remaining 3 not yet wired (db, modules, tiered)
+- **Shadow prices:** ShadowPriceRegistry defaults replace hardcoded 1.0; dynamic prices computed from VM resource usage via ShadowPriceEngine
 - **Bytecode serialization:** .eclb binary format implemented (write/read/round-trip verified)
 - **Package registry:** Client stub exists, no server deployed
 - **Concurrency:** AST nodes parsed (spawn, channel, send, recv, select, yield) but interpreter returns errors
