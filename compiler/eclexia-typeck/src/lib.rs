@@ -329,7 +329,21 @@ impl<'a> TypeChecker<'a> {
                 let ty = self.resolve_ast_type(s.ty);
                 self.env.insert_mono(s.name.clone(), ty);
             }
-            Item::EffectDecl(_) | Item::ExternBlock(_) | Item::MacroDef(_) => {}
+            Item::ExternBlock(ext) => {
+                for ext_item in &ext.items {
+                    match ext_item {
+                        eclexia_ast::ExternItem::Fn(sig) => {
+                            let ty = self.function_sig_type(sig);
+                            self.env.insert_mono(sig.name.clone(), ty);
+                        }
+                        eclexia_ast::ExternItem::Static { name, ty, .. } => {
+                            let resolved = self.resolve_ast_type(*ty);
+                            self.env.insert_mono(name.clone(), resolved);
+                        }
+                    }
+                }
+            }
+            Item::EffectDecl(_) | Item::MacroDef(_) => {}
             Item::Error(_) => {}
         }
     }
@@ -1541,6 +1555,20 @@ impl<'a> TypeChecker<'a> {
                 }
             }
             BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+                // Resource<D> comparisons: dimensions must match
+                if let (Ty::Resource { dimension: d1, .. }, Ty::Resource { dimension: d2, .. }) = (lhs, rhs) {
+                    if d1 != d2 {
+                        self.errors.push(TypeError::Custom {
+                            span,
+                            message: format!(
+                                "cannot compare resources with different dimensions: {:?} vs {:?}",
+                                d1, d2
+                            ),
+                            hint: Some("comparison requires matching resource dimensions".to_string()),
+                        });
+                        return Ty::Error;
+                    }
+                }
                 Ty::Primitive(PrimitiveTy::Bool)
             }
             BinaryOp::And | BinaryOp::Or => {

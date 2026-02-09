@@ -18,6 +18,7 @@ use std::collections::HashMap;
 
 /// Bytecode instruction
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Instruction {
     // Stack manipulation
     /// Push an integer constant onto the stack
@@ -188,6 +189,7 @@ pub enum Instruction {
 
 /// Bytecode module containing all compiled functions
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BytecodeModule {
     /// Functions in the module
     pub functions: Vec<BytecodeFunction>,
@@ -207,6 +209,7 @@ pub struct BytecodeModule {
 
 /// A compiled function
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BytecodeFunction {
     /// Function name
     pub name: SmolStr,

@@ -462,6 +462,7 @@ dependencies = [
  "eclexia-typeck",
  "la-arena",
  "rustc-hash 1.1.0",
+ "serde",
  "smol_str",
 ]
 

@@ -296,9 +296,29 @@ impl Interpreter {
                 let val = self.eval_expr(static_decl.value, file, &self.global.clone())?;
                 self.global.define(static_decl.name.clone(), val);
             }
-            Item::ExternBlock(_) => {
-                // Extern blocks: foreign function stubs
-                // Would need FFI integration; skip for now
+            Item::ExternBlock(ext) => {
+                for ext_item in &ext.items {
+                    match ext_item {
+                        ExternItem::Fn(sig) => {
+                            // Register extern fn as a builtin that errors when called
+                            self.global.define(
+                                sig.name.clone(),
+                                Value::Builtin(crate::value::BuiltinFn {
+                                    name: "extern_unlinked",
+                                    func: |_args| {
+                                        Err(RuntimeError::custom(
+                                            "extern function is not linked; FFI requires a native runtime"
+                                        ))
+                                    },
+                                }),
+                            );
+                        }
+                        ExternItem::Static { name, .. } => {
+                            // Register extern statics as unit placeholders
+                            self.global.define(name.clone(), Value::Unit);
+                        }
+                    }
+                }
             }
             Item::MacroDef(m) => {
                 // Register macro as a named value in the environment

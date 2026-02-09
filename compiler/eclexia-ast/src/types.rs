@@ -11,6 +11,7 @@ use smol_str::SmolStr;
 
 /// A semantic type in Eclexia's type system.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(any(feature = "serde", feature = "serde-types"), derive(serde::Serialize, serde::Deserialize))]
 pub enum Ty {
     /// Primitive types
     Primitive(PrimitiveTy),
@@ -115,6 +116,7 @@ impl Ty {
 
 /// Primitive types built into the language.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(any(feature = "serde", feature = "serde-types"), derive(serde::Serialize, serde::Deserialize))]
 pub enum PrimitiveTy {
     /// Signed integer (platform-dependent size)
     Int,
@@ -234,6 +236,7 @@ impl PrimitiveTy {
 
 /// A type variable for type inference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(any(feature = "serde", feature = "serde-types"), derive(serde::Serialize, serde::Deserialize))]
 pub struct TypeVar(pub u32);
 
 impl TypeVar {

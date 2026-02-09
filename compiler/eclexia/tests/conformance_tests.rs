@@ -16,7 +16,7 @@ use std::process::Command;
 /// should naturally start failing (as intended) and can be removed
 /// from this list.
 const KNOWN_RUNTIME_GAPS: &[(&str, &str)] = &[
-    ("dimension_mismatch_comparison.ecl", "Resource<D> dimension checking not in type checker yet"),
+    // All gaps resolved as of 2026-02-09.
 ];
 
 /// Run a valid test file (should succeed)

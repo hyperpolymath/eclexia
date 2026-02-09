@@ -19,7 +19,7 @@
 /// A dimension represented as a vector of SI base unit exponents
 /// plus extensions for economic and environmental units.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(any(feature = "serde", feature = "serde-types"), derive(serde::Serialize, serde::Deserialize))]
 pub struct Dimension {
     /// Mass (kilogram, kg) - exponent
     pub mass: i8,

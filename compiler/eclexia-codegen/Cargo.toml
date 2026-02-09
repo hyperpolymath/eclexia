@@ -16,6 +16,11 @@ eclexia-mir = { path = "../eclexia-mir" }
 smol_str = { workspace = true }
 rustc-hash = { workspace = true }
 la-arena = { workspace = true }
+serde = { workspace = true, optional = true }
+
+[features]
+default = []
+serde = ["dep:serde", "eclexia-ast/serde-types", "smol_str/serde"]
 
 [dev-dependencies]
 eclexia-lexer = { path = "../eclexia-lexer" }

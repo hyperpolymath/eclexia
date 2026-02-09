@@ -21,7 +21,7 @@ eclexia-parser = { path = "../eclexia-parser" }
 eclexia-typeck = { path = "../eclexia-typeck" }
 eclexia-hir = { path = "../eclexia-hir" }
 eclexia-mir = { path = "../eclexia-mir" }
-eclexia-codegen = { path = "../eclexia-codegen" }
+eclexia-codegen = { path = "../eclexia-codegen", features = ["serde"] }
 eclexia-interp = { path = "../eclexia-interp" }
 eclexia-fmt = { path = "../eclexia-fmt" }
 eclexia-lint = { path = "../eclexia-lint" }

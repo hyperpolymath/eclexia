@@ -51,9 +51,13 @@ pub fn build(input: &Path, _output: Option<&Path>, _target: &str) -> miette::Res
     println!("  {} items parsed", file.items.len());
     println!("  {} functions compiled", module.functions.len());
 
-    if _output.is_some() {
-        // TODO: Serialize bytecode module to output file once BytecodeModule implements Serialize
-        println!("  (bytecode output not yet supported)");
+    if let Some(output) = _output {
+        let json = serde_json::to_vec_pretty(&module)
+            .map_err(|e| miette::miette!("Failed to serialize bytecode: {}", e))?;
+        std::fs::write(output, &json)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to write bytecode to {}", output.display()))?;
+        println!("  Bytecode written to {}", output.display());
     }
 
     Ok(())
