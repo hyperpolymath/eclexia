@@ -3,7 +3,7 @@
 **Last Updated:** 2026-02-09
 **Completion:** Alpha — Core compiler functional, many subsystems stubbed
 **Build:** Passing (25 crates, zero warnings)
-**Tests:** 246 library tests + 32/32 conformance tests passing
+**Tests:** 271 library tests + 32/32 valid + 19/19 invalid conformance (0 skips)
 
 ---
 
@@ -25,7 +25,10 @@
 - Adaptive decision engine (8690 lines)
 - Budget enforcement
 
-**Stubbed (6-line TODOs):** scheduler, profiler, carbon monitor, shadow price LP solver
+- Scheduler: shadow-price-aware task scheduling with defer/reject/run (4 tests)
+- Profiler: wall-clock profiling with energy/carbon estimation (6 tests)
+- Carbon monitor: grid intensity with Green/Yellow/Red signals (7 tests)
+- Shadow price engine: utilization-curve LP duality pricing (8 tests)
 
 ### Standard Library (~85%)
 - Core types: Option, Result
@@ -49,9 +52,9 @@
 - VSCode extension: Syntax highlighting + LSP integration
 
 ### Testing
-- 246 library tests passing (across all crates)
+- 271 library tests passing (across all crates)
 - 32/32 valid conformance tests passing
-- 19 invalid conformance tests (rejection tests)
+- 19/19 invalid conformance tests correctly rejecting (0 skips)
 - 5 integration tests failing (pre-existing temp file race condition — not a code bug)
 - 11 property-based tests (1000+ generated cases each)
 
@@ -66,9 +69,9 @@
 ## What Does NOT Work Yet
 
 - **Native backends:** Cranelift, LLVM, WASM crates exist but only estimate sizes — no real codegen
-- **Runtime stubs:** scheduler.rs, profiler.rs, carbon.rs, shadow.rs are 6-line TODOs
+- **Runtime integration:** scheduler/profiler/carbon/shadow implemented but not wired to real system metrics
 - **Reactive compilation:** 10 crates exist structurally but are not wired into CLI
-- **Bytecode serialization:** BytecodeModule has no Serialize impl
+- **Bytecode serialization:** BytecodeModule now has Serialize — JSON output works, binary file format pending
 - **Package registry:** Client stub exists, no server deployed
 - **Concurrency:** AST nodes parsed (spawn, channel, send, recv, select, yield) but interpreter returns errors
 - **Macro expansion in HIR:** MacroCall lowers to Unit — only interpreter supports macro eval
