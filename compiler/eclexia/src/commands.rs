@@ -2163,5 +2163,6 @@ fn format_instruction(instr: &eclexia_codegen::bytecode::Instruction, module: &e
         // Debug
         Instruction::DebugPrint => "debug_print".to_string(),
         Instruction::Nop => "nop".to_string(),
+        Instruction::CallBuiltin(name, argc) => format!("call_builtin   {} ({})", name, argc),
     }
 }

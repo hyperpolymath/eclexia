@@ -153,6 +153,9 @@ pub enum Instruction {
     /// Call indirect (function on stack)
     CallIndirect(u32), // arg_count
 
+    /// Call a builtin function by name
+    CallBuiltin(SmolStr, u32), // (builtin_name, arg_count)
+
     /// Push a function reference onto the stack
     PushFunction(usize), // function index
 
@@ -376,9 +379,12 @@ impl BytecodeGenerator {
                 match func {
                     Value::Constant(const_id) => {
                         if let ConstantKind::Function(name) = &mir.constants[*const_id].kind {
-                            let func_idx = self.context.function_map.get(name)
-                                .ok_or_else(|| CodegenError::MissingFunction(name.clone()))?;
-                            out.push(Instruction::Call(*func_idx, args.len() as u32));
+                            if let Some(func_idx) = self.context.function_map.get(name) {
+                                out.push(Instruction::Call(*func_idx, args.len() as u32));
+                            } else {
+                                // Not a user function — emit as builtin call
+                                out.push(Instruction::CallBuiltin(name.clone(), args.len() as u32));
+                            }
                         } else {
                             return Err(CodegenError::TypeError("Expected function constant".to_string()));
                         }
@@ -460,9 +466,13 @@ impl BytecodeGenerator {
                     ConstantKind::Unit => out.push(Instruction::PushUnit),
                     ConstantKind::Resource { value, .. } => out.push(Instruction::PushFloat(*value)),
                     ConstantKind::Function(name) => {
-                        let func_idx = self.context.function_map.get(name)
-                            .ok_or_else(|| CodegenError::MissingFunction(name.clone()))?;
-                        out.push(Instruction::PushFunction(*func_idx));
+                        if let Some(func_idx) = self.context.function_map.get(name) {
+                            out.push(Instruction::PushFunction(*func_idx));
+                        } else {
+                            // Builtin function — push unit as placeholder
+                            // (actual dispatch handled by CallBuiltin instruction)
+                            out.push(Instruction::PushUnit);
+                        }
                     }
                 }
             }

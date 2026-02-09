@@ -128,10 +128,31 @@ impl<'hir> LoweringContext<'hir> {
                 // For now, lower each solution as a separate function
                 // In the future, this will create adaptive dispatch logic
                 for solution in &func.solutions {
-                    let mut solution_func = Function {
+                    self.local_map.clear();
+                    self.next_local = 0;
+
+                    // Register parent adaptive function parameters so solution bodies
+                    // can reference them (solutions share the parent's parameter scope).
+                    let params: Vec<Local> = func
+                        .params
+                        .iter()
+                        .map(|p| {
+                            let id = self.next_local;
+                            self.next_local += 1;
+                            self.local_map.insert(p.local, id);
+                            Local {
+                                id,
+                                name: p.name.clone(),
+                                ty: p.ty.clone(),
+                                mutable: false,
+                            }
+                        })
+                        .collect();
+
+                    let solution_func = Function {
                         span: solution.span,
                         name: SmolStr::new(format!("{}_{}", func.name, solution.name)),
-                        params: Vec::new(),
+                        params,
                         return_ty: func.return_ty.clone(),
                         locals: Vec::new(),
                         basic_blocks: Arena::new(),
@@ -140,16 +161,14 @@ impl<'hir> LoweringContext<'hir> {
                         is_adaptive: true,
                     };
 
-                    // Lower solution body
-                    self.current_function = Some(solution_func.clone());
-                    self.local_map.clear();
-                    self.next_local = 0;
-
-                    // Create entry block
-                    let entry = self.alloc_block(SmolStr::new("entry"));
-                    solution_func.entry_block = entry;
-                    self.current_block = Some(entry);
+                    // Set current function first, then allocate entry block in-place
+                    // (must not clone-then-replace, or the arena allocation is lost).
                     self.current_function = Some(solution_func);
+                    let entry = self.alloc_block(SmolStr::new("entry"));
+                    if let Some(f) = &mut self.current_function {
+                        f.entry_block = entry;
+                    }
+                    self.current_block = Some(entry);
 
                     // Lower body
                     self.lower_body(&solution.body);
@@ -428,7 +447,19 @@ impl<'hir> LoweringContext<'hir> {
                 };
                 Value::Constant(self.mir.constants.alloc(constant))
             }
-            hir::ExprKind::Local(local) => Value::Local(self.local_map[local]),
+            hir::ExprKind::Local(local) => {
+                if let Some(&mir_local) = self.local_map.get(local) {
+                    Value::Local(mir_local)
+                } else {
+                    // Unknown local — produce a unit constant rather than panicking.
+                    // This can happen when lowering incomplete ASTs (e.g. error recovery).
+                    let constant = Constant {
+                        ty: Ty::Primitive(PrimitiveTy::Unit),
+                        kind: ConstantKind::Unit,
+                    };
+                    Value::Constant(self.mir.constants.alloc(constant))
+                }
+            }
             hir::ExprKind::Binary { op, lhs, rhs } => {
                 let lhs_val = self.lower_expr(*lhs);
                 let rhs_val = self.lower_expr(*rhs);

@@ -815,6 +815,18 @@ impl VirtualMachine {
                 Ok(ExecutionResult::Continue)
             }
 
+            Instruction::CallBuiltin(name, arg_count) => {
+                let mut args = Vec::new();
+                for _ in 0..*arg_count {
+                    args.push(self.pop()?);
+                }
+                args.reverse();
+
+                let result = self.execute_builtin(name, &args)?;
+                self.push(result)?;
+                Ok(ExecutionResult::Continue)
+            }
+
             // Resource tracking
             Instruction::TrackResource { resource, dimension } => {
                 let amount = self.pop()?.as_float()?;
@@ -932,6 +944,136 @@ impl VirtualMachine {
     /// Peek at the top of the stack
     fn peek(&self) -> Result<&Value, VmError> {
         self.stack.last().ok_or(VmError::StackUnderflow)
+    }
+
+    /// Execute a builtin function by name
+    fn execute_builtin(&self, name: &SmolStr, args: &[Value]) -> Result<Value, VmError> {
+        match name.as_str() {
+            "println" => {
+                let parts: Vec<String> = args.iter().map(|a| self.display_value(a)).collect();
+                println!("{}", parts.join(" "));
+                Ok(Value::Unit)
+            }
+            "print" => {
+                let parts: Vec<String> = args.iter().map(|a| self.display_value(a)).collect();
+                print!("{}", parts.join(" "));
+                Ok(Value::Unit)
+            }
+            "to_string" => {
+                if args.is_empty() {
+                    return Ok(Value::String(String::new()));
+                }
+                Ok(Value::String(self.display_value(&args[0])))
+            }
+            "len" => {
+                match args.first() {
+                    Some(Value::String(s)) => Ok(Value::Int(s.len() as i64)),
+                    _ => Ok(Value::Int(0)),
+                }
+            }
+            "abs" => {
+                match args.first() {
+                    Some(Value::Int(i)) => Ok(Value::Int(i.abs())),
+                    Some(Value::Float(f)) => Ok(Value::Float(f.abs())),
+                    _ => Ok(Value::Int(0)),
+                }
+            }
+            "min" => {
+                match (args.first(), args.get(1)) {
+                    (Some(Value::Int(a)), Some(Value::Int(b))) => Ok(Value::Int(*a.min(b))),
+                    (Some(Value::Float(a)), Some(Value::Float(b))) => Ok(Value::Float(a.min(*b))),
+                    _ => Ok(Value::Int(0)),
+                }
+            }
+            "max" => {
+                match (args.first(), args.get(1)) {
+                    (Some(Value::Int(a)), Some(Value::Int(b))) => Ok(Value::Int(*a.max(b))),
+                    (Some(Value::Float(a)), Some(Value::Float(b))) => Ok(Value::Float(a.max(*b))),
+                    _ => Ok(Value::Int(0)),
+                }
+            }
+            "sqrt" => {
+                match args.first() {
+                    Some(Value::Float(f)) => Ok(Value::Float(f.sqrt())),
+                    Some(Value::Int(i)) => Ok(Value::Float((*i as f64).sqrt())),
+                    _ => Ok(Value::Float(0.0)),
+                }
+            }
+            "floor" => {
+                match args.first() {
+                    Some(Value::Float(f)) => Ok(Value::Int(f.floor() as i64)),
+                    Some(Value::Int(i)) => Ok(Value::Int(*i)),
+                    _ => Ok(Value::Int(0)),
+                }
+            }
+            "ceil" => {
+                match args.first() {
+                    Some(Value::Float(f)) => Ok(Value::Int(f.ceil() as i64)),
+                    Some(Value::Int(i)) => Ok(Value::Int(*i)),
+                    _ => Ok(Value::Int(0)),
+                }
+            }
+            "pow" => {
+                match (args.first(), args.get(1)) {
+                    (Some(Value::Int(a)), Some(Value::Int(b))) => {
+                        Ok(Value::Int(a.wrapping_pow(*b as u32)))
+                    }
+                    (Some(Value::Float(a)), Some(Value::Float(b))) => Ok(Value::Float(a.powf(*b))),
+                    _ => Ok(Value::Int(0)),
+                }
+            }
+            "log" => {
+                match args.first() {
+                    Some(Value::Float(f)) => Ok(Value::Float(f.ln())),
+                    Some(Value::Int(i)) => Ok(Value::Float((*i as f64).ln())),
+                    _ => Ok(Value::Float(0.0)),
+                }
+            }
+            "exp" => {
+                match args.first() {
+                    Some(Value::Float(f)) => Ok(Value::Float(f.exp())),
+                    Some(Value::Int(i)) => Ok(Value::Float((*i as f64).exp())),
+                    _ => Ok(Value::Float(0.0)),
+                }
+            }
+            "assert" => {
+                match args.first() {
+                    Some(Value::Bool(true)) => Ok(Value::Unit),
+                    Some(Value::Bool(false)) => Err(VmError::TypeError("Assertion failed".to_string())),
+                    _ => Err(VmError::TypeError("assert requires a boolean".to_string())),
+                }
+            }
+            "panic" => {
+                let msg = args.first().map(|a| self.display_value(a)).unwrap_or_default();
+                Err(VmError::TypeError(format!("panic: {}", msg)))
+            }
+            "range" => {
+                match (args.first(), args.get(1)) {
+                    (Some(Value::Int(a)), Some(Value::Int(b))) => Ok(Value::Range(*a, *b)),
+                    _ => Ok(Value::Unit),
+                }
+            }
+            _ => {
+                // Unknown builtin — return Unit rather than crash
+                eprintln!("Warning: unknown builtin '{}', returning Unit", name);
+                Ok(Value::Unit)
+            }
+        }
+    }
+
+    /// Format a value for display
+    fn display_value(&self, value: &Value) -> String {
+        match value {
+            Value::Unit => "()".to_string(),
+            Value::Bool(b) => b.to_string(),
+            Value::Int(i) => i.to_string(),
+            Value::Float(f) => format!("{}", f),
+            Value::String(s) => s.clone(),
+            Value::Char(c) => c.to_string(),
+            Value::Function(idx) => format!("<function {}>", idx),
+            Value::Range(a, b) => format!("{}..{}", a, b),
+            Value::RangeInclusive(a, b) => format!("{}..={}", a, b),
+        }
     }
 
     /// Get resource usage statistics
