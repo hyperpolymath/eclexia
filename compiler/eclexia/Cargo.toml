@@ -32,6 +32,8 @@ eclexia-db = { path = "../eclexia-db" }
 eclexia-tiered = { path = "../eclexia-tiered" }
 eclexia-absinterp = { path = "../eclexia-absinterp" }
 eclexia-comptime = { path = "../eclexia-comptime" }
+eclexia-effects = { path = "../eclexia-effects" }
+eclexia-specialize = { path = "../eclexia-specialize" }
 
 notify = { workspace = true }
 clap = { workspace = true }

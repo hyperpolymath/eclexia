@@ -43,7 +43,7 @@ pub fn build(input: &Path, _output: Option<&Path>, _target: &str, analyze: bool)
 
     // Run analysis passes if requested
     if analyze {
-        run_mir_analysis(&mir_file);
+        run_mir_analysis(&mir_file, &file);
     }
 
     // Generate bytecode
@@ -77,7 +77,7 @@ pub fn build(input: &Path, _output: Option<&Path>, _target: &str, analyze: bool)
 }
 
 /// Run MIR-level analysis passes: constant folding, resource analysis, budget verification.
-fn run_mir_analysis(mir: &eclexia_mir::MirFile) {
+fn run_mir_analysis(mir: &eclexia_mir::MirFile, ast: &eclexia_ast::SourceFile) {
     println!("\n--- MIR Analysis ---");
 
     // Compile-time constant folding analysis
@@ -153,7 +153,38 @@ fn run_mir_analysis(mir: &eclexia_mir::MirFile) {
         }
     }
 
-    if comptime_verdicts.is_empty() && !has_resources && budget_verdicts.is_empty() {
+    // Binding-time analysis (specialization opportunities)
+    let mut specializable = 0usize;
+    let mut total_adaptive = 0usize;
+    for func in &mir.functions {
+        if func.is_adaptive {
+            total_adaptive += 1;
+            let param_bts = vec![eclexia_specialize::BindingTime::Dynamic; func.params.len()];
+            let env = eclexia_specialize::binding_time::analyze_function(func, mir, &param_bts);
+            if eclexia_specialize::binding_time::constraints_are_static(func, mir, &env) {
+                specializable += 1;
+            }
+        }
+    }
+    if total_adaptive > 0 {
+        println!("  Binding-time analysis: {}/{} adaptive function(s) specializable", specializable, total_adaptive);
+    }
+
+    // Effect signature analysis
+    let mut effect_registry = eclexia_effects::evidence::EffectRegistry::new();
+    for item in &ast.items {
+        if let eclexia_ast::Item::EffectDecl(decl) = item {
+            let sig = eclexia_effects::effect_signature_from_decl(decl);
+            effect_registry.register(sig);
+        }
+    }
+    if !effect_registry.is_empty() {
+        println!("  Effect signatures: {} effect(s) registered", effect_registry.len());
+    }
+
+    if comptime_verdicts.is_empty() && !has_resources && budget_verdicts.is_empty()
+        && total_adaptive == 0 && effect_registry.is_empty()
+    {
         println!("  No resource constraints to analyze");
     }
 
@@ -194,7 +225,11 @@ pub fn run(input: &Path, observe_shadow: bool, carbon_report: bool) -> miette::R
     }
 
     if observe_shadow {
-        println!("Shadow price observation: λ_energy=1.0, λ_latency=1.0, λ_carbon=1.0");
+        let registry = eclexia_runtime::ShadowPriceRegistry::new();
+        let energy = registry.get_price(&smol_str::SmolStr::new("energy"), eclexia_ast::dimension::Dimension::energy());
+        let time = registry.get_price(&smol_str::SmolStr::new("time"), eclexia_ast::dimension::Dimension::time());
+        let carbon = registry.get_price(&smol_str::SmolStr::new("carbon"), eclexia_ast::dimension::Dimension::carbon());
+        println!("Shadow price observation: λ_energy={:.6}, λ_time={:.6}, λ_carbon={:.6}", energy, time, carbon);
     }
 
     // Execute using the interpreter
@@ -231,7 +266,11 @@ fn run_bytecode(input: &Path, observe_shadow: bool, carbon_report: bool) -> miet
     println!("  {} function(s), {} string(s)", module.functions.len(), module.strings.len());
 
     if observe_shadow {
-        println!("Shadow price observation: λ_energy=1.0, λ_latency=1.0, λ_carbon=1.0");
+        let registry = eclexia_runtime::ShadowPriceRegistry::new();
+        let energy = registry.get_price(&smol_str::SmolStr::new("energy"), eclexia_ast::dimension::Dimension::energy());
+        let time = registry.get_price(&smol_str::SmolStr::new("time"), eclexia_ast::dimension::Dimension::time());
+        let carbon = registry.get_price(&smol_str::SmolStr::new("carbon"), eclexia_ast::dimension::Dimension::carbon());
+        println!("Shadow price observation: λ_energy={:.6}, λ_time={:.6}, λ_carbon={:.6}", energy, time, carbon);
     }
 
     // Execute through the VM

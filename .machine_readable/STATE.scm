@@ -18,20 +18,31 @@
 
   (current-position
     (phase "alpha")
-    (overall-completion 55)
+    (overall-completion 62)
     (components
       (lexer (completion 100) (status "complete - full tokenization with raw strings, hex/unicode escapes, doc comments"))
-      (parser (completion 100) (status "complete - 32/32 conformance, handle exprs, full use-trees, where clauses"))
-      (hir (completion 100) (status "complete - all patterns, match desugaring, for-loops, method calls, effects"))
-      (typeck (completion 100) (status "complete - traits, impls, modules, match arms, field types, generics"))
-      (interp (completion 100) (status "complete - casts, modules, trait dispatch, impl blocks, try operator"))
-      (mir (completion 100) (status "complete - break/continue labels, lambda, struct, try, tuple/array, pow"))
-      (codegen (completion 100) (status "complete - all instructions, switch, callindirect, range, cast, pow"))
-      (vm (completion 100) (status "complete - range values, callindirect, cast conversions, pow, field/index"))
-      (fmt (completion 100) (status "complete - trait, impl, module, effect, static, extern formatting"))
-      (lint (completion 100) (status "complete - 6 rules"))
-      (lsp (completion 100) (status "complete - 7 symbol kinds, all patterns, impl/import/extern indexing"))
-      (doc (completion 100) (status "complete - HTML/Markdown generation from doc comments")))
+      (parser (completion 95) (status "3106 lines, 52 unwrap calls on untrusted input"))
+      (hir (completion 95) (status "match desugaring, for-loops, effects all work"))
+      (typeck (completion 97) (status "Robinson unification, generics, Resource<D> types, casts, concurrency stubs, extern block signatures"))
+      (interp (completion 95) (status "tree-walking, 28 builtins, extern stubs, enum variant matching fixed"))
+      (mir (completion 90) (status "constant propagation, dead code elimination, block inlining"))
+      (codegen (completion 95) (status "all instructions, .eclb binary format, serde derives"))
+      (vm (completion 90) (status "stack-based, 934 lines, .eclb loading, disasm command"))
+      (fmt (completion 95) (status "trait, impl, module, effect, static, extern formatting"))
+      (lint (completion 90) (status "6 rules implemented"))
+      (lsp (completion 80) (status "diagnostics, completion, go-to-def, no resource-type awareness"))
+      (doc (completion 100) (status "HTML/Markdown generation from doc comments"))
+      (runtime-scheduler (completion 70) (status "shadow-price-aware scheduling, 4 tests"))
+      (runtime-profiler (completion 70) (status "wall-clock profiling, energy/carbon estimation, 6 tests"))
+      (runtime-carbon (completion 70) (status "grid intensity monitor, Green/Yellow/Red signals, 7 tests"))
+      (runtime-shadow (completion 70) (status "LP duality pricing, EMA smoothing, 8 tests"))
+      (reactive-absinterp (completion 80) (status "wired into CLI via build --analyze"))
+      (reactive-comptime (completion 80) (status "wired into CLI via build --analyze"))
+      (reactive-db (completion 60) (status "Salsa incremental, 8 tests, not wired to CLI"))
+      (reactive-modules (completion 60) (status "dep graph, parallel compilation, 21 tests, not wired"))
+      (reactive-effects (completion 60) (status "evidence passing, row polymorphism, 26 tests, not wired"))
+      (reactive-specialize (completion 60) (status "binding-time analysis, 14 tests, not wired"))
+      (reactive-tiered (completion 60) (status "tiered execution, PGO, 26 tests, not wired")))
     (working-features
       ("resource-tracking" "adaptive-functions" "pattern-matching"
        "type-casting" "assignment-statements" "range-operators"
@@ -40,7 +51,9 @@
        "trait-declarations" "impl-blocks" "module-declarations"
        "effect-declarations" "effect-handlers" "static-declarations"
        "extern-blocks" "break-continue-labels" "lambda-expressions"
-       "try-operator" "raw-strings" "doc-comments")))
+       "try-operator" "raw-strings" "doc-comments" "eclb-binary-format"
+       "build-analyze" "enum-variant-matching" "macro-system"
+       "concurrency-ast-nodes" "watch-mode" "disassembler")))
 
   (route-to-mvp
     (milestones
@@ -61,36 +74,53 @@
 
   (blockers-and-issues
     (critical)
-    (high)
-    (medium)
+    (high
+      ("5 reactive crates not yet wired into CLI"
+       "shadow prices hardcoded 1.0 — not connected to real VM metrics"))
+    (medium
+      ("code coverage at 17.92% (target 80%)"
+       "22 formal verification theorems Admitted (not proven)"
+       "native backends (LLVM/Cranelift/WASM) are stubs"))
     (low
-      ("LLVM/Cranelift backend not yet implemented"
-       "code coverage at 17.92% (target 80%)"
-       "8 formal verification theorems not yet mechanized")))
+      ("package registry server not deployed"
+       "concurrency interpreter stubs return errors")))
 
   (critical-next-actions
-    (immediate)
+    (immediate
+      ("wire remaining 5 reactive crates into CLI"
+       "connect shadow prices to real VM metrics"))
     (this-week
-      ("increase code coverage toward 80%"
-       "complete remaining formal proofs"))
+      ("create more working example programs"
+       "increase code coverage toward 80%"))
     (this-month
-      ("LLVM/Cranelift backend"
+      ("complete remaining formal proofs"
+       "LLVM/Cranelift backend"
        "community building and ecosystem growth")))
 
   (session-history
     ((date "2026-02-09")
-     (summary "Runtime stubs implemented, dimension check, seam fixes, docs honesty, interop bridges")
+     (summary "Sessions 6-8: .eclb format, doc honesty, unwrap fixes, verisimdb, reactive crate wiring, enum variant fix")
      (changes
-       ("Task 6: reqwest 0.11→0.12 (RUSTSEC-2025-0134), macro system added"
-        "Task 7: Documentation honesty pass — removed false 100% claims, fixed license"
-        "Task 8: Runtime stubs implemented — scheduler (4t), profiler (6t), carbon (7t), shadow (8t)"
-        "Task 9: Seam analysis — 8 issues found, 2 critical MIR panics fixed"
-        "Task 10: Nextgen interop bridge configs — WokeLang, Phronesis, betlang, AffineScript"
-        "Task 11: Resource<D> dimension comparison check, bytecode serde, 11 example programs"
-        "Tests: 271 lib (was 246), 32+19 conformance (0 skips, was 1)"
-        "Echidna verify: 5/6 QED (Layout.idr has 1 open goal), Coq needs coqc"
-        "panic-attack: 15 weak points (unchanged)"
+       ("Session 6: .eclb binary bytecode format (8-byte header + JSON body)"
+        "Session 6: Fixed 11 examples (def→fn syntax), dimension API rename"
+        "Session 7: Documentation honesty pass on 6 key docs"
+        "Session 7: Fixed 3 dangerous production unwraps (modules, REPL, LSP)"
+        "Session 7: Ingested eclexia scan into verisimdb-data"
+        "Session 7: Wired eclexia-absinterp + eclexia-comptime into build --analyze"
+        "Session 8: Fixed enum variant matching bug (unit variants as Pattern::Var)"
+        "Session 8: Fixed Value::Struct PartialEq (was always returning false)"
+        "panic-attack: 15 weak points, 327 unwraps, 28 unsafe, 48 panic sites"
         "All pushed to GitHub + GitLab")))
+    ((date "2026-02-09")
+     (summary "Sessions 1-5: Runtime stubs, dimension check, seam fixes, docs honesty, interop bridges")
+     (changes
+       ("Runtime stubs implemented — scheduler (4t), profiler (6t), carbon (7t), shadow (8t)"
+        "Seam analysis — 8 issues found, 2 critical MIR panics fixed"
+        "Documentation honesty pass — removed false 100% claims"
+        "Nextgen interop bridge configs — WokeLang, Phronesis, betlang, AffineScript"
+        "Resource<D> dimension comparison check, bytecode serde"
+        "271 lib tests, 32+19 conformance (0 skips)"
+        "Echidna verify: 5/6 QED")))
     ((date "2026-02-08")
      (summary "8-stage toolchain hardening: all components brought to 100%")
      (changes
