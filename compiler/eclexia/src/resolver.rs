@@ -239,7 +239,7 @@ impl Resolver {
 
         self.registry
             .entry(name)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(node);
     }
 

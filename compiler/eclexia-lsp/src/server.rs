@@ -500,7 +500,7 @@ impl LanguageServer for EclexiaLanguageServer {
                             label: keyword.to_string(),
                             label_details: None,
                             kind: Some(CompletionItemKind::KEYWORD),
-                            detail: Some(format!("keyword")),
+                            detail: Some("keyword".to_string()),
                             documentation: None,
                             deprecated: Some(false),
                             preselect: None,

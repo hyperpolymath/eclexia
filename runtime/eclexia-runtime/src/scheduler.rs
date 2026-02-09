@@ -131,7 +131,7 @@ impl Scheduler {
             .estimated_costs
             .iter()
             .map(|(dim, amount)| {
-                let price = prices.get_price(&SmolStr::new("_global"), dim.clone());
+                let price = prices.get_price(&SmolStr::new("_global"), *dim);
                 price * amount
             })
             .sum();

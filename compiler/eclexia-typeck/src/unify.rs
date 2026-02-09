@@ -88,7 +88,7 @@ impl TypeChecker<'_> {
                 for (a, b) in p1.iter().zip(p2.iter()) {
                     self.unify_with_occurs_check(a, b, span)?;
                 }
-                self.unify_with_occurs_check(&r1, &r2, span)
+                self.unify_with_occurs_check(r1, r2, span)
             }
 
             (Ty::Tuple(e1), Ty::Tuple(e2)) => {
@@ -107,7 +107,7 @@ impl TypeChecker<'_> {
             }
 
             (Ty::Array { elem: e1, .. }, Ty::Array { elem: e2, .. }) => {
-                self.unify_with_occurs_check(&e1, &e2, span)
+                self.unify_with_occurs_check(e1, e2, span)
             }
 
             (Ty::Named { name: n1, args: a1 }, Ty::Named { name: n2, args: a2 }) if n1 == n2 => {

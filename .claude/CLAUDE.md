@@ -1,17 +1,19 @@
 ## Current Session Status (Updated 2026-02-09)
 
-**Build Status:** 25 crates compiling, 271 lib tests passing, zero warnings
-**Panic-Attack:** 15 weak points (314 unwraps, 28 unsafe, 49 panic sites) — scan 2026-02-09
+**Build Status:** 25 crates compiling, 271 lib tests passing, zero warnings, zero clippy errors
+**Panic-Attack:** 15 weak points (331 unwraps, 28 unsafe, 48 panic sites) — scan 2026-02-09 session 6
 **Conformance:** 32/32 valid + 19/19 invalid passing (0 skips)
 **License:** All files PMPL-1.0-or-later
+**Examples:** 11 working .ecl programs in examples/
 
 **Core Compiler Pipeline (WORKING):**
 - Lexer (logos, 893 lines, 95+ tokens, 48 keywords) → Parser (Pratt, 3106 lines) → AST
 - TypeChecker (Robinson unification, 2210 lines) → HIR lowering → MIR lowering
-- Bytecode codegen → Stack-based VM (934 lines, full instruction set)
-- Tree-walking interpreter (separate path, 28 builtin tests)
-- `build` command uses full pipeline: Parse → TypeCheck → HIR → MIR → Bytecode
+- Bytecode codegen → Stack-based VM (934 lines, full instruction set) → .eclb serialization (serde)
+- Tree-walking interpreter (separate path, 28 builtin tests, extern block stubs)
+- `build` command uses full pipeline: Parse → TypeCheck → HIR → MIR → Bytecode (→ .eclb output)
 - `run` command uses interpreter with type checking
+- `run-bytecode` command loads and executes .eclb files
 - `debug` command uses full pipeline with interactive debugger
 
 **Developer Tooling:**
@@ -22,7 +24,8 @@
 - Package manager with registry client
 
 **Runtime:** Shadow prices, resource tracking, adaptive decision engine, scheduler, profiler, carbon monitor, shadow price engine
-**Standard Library:** core, collections, math, I/O, text, time (1280 lines .ecl)
+**Standard Library:** core, collections, math, I/O, text, time, async (7 modules, ~1420 lines .ecl)
+**Concurrency:** eclexia-async runtime (executor, channel, task, parallel, 10 tests)
 **Formal Verification:** Coq/Agda files present (1222 lines, some theorems Admitted)
 
 **Reactive Compiler Infrastructure (STRUCTURAL - not wired into main pipeline):**

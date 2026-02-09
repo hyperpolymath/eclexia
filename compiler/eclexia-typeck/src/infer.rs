@@ -22,7 +22,7 @@ impl TypeChecker<'_> {
         // Variables free in type but not in environment can be generalized
         let generalizable: Vec<SmolStr> = free_in_ty
             .difference(&free_in_env)
-            .map(|v| SmolStr::new(&format!("t{}", v.0)))
+            .map(|v| SmolStr::new(format!("t{}", v.0)))
             .collect();
 
         if generalizable.is_empty() {
@@ -100,7 +100,7 @@ impl TypeChecker<'_> {
     ) -> Ty {
         match ty {
             Ty::Var(v) => {
-                let name = SmolStr::new(&format!("t{}", v.0));
+                let name = SmolStr::new(format!("t{}", v.0));
                 subst.get(&name).cloned().unwrap_or_else(|| ty.clone())
             }
             Ty::Named { name, args } => Ty::Named {

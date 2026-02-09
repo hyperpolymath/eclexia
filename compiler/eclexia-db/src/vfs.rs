@@ -285,11 +285,10 @@ impl FileWatcher {
                     }
                 }
 
-                if !changeset.changes.is_empty() {
-                    if tx.send(changeset).is_err() {
+                if !changeset.changes.is_empty()
+                    && tx.send(changeset).is_err() {
                         break;
                     }
-                }
             }
         });
 

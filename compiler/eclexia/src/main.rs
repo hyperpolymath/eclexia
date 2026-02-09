@@ -45,6 +45,10 @@ enum Commands {
         /// Target platform (native, wasm)
         #[arg(short, long, default_value = "native")]
         target: String,
+
+        /// Run resource analysis and compile-time verification on MIR
+        #[arg(long)]
+        analyze: bool,
     },
 
     /// Build and run an Eclexia program
@@ -170,8 +174,8 @@ fn main() -> miette::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Build { input, output, target } => {
-            commands::build(&input, output.as_deref(), &target)?;
+        Commands::Build { input, output, target, analyze } => {
+            commands::build(&input, output.as_deref(), &target, analyze)?;
         }
         Commands::Run { input, observe_shadow, carbon_report } => {
             commands::run(&input, observe_shadow, carbon_report)?;

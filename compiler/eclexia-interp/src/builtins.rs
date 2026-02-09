@@ -1234,7 +1234,7 @@ fn builtin_str_to_lowercase(args: &[Value]) -> RuntimeResult<Value> {
     }
 
     match &args[0] {
-        Value::String(s) => Ok(Value::String(SmolStr::new(&s.to_lowercase()))),
+        Value::String(s) => Ok(Value::String(SmolStr::new(s.to_lowercase()))),
         other => Err(RuntimeError::type_error("string", other.type_name())),
     }
 }
@@ -1248,7 +1248,7 @@ fn builtin_str_to_uppercase(args: &[Value]) -> RuntimeResult<Value> {
     }
 
     match &args[0] {
-        Value::String(s) => Ok(Value::String(SmolStr::new(&s.to_uppercase()))),
+        Value::String(s) => Ok(Value::String(SmolStr::new(s.to_uppercase()))),
         other => Err(RuntimeError::type_error("string", other.type_name())),
     }
 }
@@ -1283,7 +1283,7 @@ fn builtin_time_now_ms(_args: &[Value]) -> RuntimeResult<Value> {
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|e| RuntimeError::custom(&format!("Time error: {}", e)))?;
+        .map_err(|e| RuntimeError::custom(format!("Time error: {}", e)))?;
 
     Ok(Value::Int(now.as_millis() as i64))
 }
@@ -1293,7 +1293,7 @@ fn builtin_time_unix_timestamp(_args: &[Value]) -> RuntimeResult<Value> {
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|e| RuntimeError::custom(&format!("Time error: {}", e)))?;
+        .map_err(|e| RuntimeError::custom(format!("Time error: {}", e)))?;
 
     Ok(Value::Int(now.as_secs() as i64))
 }
@@ -1324,7 +1324,7 @@ fn builtin_time_hour(_args: &[Value]) -> RuntimeResult<Value> {
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|e| RuntimeError::custom(&format!("Time error: {}", e)))?;
+        .map_err(|e| RuntimeError::custom(format!("Time error: {}", e)))?;
 
     // Simplified: hour from UTC (full impl would need timezone handling)
     let secs = now.as_secs();
@@ -1339,7 +1339,7 @@ fn builtin_time_day_of_week(_args: &[Value]) -> RuntimeResult<Value> {
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|e| RuntimeError::custom(&format!("Time error: {}", e)))?;
+        .map_err(|e| RuntimeError::custom(format!("Time error: {}", e)))?;
 
     let days = now.as_secs() / 86400;
     // Unix epoch (1970-01-01) was a Thursday (4), so add 4 and mod 7
@@ -2333,7 +2333,7 @@ fn builtin_set_from_array(args: &[Value]) -> RuntimeResult<Value> {
 /// Assert that a condition is true, panic if false.
 /// Usage: assert(condition, message)
 fn builtin_assert(args: &[Value]) -> RuntimeResult<Value> {
-    if args.len() < 1 {
+    if args.is_empty() {
         return Err(RuntimeError::custom("assert requires at least 1 argument (condition)"));
     }
 

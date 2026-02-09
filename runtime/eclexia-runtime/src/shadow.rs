@@ -182,7 +182,7 @@ impl ShadowPriceEngine {
             if let Some(&price) = result.prices.get(&constraint.name) {
                 dim_prices.push((
                     constraint.name.clone(),
-                    constraint.dimension.clone(),
+                    constraint.dimension,
                     price,
                 ));
             }

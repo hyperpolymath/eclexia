@@ -573,7 +573,7 @@ impl<'a> TypeChecker<'a> {
                     "Int" | "I64" => PrimitiveTy::Int,
                     _ => PrimitiveTy::Float,
                 };
-                Ty::Resource { base: base_ty, dimension: dimension.clone() }
+                Ty::Resource { base: base_ty, dimension: *dimension }
             }
             eclexia_ast::TypeKind::Reference { ty, mutable } => {
                 let inner_ty = self.resolve_ast_type(*ty);
@@ -1391,8 +1391,8 @@ impl<'a> TypeChecker<'a> {
                 let elem_ty = match ty {
                     Ty::Array { elem, .. } => (**elem).clone(),
                     _ => {
-                        let fresh = self.fresh_var();
-                        fresh
+                        
+                        self.fresh_var()
                     }
                 };
                 for pat in pats {

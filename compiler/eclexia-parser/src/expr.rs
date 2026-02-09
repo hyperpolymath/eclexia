@@ -170,7 +170,7 @@ impl<'src> Parser<'src> {
                     span,
                     kind: ExprKind::Binary { op, lhs, rhs },
                 };
-                return Ok(file.exprs.alloc(range_expr));
+                Ok(file.exprs.alloc(range_expr))
             }
 
             // Primary expressions

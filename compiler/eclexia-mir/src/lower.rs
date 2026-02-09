@@ -130,7 +130,7 @@ impl<'hir> LoweringContext<'hir> {
                 for solution in &func.solutions {
                     let mut solution_func = Function {
                         span: solution.span,
-                        name: SmolStr::new(&format!("{}_{}", func.name, solution.name)),
+                        name: SmolStr::new(format!("{}_{}", func.name, solution.name)),
                         params: Vec::new(),
                         return_ty: func.return_ty.clone(),
                         locals: Vec::new(),
@@ -484,7 +484,7 @@ impl<'hir> LoweringContext<'hir> {
                 if let Some(f) = &mut self.current_function {
                     f.locals.push(Local {
                         id: result_local,
-                        name: SmolStr::new(&format!("tmp{}", result_local)),
+                        name: SmolStr::new(format!("tmp{}", result_local)),
                         ty: expr.ty.clone(),
                         mutable: false,
                     });
@@ -508,7 +508,7 @@ impl<'hir> LoweringContext<'hir> {
                 if let Some(f) = &mut self.current_function {
                     f.locals.push(Local {
                         id: result_local,
-                        name: SmolStr::new(&format!("if_result{}", result_local)),
+                        name: SmolStr::new(format!("if_result{}", result_local)),
                         ty: expr.ty.clone(),
                         mutable: true,
                     });
@@ -622,7 +622,7 @@ impl<'hir> LoweringContext<'hir> {
                 if let Some(f) = &mut self.current_function {
                     f.locals.push(Local {
                         id: result_local,
-                        name: SmolStr::new(&format!("aggregate{}", result_local)),
+                        name: SmolStr::new(format!("aggregate{}", result_local)),
                         ty: expr.ty.clone(),
                         mutable: false,
                     });
@@ -683,7 +683,7 @@ impl<'hir> LoweringContext<'hir> {
                 if let Some(f) = &mut self.current_function {
                     f.locals.push(Local {
                         id: result_local,
-                        name: SmolStr::new(&format!("try_result{}", result_local)),
+                        name: SmolStr::new(format!("try_result{}", result_local)),
                         ty: expr.ty.clone(),
                         mutable: true,
                     });
@@ -815,7 +815,7 @@ impl<'hir> LoweringContext<'hir> {
 
             hir::ExprKind::Lambda { params, body } => {
                 // Generate a unique name for the lambda function
-                let lambda_name = SmolStr::new(&format!("__lambda_{}", self.lambda_counter));
+                let lambda_name = SmolStr::new(format!("__lambda_{}", self.lambda_counter));
                 self.lambda_counter += 1;
 
                 // Save the current lowering state
@@ -893,7 +893,7 @@ impl<'hir> LoweringContext<'hir> {
                 if let Some(f) = &mut self.current_function {
                     f.locals.push(Local {
                         id: result_local,
-                        name: SmolStr::new(&format!("struct_{}", name)),
+                        name: SmolStr::new(format!("struct_{}", name)),
                         ty: expr.ty.clone(),
                         mutable: false,
                     });

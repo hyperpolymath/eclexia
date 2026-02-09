@@ -309,7 +309,7 @@ pub enum TokenKind {
     /// Block doc comment (/** ... */)
     #[regex(r"/\*\*([^*]|\*[^/])*\*/", |lex| {
         let s = lex.slice();
-        SmolStr::new(&s[3..s.len()-2].trim())
+        SmolStr::new(s[3..s.len()-2].trim())
     })]
     BlockDocComment(SmolStr),
 
@@ -320,7 +320,7 @@ pub enum TokenKind {
     #[regex(r"[a-zA-Z_\u{80}-\u{10FFFF}][a-zA-Z0-9_\u{80}-\u{10FFFF}]*", |lex| {
         let s = lex.slice();
         // Verify first char is XID_Start, rest are XID_Continue
-        if s.chars().next().map_or(false, is_xid_start) &&
+        if s.chars().next().is_some_and(is_xid_start) &&
            s.chars().skip(1).all(is_xid_continue) {
             Some(SmolStr::new(s))
         } else {

@@ -208,7 +208,7 @@ impl DocGenerator {
                 item.name.to_lowercase()
             ));
         }
-        md.push_str("\n");
+        md.push('\n');
 
         // Item documentation
         for item in &self.items {

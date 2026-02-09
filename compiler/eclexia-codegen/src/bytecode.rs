@@ -308,9 +308,7 @@ impl BytecodeGenerator {
 
         // Map locals
         for (idx, local) in func.locals.iter().enumerate() {
-            if !self.local_map.contains_key(&local.id) {
-                self.local_map.insert(local.id, (func.params.len() + idx) as u32);
-            }
+            self.local_map.entry(local.id).or_insert_with(|| (func.params.len() + idx) as u32);
         }
 
         // Create labels for all blocks
@@ -364,7 +362,7 @@ impl BytecodeGenerator {
                 self.generate_value(value, out, mir, mir_func)?;
                 // Store to local
                 let local_idx = self.local_map.get(target)
-                    .ok_or_else(|| CodegenError::MissingLocal(*target))?;
+                    .ok_or(CodegenError::MissingLocal(*target))?;
                 out.push(Instruction::StoreLocal(*local_idx));
             }
 
@@ -395,7 +393,7 @@ impl BytecodeGenerator {
                 // Store result if target specified
                 if let Some(target) = target {
                     let local_idx = self.local_map.get(target)
-                        .ok_or_else(|| CodegenError::MissingLocal(*target))?;
+                        .ok_or(CodegenError::MissingLocal(*target))?;
                     out.push(Instruction::StoreLocal(*local_idx));
                 } else {
                     // Discard result
@@ -444,7 +442,7 @@ impl BytecodeGenerator {
         match value {
             Value::Local(local_id) => {
                 let local_idx = self.local_map.get(local_id)
-                    .ok_or_else(|| CodegenError::MissingLocal(*local_id))?;
+                    .ok_or(CodegenError::MissingLocal(*local_id))?;
                 out.push(Instruction::LoadLocal(*local_idx));
             }
 

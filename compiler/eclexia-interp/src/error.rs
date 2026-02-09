@@ -110,9 +110,7 @@ impl RuntimeError {
     pub fn type_error(expected: impl Into<String>, got: impl Into<String>) -> Self {
         let expected_str = expected.into();
         let got_str = got.into();
-        let hint = Some(format!(
-            "check that the value's type matches what is expected in this context"
-        ));
+        let hint = Some("check that the value's type matches what is expected in this context".to_string());
         Self::TypeError {
             expected: expected_str,
             got: got_str,

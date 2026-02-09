@@ -30,6 +30,8 @@ eclexia-doc = { path = "../eclexia-doc" }
 eclexia-runtime = { path = "../../runtime/eclexia-runtime" }
 eclexia-db = { path = "../eclexia-db" }
 eclexia-tiered = { path = "../eclexia-tiered" }
+eclexia-absinterp = { path = "../eclexia-absinterp" }
+eclexia-comptime = { path = "../eclexia-comptime" }
 
 notify = { workspace = true }
 clap = { workspace = true }

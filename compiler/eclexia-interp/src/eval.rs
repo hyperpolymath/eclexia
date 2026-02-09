@@ -1196,10 +1196,7 @@ impl Interpreter {
                                         if let ConstraintKind::Resource { resource, op, amount } = &constraint.kind {
                                             call_env.define(resource.clone(), Value::String(resource.clone()));
                                             if matches!(op, CompareOp::Lt | CompareOp::Le) {
-                                                match resource.as_str() {
-                                                    "energy" => fn_energy_limit = Some(amount.value),
-                                                    _ => {}
-                                                }
+                                                if resource.as_str() == "energy" { fn_energy_limit = Some(amount.value) }
                                             }
                                         }
                                     }
@@ -1815,10 +1812,8 @@ impl Interpreter {
                     if first_param.as_str() == "self" || first_param.as_str() == "&self" {
                         call_env.define(SmolStr::new("self"), receiver.clone());
                         arg_iter.next(); // skip receiver in args
-                    } else {
-                        if let Some(arg) = arg_iter.next() {
-                            call_env.define(first_param.clone(), arg.clone());
-                        }
+                    } else if let Some(arg) = arg_iter.next() {
+                        call_env.define(first_param.clone(), arg.clone());
                     }
                 }
 

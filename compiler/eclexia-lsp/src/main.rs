@@ -12,7 +12,7 @@ async fn main() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let (service, socket) = LspService::new(|client| eclexia_lsp::server::EclexiaLanguageServer::new(client));
+    let (service, socket) = LspService::new(eclexia_lsp::server::EclexiaLanguageServer::new);
 
     Server::new(stdin, stdout, socket).serve(service).await;
 }

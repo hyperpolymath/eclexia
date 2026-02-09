@@ -51,6 +51,7 @@ pub enum TaskState {
 
 /// Resource budget for a task.
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct ResourceBudget {
     /// Maximum energy this task may consume (Joules). None = unlimited.
     pub energy_limit: Option<f64>,
@@ -60,15 +61,6 @@ pub struct ResourceBudget {
     pub memory_limit: Option<f64>,
 }
 
-impl Default for ResourceBudget {
-    fn default() -> Self {
-        Self {
-            energy_limit: None,
-            carbon_limit: None,
-            memory_limit: None,
-        }
-    }
-}
 
 /// Error returned when joining a task that panicked or was cancelled.
 #[derive(Debug)]

@@ -132,7 +132,9 @@ impl AdaptiveDecisionEngine {
         }
 
         // Select based on criteria
-        let best = match &self.criteria {
+        
+
+        match &self.criteria {
             SelectionCriteria::MinimizeCost => {
                 self.select_min_cost(&viable, prices)
             }
@@ -160,9 +162,7 @@ impl AdaptiveDecisionEngine {
                     *carbon_weight,
                 )
             }
-        };
-
-        best
+        }
     }
 
     /// Select solution with minimum total cost

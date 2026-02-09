@@ -309,7 +309,7 @@ impl VirtualMachine {
     /// Execute the module's entry point
     pub fn run(&mut self) -> Result<Value, VmError> {
         let entry_idx = self.module.entry_point
-            .ok_or_else(|| VmError::MissingFunction(0))?;
+            .ok_or(VmError::MissingFunction(0))?;
 
         self.call_function(entry_idx, &[])?;
         self.execute()
@@ -459,7 +459,7 @@ impl VirtualMachine {
 
             Instruction::PushString(idx) => {
                 let s = self.module.strings.get(*idx)
-                    .ok_or_else(|| VmError::OutOfBounds { index: *idx, size: self.module.strings.len() })?;
+                    .ok_or(VmError::OutOfBounds { index: *idx, size: self.module.strings.len() })?;
                 self.push(Value::String(s.clone()))?;
                 Ok(ExecutionResult::Continue)
             }
@@ -474,7 +474,7 @@ impl VirtualMachine {
                 let local_idx = bp + (*idx as usize);
 
                 let value = self.locals.get(local_idx)
-                    .ok_or_else(|| VmError::OutOfBounds { index: local_idx, size: self.locals.len() })?
+                    .ok_or(VmError::OutOfBounds { index: local_idx, size: self.locals.len() })?
                     .clone();
 
                 self.push(value)?;

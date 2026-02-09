@@ -203,10 +203,10 @@ impl<'src> Parser<'src> {
                             let amount_token = self.advance();
                             let amount = match &amount_token.kind {
                                 TokenKind::Resource(r) => {
-                                    SmolStr::new(&format!("{}{}", r.value, r.unit))
+                                    SmolStr::new(format!("{}{}", r.value, r.unit))
                                 }
-                                TokenKind::Integer(n) => SmolStr::new(&n.to_string()),
-                                TokenKind::Float(f) => SmolStr::new(&f.to_string()),
+                                TokenKind::Integer(n) => SmolStr::new(n.to_string()),
+                                TokenKind::Float(f) => SmolStr::new(f.to_string()),
                                 _ => SmolStr::new("unknown"),
                             };
                             args.push(amount);
@@ -1822,9 +1822,9 @@ impl<'src> Parser<'src> {
                 let tok = self.advance();
                 let text = match &tok.kind {
                     TokenKind::Ident(s) => s.clone(),
-                    TokenKind::Integer(n) => SmolStr::new(&n.to_string()),
-                    TokenKind::Float(f) => SmolStr::new(&f.to_string()),
-                    TokenKind::String(s) => SmolStr::new(&format!("\"{}\"", s)),
+                    TokenKind::Integer(n) => SmolStr::new(n.to_string()),
+                    TokenKind::Float(f) => SmolStr::new(f.to_string()),
+                    TokenKind::String(s) => SmolStr::new(format!("\"{}\"", s)),
                     TokenKind::Plus => SmolStr::new("+"),
                     TokenKind::Minus => SmolStr::new("-"),
                     TokenKind::Star => SmolStr::new("*"),
@@ -1881,7 +1881,7 @@ impl<'src> Parser<'src> {
                     TokenKind::Use => SmolStr::new("use"),
                     TokenKind::Adaptive => SmolStr::new("adaptive"),
                     TokenKind::Macro => SmolStr::new("macro"),
-                    _ => SmolStr::new(&format!("{:?}", tok.kind)),
+                    _ => SmolStr::new(format!("{:?}", tok.kind)),
                 };
                 tokens.push(MacroToken::Literal(text));
             }

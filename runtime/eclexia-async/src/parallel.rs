@@ -130,7 +130,7 @@ impl<T: Send + Sync + Clone + 'static> ParallelIterator<T> {
             return self
                 .data
                 .into_iter()
-                .fold(identity, |acc, x| op(acc, x));
+                .fold(identity, &op);
         }
 
         let op = Arc::new(op);

@@ -72,6 +72,7 @@ pub enum OutputType {
 
 /// Resource limits.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct ResourceLimits {
     pub energy: Option<String>,
     pub time: Option<String>,
@@ -79,16 +80,6 @@ pub struct ResourceLimits {
     pub carbon: Option<String>,
 }
 
-impl Default for ResourceLimits {
-    fn default() -> Self {
-        Self {
-            energy: None,
-            time: None,
-            memory: None,
-            carbon: None,
-        }
-    }
-}
 
 /// Feature flags.
 #[derive(Debug, Clone, Serialize, Deserialize)]
