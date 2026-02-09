@@ -1490,7 +1490,19 @@ impl Interpreter {
     fn match_pattern(&self, pattern: &Pattern, value: &Value) -> Option<Vec<(SmolStr, Value)>> {
         match pattern {
             Pattern::Wildcard => Some(vec![]),
-            Pattern::Var(name) => Some(vec![(name.clone(), value.clone())]),
+            Pattern::Var(name) => {
+                // Check if this name is an enum variant (unit constructor) in the environment.
+                // If so, compare structurally instead of treating it as a variable binding.
+                if let Some(env_val) = self.global.get(name) {
+                    if let Value::Struct { fields, .. } = &env_val {
+                        if fields.is_empty() {
+                            // Unit enum variant: compare against the value
+                            return if env_val == *value { Some(vec![]) } else { None };
+                        }
+                    }
+                }
+                Some(vec![(name.clone(), value.clone())])
+            }
             Pattern::Literal(lit) => {
                 let lit_val = self.eval_literal(lit);
                 if lit_val == *value {

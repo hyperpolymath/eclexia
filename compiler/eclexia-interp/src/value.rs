@@ -316,6 +316,16 @@ impl PartialEq for Value {
             (Value::Tuple(a), Value::Tuple(b)) => a == b,
             (Value::Some(a), Value::Some(b)) => a == b,
             (Value::None, Value::None) => true,
+            (
+                Value::Struct {
+                    name: na,
+                    fields: fa,
+                },
+                Value::Struct {
+                    name: nb,
+                    fields: fb,
+                },
+            ) => na == nb && fa == fb,
             _ => false,
         }
     }

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
-// Mathematical computations in Eclexia
-
 fn factorial(n: Int) -> Int {
     if n <= 1 {
         1
@@ -46,38 +43,32 @@ fn is_prime(n: Int) -> Bool {
 }
 
 fn abs(x: Int) -> Int {
-    if x < 0 { -x } else { x }
+    if x < 0 {
+        -x
+    } else {
+        x
+    }
 }
 
 fn main() {
-    println("=== Math Showcase ===")
-
-    // Factorials
-    println("5! =", factorial(5))
-    println("10! =", factorial(10))
-
-    // Powers
-    println("2^10 =", power(2, 10))
-    println("3^5 =", power(3, 5))
-
-    // GCD
-    println("gcd(48, 18) =", gcd(48, 18))
-    println("gcd(100, 75) =", gcd(100, 75))
-
-    // Prime checking
-    println("")
-    println("Primes up to 30:")
-    let n = 2
+    println("=== Math Showcase ===");
+    println("5! =", factorial(5));
+    println("10! =", factorial(10));
+    println("2^10 =", power(2, 10));
+    println("3^5 =", power(3, 5));
+    println("gcd(48, 18) =", gcd(48, 18));
+    println("gcd(100, 75) =", gcd(100, 75));
+    println("");
+    println("Primes up to 30:");
+    let n = 2;
     while n <= 30 {
         if is_prime(n) {
             print(n, "")
-        }
-        n = n + 1
+        };
+        n = n + 1;
     }
-    println("")
-
-    // Absolute value
-    println("")
-    println("abs(-42) =", abs(-42))
+    println("");
+    println("");
+    println("abs(-42) =", abs(-42));
     println("abs(17) =", abs(17))
 }
