@@ -223,6 +223,7 @@ pub fn mount(selector: &str, html: &str) -> MountResult {
 /// Mount with pre-validated selector and HTML.
 ///
 /// On native, returns a simulated mount. On WASM, performs DOM operations.
+#[allow(unused_variables)]
 pub fn mount_validated(selector: &ValidatedSelector, html: &ValidatedHtml) -> MountResult {
     #[cfg(target_arch = "wasm32")]
     {

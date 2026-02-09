@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// A command represents a side effect to be performed
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Cmd<Msg> {
     /// No effect
     None,
@@ -19,13 +18,11 @@ pub enum Cmd<Msg> {
         method: String,
         url: String,
         body: Option<String>,
-        #[serde(skip)]
         on_response: Option<Box<dyn Fn(Result<String, String>) -> Msg + Send + Sync>>,
     },
     /// Timer that fires after delay_ms milliseconds
     Timer {
         delay_ms: u64,
-        #[serde(skip)]
         on_tick: Option<Box<dyn Fn() -> Msg + Send + Sync>>,
     },
     /// Custom command with serialized payload
@@ -35,6 +32,26 @@ pub enum Cmd<Msg> {
     },
 }
 
+impl<Msg> fmt::Debug for Cmd<Msg> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Cmd::None => write!(f, "Cmd::None"),
+            Cmd::Batch(cmds) => f.debug_tuple("Cmd::Batch").field(&cmds.len()).finish(),
+            Cmd::Http { method, url, .. } => f.debug_struct("Cmd::Http")
+                .field("method", method)
+                .field("url", url)
+                .finish(),
+            Cmd::Timer { delay_ms, .. } => f.debug_struct("Cmd::Timer")
+                .field("delay_ms", delay_ms)
+                .finish(),
+            Cmd::Custom { kind, payload } => f.debug_struct("Cmd::Custom")
+                .field("kind", kind)
+                .field("payload", payload)
+                .finish(),
+        }
+    }
+}
+
 impl<Msg> Default for Cmd<Msg> {
     fn default() -> Self {
         Cmd::None
@@ -42,7 +59,6 @@ impl<Msg> Default for Cmd<Msg> {
 }
 
 /// A subscription represents an ongoing event source
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Sub<Msg> {
     /// No subscription
     None,
@@ -51,16 +67,30 @@ pub enum Sub<Msg> {
     /// Timer subscription that fires every interval_ms
     OnTimer {
         interval_ms: u64,
-        #[serde(skip)]
         to_msg: Option<Box<dyn Fn(f64) -> Msg + Send + Sync>>,
     },
     /// DOM event subscription
     OnEvent {
         event_name: String,
         selector: String,
-        #[serde(skip)]
         to_msg: Option<Box<dyn Fn(String) -> Msg + Send + Sync>>,
     },
+}
+
+impl<Msg> fmt::Debug for Sub<Msg> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Sub::None => write!(f, "Sub::None"),
+            Sub::Batch(subs) => f.debug_tuple("Sub::Batch").field(&subs.len()).finish(),
+            Sub::OnTimer { interval_ms, .. } => f.debug_struct("Sub::OnTimer")
+                .field("interval_ms", interval_ms)
+                .finish(),
+            Sub::OnEvent { event_name, selector, .. } => f.debug_struct("Sub::OnEvent")
+                .field("event_name", event_name)
+                .field("selector", selector)
+                .finish(),
+        }
+    }
 }
 
 impl<Msg> Default for Sub<Msg> {
