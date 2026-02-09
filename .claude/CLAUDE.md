@@ -1,8 +1,8 @@
 ## Current Session Status (Updated 2026-02-09)
 
-**Build Status:** 25 crates compiling, 246 lib tests passing, zero warnings
+**Build Status:** 25 crates compiling, 271 lib tests passing, zero warnings
 **Panic-Attack:** 15 weak points (314 unwraps, 28 unsafe, 49 panic sites) — scan 2026-02-09
-**Conformance:** 32/32 valid tests passing
+**Conformance:** 32/32 valid + 19/19 invalid passing (0 skips)
 **License:** All files PMPL-1.0-or-later
 
 **Core Compiler Pipeline (WORKING):**
@@ -21,7 +21,7 @@
 - Debugger: breakpoints, step, continue, stack/locals/callstack/resources inspection
 - Package manager with registry client
 
-**Runtime:** Shadow prices, resource tracking, adaptive decision engine (872 lines)
+**Runtime:** Shadow prices, resource tracking, adaptive decision engine, scheduler, profiler, carbon monitor, shadow price engine
 **Standard Library:** core, collections, math, I/O, text, time (1280 lines .ecl)
 **Formal Verification:** Coq/Agda files present (1222 lines, some theorems Admitted)
 
@@ -38,11 +38,9 @@
 - eclexia-tiered: Tiered execution, PGO profiling, watch mode (26 tests)
 
 **Known Gaps:**
-- Runtime modules scheduler/profiler/carbon/shadow are 6-line stubs
 - Backend crates estimate sizes rather than generating real machine code
 - Reactive crates not yet wired into CLI commands
 - Formal verification has Admitted/unproven theorems
-- BytecodeModule does not implement Serialize (no bytecode file output yet)
 
 ---
 
