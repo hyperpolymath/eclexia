@@ -7,9 +7,9 @@ For detailed technical implementation plans, see [IMPLEMENTATION_ROADMAP.md](IMP
 
 == Current Status
 
-**Phase**: v0.1 - Initial Setup
-**Overall Completion**: 80%
-**Last Updated**: 2025-12-31
+**Phase**: v0.2 - Core Development
+**Overall Completion**: ~55%
+**Last Updated**: 2026-02-09
 
 ---
 
@@ -23,7 +23,7 @@ For detailed technical implementation plans, see [IMPLEMENTATION_ROADMAP.md](IMP
 - [x] Security documentation (SECURITY.md)
 - [x] Code of Conduct (CODE_OF_CONDUCT.md)
 - [x] Contributing guidelines (CONTRIBUTING.md)
-- [x] License setup (MIT OR PMPL-1.0-or-later dual license)
+- [x] License setup (PMPL-1.0-or-later)
 - [x] GitHub workflows (CodeQL, Dependabot)
 - [x] Issue templates (bug report, feature request, documentation, question)
 
@@ -43,15 +43,22 @@ For detailed technical implementation plans, see [IMPLEMENTATION_ROADMAP.md](IMP
 
 == In Progress
 
-=== v0.2.0 - Core Development
+=== v0.2.0 - Core Development (In Progress)
 
-- [ ] Define project scope and objectives
-- [ ] Establish core architecture
-- [ ] Set up development environment (flake.nix)
-- [ ] Create justfile for task automation
-- [ ] Add initial source code structure
-- [ ] Implement basic functionality
-- [ ] Add unit tests (target: 70% coverage)
+- [x] 25-crate Rust compiler architecture
+- [x] Lexer (logos, 893 lines, 95+ tokens)
+- [x] Parser (Pratt, 3106 lines, 32 valid + 19 invalid conformance tests)
+- [x] Type checker (Robinson unification, 2210 lines, dimensional types)
+- [x] HIR and MIR lowering
+- [x] Bytecode codegen and stack-based VM (934 lines)
+- [x] Tree-walking interpreter with builtins
+- [x] .eclb binary bytecode format
+- [x] LSP server, formatter, linter, debugger
+- [x] 271 lib tests passing, 0 conformance skips
+- [ ] Wire reactive compiler crates (salsa DB, modules, effects) into CLI
+- [ ] Reduce unwrap() calls in parser/interpreter
+- [ ] Link builtins into bytecode build path
+- [ ] Real codegen for backend crates (Cranelift, LLVM, WASM)
 
 ---
 
@@ -106,7 +113,7 @@ Following Rhodium Standard Repository guidelines:
 | Security policy | Complete | SECURITY.md with reporting process |
 | Code of Conduct | Complete | Contributor Covenant based |
 | Dependabot config | Complete | Weekly updates configured |
-| CodeQL analysis | Complete | JavaScript/TypeScript enabled |
+| CodeQL analysis | Complete | Rust/Actions enabled |
 | Multi-platform CI | Pending | Add Linux, macOS, Windows |
 | Signed commits | Recommended | Encouraged in contributing guide |
 
@@ -124,6 +131,6 @@ Have ideas for features or improvements?
 
 == Updates
 
-This roadmap is updated as the project evolves. See [STATE.scm](STATE.scm) for machine-readable project state.
+This roadmap is updated as the project evolves. See `.machine_readable/STATE.scm` for machine-readable project state.
 
-*Last reviewed: 2025-12-31*
+*Last reviewed: 2026-02-09*

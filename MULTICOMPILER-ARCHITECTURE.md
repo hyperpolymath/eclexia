@@ -3,6 +3,14 @@
 **Date:** 2026-02-07
 **Goal:** Universal compilation platform with domain-specific libraries that showcase Economics-as-Code
 
+> **VISION DOCUMENT (2026-02-09):** This document describes the **long-term
+> design vision** for Eclexia. Almost none of what is described here is
+> implemented yet. The current compiler has a bytecode VM backend only — the
+> LLVM, Cranelift, WASM, GPU, and Embedded backend crates exist as stubs that
+> estimate code sizes but produce no real machine code. The domain-specific
+> standard libraries (mobile, cloud, HPC, data science, embedded, web) do not
+> exist. Read this as an aspirational architecture document, not a status report.
+
 ---
 
 ## Executive Summary

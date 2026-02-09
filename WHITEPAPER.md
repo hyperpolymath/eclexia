@@ -8,6 +8,14 @@
 **Authors:** Jonathan D.A. Jewell
 **Status:** Research Preview
 
+> **Implementation note (2026-02-09):** This whitepaper describes the
+> theoretical foundation and design goals for Eclexia. As of this date,
+> the compiler implements the core type system (Hindley-Milner with
+> dimensional analysis) and a bytecode VM, but adaptive function dispatch,
+> carbon-aware scheduling, and shadow price optimisation are stub
+> implementations. The performance claims in Section 11 (Evaluation) are
+> **projected**, not measured — no benchmarks have been run yet.
+
 ---
 
 ## Abstract

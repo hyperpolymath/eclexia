@@ -7,9 +7,15 @@
 
 ## Executive Summary
 
-**Current Status:** Eclexia is 100% complete as a language but only has a **bytecode VM backend**. The compiler is ~10,000 lines of Rust across 63 files.
+> **Honesty note (2026-02-09):** This document was written when the project was
+> less mature and contains outdated claims. The language is ~55% complete, not
+> "100% complete". The frontend has known gaps (some MIR lowering panics,
+> builtins not linked into bytecode path, formal proofs have Admitted theorems).
+> Read this as a **vision/planning document**, not as a status report.
 
-**Self-Hosting Feasibility:** **MODERATE** - Language is feature-complete, but needs:
+**Current Status:** Eclexia has a working compiler pipeline (lexer → parser → typechecker → HIR → MIR → bytecode VM) plus a tree-walking interpreter. The compiler is ~25 crates of Rust. Many features described below as "complete" are partially implemented or stubbed.
+
+**Self-Hosting Feasibility:** **LONG-TERM** - Language needs significant work before self-hosting is realistic:
 1. FFI for calling C/system libraries
 2. Unsafe operations for low-level code
 3. Multiple backend implementations
@@ -27,28 +33,27 @@
 
 ### What Eclexia Has ✅
 
-**Frontend (100% Complete):**
-- ✅ Lexer (logos-based, Unicode support)
-- ✅ Parser (hand-written recursive descent, 32/32 conformance tests)
-- ✅ AST → HIR → MIR pipeline
-- ✅ Type checker (Hindley-Milner with dimensional types)
-- ✅ Resource tracking (energy, carbon, time, memory)
-- ✅ Adaptive functions with `@solution` blocks
+**Frontend (Mostly Working — ~75%):**
+- ✅ Lexer (logos-based, Unicode support, 95+ tokens)
+- ✅ Parser (Pratt parser, 3106 lines — 32 valid + 19 invalid conformance tests)
+- ⚠️ AST → HIR → MIR pipeline (works for core constructs; some MIR lowering panics on advanced features)
+- ✅ Type checker (Robinson unification with dimensional types, 2210 lines)
+- ⚠️ Resource tracking (runtime module exists, shadow prices hardcoded 1.0/1.0/1.0)
+- ⚠️ Adaptive functions (parser recognises syntax, runtime has stubs, no real dispatch)
 - ✅ Pattern matching, closures, generics, Option types
 
 **Backend (Partial):**
-- ✅ Bytecode VM (fully functional, debugger included)
-- ⚠️ Cranelift JIT (stub only - "not yet implemented")
-- ❌ LLVM backend (mentioned in docs, not implemented)
-- ❌ WebAssembly backend (mentioned in docs, not implemented)
+- ✅ Bytecode VM (934 lines, functional for pure computation)
+- ✅ .eclb binary format (header + JSON payload, round-trip verified)
+- ⚠️ Cranelift backend (stub — estimates sizes only, no real codegen)
+- ⚠️ LLVM backend (stub — estimates sizes only, no real codegen)
+- ⚠️ WASM backend (stub — estimates sizes only, no real codegen)
 - ❌ Native code generation (no x86/ARM/RISC-V codegen)
 
-**Tooling (100% Complete):**
-- ✅ REPL
-- ✅ LSP server (3.0MB binary)
-- ✅ Formatter
-- ✅ Linter
-- ✅ CLI with 12 commands
+**Tooling (Exists — completeness varies):**
+- ✅ REPL, LSP server, Formatter, Linter
+- ✅ CLI with 15 commands
+- ⚠️ Builtins not linked into bytecode build path
 
 ### What Eclexia Lacks for Self-Hosting ❌
 
