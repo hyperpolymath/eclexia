@@ -1,6 +1,6 @@
 # Type Theory and Categorical Semantics of Eclexia
 
-<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!-- SPDX-License-Identifier: PMPL-1.0-or-later -->
 <!-- SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell -->
 
 **Version:** 1.0
@@ -970,7 +970,7 @@ eval(e₁ e₂, ρ) = eval(e₁, ρ)(eval(e₂, ρ))
 
 **Document Version:** 1.0
 **Last Updated:** December 2025
-**License:** AGPL-3.0-or-later
+**License:** PMPL-1.0-or-later
 
 ```bibtex
 @techreport{eclexia2025theory,

@@ -82,6 +82,7 @@ impl<'a> Printer<'a> {
             Item::EffectDecl(decl) => self.format_effect_decl(decl, file),
             Item::StaticDecl(decl) => self.format_static_decl(decl, file),
             Item::ExternBlock(block) => self.format_extern_block(block, file),
+            Item::Error(_) => {} // Skip error items silently
         }
     }
 
@@ -677,6 +678,7 @@ impl<'a> Printer<'a> {
                 }
                 self.write(";");
             }
+            StmtKind::Error => {} // Skip error statements silently
         }
     }
 

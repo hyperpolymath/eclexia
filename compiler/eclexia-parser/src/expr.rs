@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Expression parsing using Pratt parsing for operators.
@@ -13,22 +13,39 @@ use crate::{Parser, ParseResult, ParseError};
 #[repr(u8)]
 #[allow(dead_code)]
 pub enum Precedence {
+    /// No precedence (lowest).
     None = 0,
-    Assignment = 1,   // =
-    Or = 2,           // or, ||
-    And = 3,          // and, &&
-    Equality = 4,     // ==, !=
-    Cast = 5,         // as
-    Comparison = 6,   // <, >, <=, >=
-    BitOr = 7,        // |
-    BitXor = 8,       // ^
-    BitAnd = 9,       // &
-    Shift = 10,       // <<, >>
-    Term = 11,        // +, -
-    Factor = 12,      // *, /, %
-    Power = 13,       // **
-    Unary = 14,       // !, -, ~
-    Call = 15,        // (), [], .
+    /// Assignment precedence (`=`).
+    Assignment = 1,
+    /// Logical OR precedence (`or`, `||`).
+    Or = 2,
+    /// Logical AND precedence (`and`, `&&`).
+    And = 3,
+    /// Equality comparison precedence (`==`, `!=`).
+    Equality = 4,
+    /// Type cast precedence (`as`).
+    Cast = 5,
+    /// Relational comparison precedence (`<`, `>`, `<=`, `>=`).
+    Comparison = 6,
+    /// Bitwise OR precedence (`|`).
+    BitOr = 7,
+    /// Bitwise XOR precedence (`^`).
+    BitXor = 8,
+    /// Bitwise AND precedence (`&`).
+    BitAnd = 9,
+    /// Bit shift precedence (`<<`, `>>`).
+    Shift = 10,
+    /// Additive precedence (`+`, `-`).
+    Term = 11,
+    /// Multiplicative precedence (`*`, `/`, `%`).
+    Factor = 12,
+    /// Exponentiation precedence (`**`).
+    Power = 13,
+    /// Unary operator precedence (`!`, `-`, `~`).
+    Unary = 14,
+    /// Call and member access precedence (`()`, `[]`, `.`).
+    Call = 15,
+    /// Primary expression precedence (highest).
     Primary = 16,
 }
 

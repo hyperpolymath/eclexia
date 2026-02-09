@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Dimensional analysis for resource types.
@@ -529,9 +529,9 @@ pub fn parse_unit(suffix: &str) -> Option<&'static Unit> {
         "mW" => Some(&units::MILLIWATT),
         "kW" => Some(&units::KILOWATT),
         // Carbon
-        "gCO2e" => Some(&units::GRAM_CO2E),
-        "kgCO2e" => Some(&units::KILOGRAM_CO2E),
-        "tCO2e" => Some(&units::TONNE_CO2E),
+        "gCO2" | "gCO2e" => Some(&units::GRAM_CO2E),
+        "kgCO2" | "kgCO2e" => Some(&units::KILOGRAM_CO2E),
+        "tCO2" | "tCO2e" => Some(&units::TONNE_CO2E),
         // Memory
         "b" => Some(&units::BIT),
         "B" => Some(&units::BYTE),

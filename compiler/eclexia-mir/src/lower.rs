@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! HIR to MIR lowering.
@@ -32,6 +32,7 @@ pub struct LoweringContext<'hir> {
 }
 
 impl<'hir> LoweringContext<'hir> {
+    /// Create a new MIR lowering context from a HIR file
     pub fn new(hir: &'hir hir::HirFile) -> Self {
         let mut function_names = FxHashMap::default();
 
@@ -163,8 +164,9 @@ impl<'hir> LoweringContext<'hir> {
             }
             hir::Item::TypeDef(_) | hir::Item::Const(_)
             | hir::Item::TraitDecl { .. } | hir::Item::ImplBlock { .. }
-            | hir::Item::Module { .. } | hir::Item::Static { .. } => {
-                // Type definitions, constants, and declarations don't produce MIR functions
+            | hir::Item::Module { .. } | hir::Item::Static { .. }
+            | hir::Item::Error(_) => {
+                // Type definitions, constants, declarations, and error items don't produce MIR functions
             }
         }
     }
@@ -365,6 +367,9 @@ impl<'hir> LoweringContext<'hir> {
                     let dead_block = self.alloc_block(SmolStr::new("post_continue"));
                     self.current_block = Some(dead_block);
                 }
+            }
+            hir::StmtKind::Error => {
+                // Error statements are silently skipped during lowering
             }
         }
     }

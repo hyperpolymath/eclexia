@@ -239,38 +239,38 @@ adaptive def compress(image: Image) -> CompressedImage
     @solution "balanced": { /* ... */ }
 }
 
-📊 Benchmarks & Results
+📊 Expected Benefits (Projected)
 
-Eclexia delivers measurable benefits:
+NOTE: These are theoretical projections based on the language design. Measured benchmarks are not yet available.
 
 Metric
-Improvement
+Expected Improvement
 Workload
 
 Energy Reduction
-20-40%
+20-40% (projected)
 Typical web server
 
 Battery Life
-+25-35%
++25-35% (projected)
 Mobile applications
 
 Carbon Footprint
-40-60%
+40-60% (projected)
 With carbon-aware scheduling
 
 Developer Time
-50-70% less
+50-70% less (projected)
 Optimization vs. manual tuning
 
-See benchmarks/ for detailed results and methodology.
+Benchmarking infrastructure exists (`eclexia bench`) but comprehensive results have not yet been measured.
 
 🧪 Research & Formal Foundations
 
 Eclexia is built on solid theoretical foundations:
 Formal Proofs
 
-We provide mathematical proofs for:
+Coq and Agda files are present (1222 lines). Some theorems are fully proved; others are `Admitted` (assumed without proof) and remain to be completed. The proofs address:
 
 Type Safety (progress & preservation)
 
@@ -466,80 +466,73 @@ Contact: licensing@eclexia.org
 
 🚧 Roadmap
 
-Phase 1: Research Preview (Q4 2025) - ✅ 100% Complete
+Phase 1: Core Compiler (Q4 2025) — Complete
 
-✅ White paper published
-
-✅ Formal proofs (20+ theorems, 12 fully proved)
-
-✅ Language specification v1.0
-
-✅ Reference compiler (complete)
-  - ✅ Lexer with dimensional literals
-  - ✅ Recursive descent parser
-  - ✅ Hindley-Milner type checker with dimensional analysis
-  - ✅ HIR lowering
-  - ✅ MIR with optimizations (constant propagation, dead code elimination, block inlining)
-  - ✅ Bytecode generator
-  - ✅ Virtual machine with resource tracking
-  - ✅ Runtime with shadow prices and adaptive engine
-
-✅ Standard library (95% - core, collections, math, I/O, text, time)
-
+✅ Language specification (draft)
+✅ Core compiler pipeline (Lexer → Parser → AST → TypeCheck → HIR → MIR → Bytecode → VM)
+  - ✅ Lexer with 95+ token types including dimensional literals (893 lines)
+  - ✅ Pratt parser with full expression and item parsing (3106 lines)
+  - ✅ Hindley-Milner type checker with Robinson unification (2210 lines)
+  - ✅ HIR lowering (desugaring, type annotations)
+  - ✅ MIR lowering (CFG representation, basic optimizations)
+  - ✅ Bytecode code generator
+  - ✅ Stack-based VM with resource tracking (934 lines)
+  - ✅ Tree-walking interpreter (separate execution path, 28 builtin tests)
+✅ Standard library (6 modules: core, collections, math, I/O, text, time — 1280 lines .ecl)
 ✅ Developer toolchain
-  - ✅ CLI (build, run, check, fmt, repl, init, test, bench, doc)
+  - ✅ CLI (build, run, check, fmt, lint, repl, init, new, test, bench, debug, doc, install)
+  - ✅ Project minter with 10 templates (bin, lib, web, cli, mcp, ssg, lsp, tool, framework, db-connector)
   - ✅ REPL with expression evaluation
-  - ✅ Testing framework (96 tests: conformance, property-based, integration)
-  - ✅ Benchmarking framework (#[bench] attributes)
-  - ✅ Package manager (manifest parsing, dependency resolution)
-  - ✅ LSP server (diagnostics, symbols, navigation, hover, completion)
-  - ✅ Formatter (AST pretty printer with economics-aware formatting)
-  - ✅ Linter (10+ rules for code quality and economics)
-  - ✅ Debugger (interactive with economics inspection)
-  - ✅ VSCode extension (syntax highlighting + LSP)
+  - ✅ Test runner and benchmark runner
+  - ✅ Package manager (manifest parsing, dependency resolution — registry is stub)
+  - ✅ LSP server (diagnostics, completion, go-to-def, references, symbols, hover, rename, signature help, formatting)
+  - ✅ Formatter (eclexia-fmt: functions, traits, impls, modules, effects)
+  - ✅ Linter (configurable rules)
+  - ✅ Interactive debugger (breakpoints, step, continue, stack/locals/callstack/resources inspection)
+✅ 233 library tests passing, zero warnings, 25 crates compiling
+✅ Documentation (specification, getting started guide, whitepaper, theory)
 
-✅ Documentation (42,000+ words)
-  - ✅ 4 comprehensive tutorials (Getting Started, Resource-Aware, Advanced Types, Economics-as-Code)
-  - ✅ API documentation generator (eclexia-doc)
-  - ✅ Language reference manual with EBNF grammar
-  - ✅ 6 stdlib modules documented
+Phase 2: Ecosystem Foundation (Q1–Q2 2026) — In Progress
 
-✅ Formal verification
-  - ✅ 20+ theorems (12 fully proved in Coq/Agda)
-  - ✅ Shadow price correctness proofs
-  - ✅ Type system soundness proofs
-  - ✅ Resource tracking soundness proofs
+✅ License migration to PMPL-1.0-or-later
+🔄 Core ecosystem libraries (json, http, crypto, regex, log — not yet started)
+🔄 TEA web framework (planned)
+🔄 Database connectors (Idris2 ABI + Zig FFI pattern — templates ready)
+🔄 Package registry (HTTP client exists, server not yet deployed)
+🔄 Playground / web REPL (not yet started)
+🔄 Eclexia website (not yet started)
+🔄 odds-and-sods-package-manager integration (adapter pattern identified)
+🔄 Codebase annotation coverage improvement
 
-✅ Deployment infrastructure
-  - ✅ Docker (multi-stage, 25MB image)
-  - ✅ Kubernetes (StatefulSet, persistent shadow prices)
-  - ✅ Guix (reproducible builds)
+Phase 3: Advanced Compiler (Q3 2026)
 
-Phase 2: Alpha Release (Q1 2026) - 95% Complete
+Reactive compilation via Salsa incremental database (structural crates exist, not wired in)
+Parallel module compilation
+Error recovery for resilient parsing
+Compile-time evaluation (comptime)
+Abstract interpretation for resource analysis
+Algebraic effect compilation (evidence-passing)
+Partial evaluation and adaptive specialization
 
-✅ Optimizing compiler (MIR optimizations complete)
-✅ Runtime with shadow prices (complete)
-✅ IDE plugin (LSP server + VSCode extension complete)
-✅ Testing infrastructure (96 tests, 17.92% coverage)
-✅ Documentation system (complete)
-✅ Deployment infrastructure (Docker, Kubernetes, Guix)
-🔄 Package registry client (HTTP API TODO)
-🔄 Code coverage improvement (17.92% → 80%)
+Phase 4: Multi-Target + Production (Q4 2026)
 
-Phase 3: Beta Release (Q2 2026)
+Native backends (Cranelift for dev, LLVM for release — currently stubs that estimate sizes)
+WebAssembly backend (currently stub)
+Tiered execution (interpreter → VM → Cranelift → LLVM)
+Profile-guided optimization
+BytecodeModule serialization (file output)
+Formal verification completion (some Coq/Agda theorems currently Admitted)
+Production deployment infrastructure (Docker/Kubernetes manifests exist, untested)
 
-Production-ready compiler
-Advanced optimizations
-Carbon-aware scheduling
-Comprehensive stdlib
-Documentation complete
+Known Limitations (Current)
 
-Phase 4: 1.0 Release (Q3 2026)
-
-Stable language spec
-Performance competitive with Rust/C++
-Rich ecosystem (libraries, tools)
-Enterprise support available
+Backends (Cranelift, LLVM, WASM) are structural stubs — they estimate code sizes, not generate real machine code
+Runtime modules (scheduler, profiler, carbon, shadow) are 6-line stubs
+10 reactive compiler crates exist structurally but are not wired into CLI commands
+BytecodeModule does not implement Serialize (no bytecode file output yet)
+Package registry server does not exist yet (client is a stub)
+Formal verification has Admitted/unproven theorems
+No benchmarks with measured results yet (projections only)
 
 🙏 Acknowledgments
 

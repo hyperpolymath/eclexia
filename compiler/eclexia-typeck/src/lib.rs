@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Type checker for the Eclexia programming language.
@@ -35,6 +35,8 @@ pub struct TypeChecker<'a> {
     next_var: u32,
     /// Collected errors
     errors: Vec<TypeError>,
+    /// In-scope type parameters (e.g., T, U in generic functions)
+    type_param_scope: FxHashMap<SmolStr, Ty>,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -63,6 +65,42 @@ impl<'a> TypeChecker<'a> {
         env.insert_mono(SmolStr::new("range"), Ty::Function {
             params: vec![Ty::Primitive(PrimitiveTy::Int), Ty::Primitive(PrimitiveTy::Int)],
             ret: Box::new(Ty::Array { elem: Box::new(Ty::Primitive(PrimitiveTy::Int)), size: None }),
+        });
+
+        // Core builtins: assert, panic
+        env.insert_mono(SmolStr::new("assert"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::Bool)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+        });
+        env.insert_mono(SmolStr::new("panic"), Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::String)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+        });
+
+        // Resource intrinsics
+        env.insert_mono(SmolStr::new("shadow_price"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::Float)),
+        });
+
+        // Option constructors
+        env.insert_mono(SmolStr::new("Some"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Named { name: SmolStr::new("Option"), args: vec![Ty::Var(TypeVar::new(0))] }),
+        });
+        env.insert_mono(SmolStr::new("None"), Ty::Named {
+            name: SmolStr::new("Option"),
+            args: vec![Ty::Var(TypeVar::new(0))],
+        });
+
+        // Result constructors
+        env.insert_mono(SmolStr::new("Ok"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Named { name: SmolStr::new("Result"), args: vec![Ty::Var(TypeVar::new(0)), Ty::Var(TypeVar::new(1))] }),
+        });
+        env.insert_mono(SmolStr::new("Err"), Ty::Function {
+            params: vec![Ty::Var(TypeVar::new(0))],
+            ret: Box::new(Ty::Named { name: SmolStr::new("Result"), args: vec![Ty::Var(TypeVar::new(0)), Ty::Var(TypeVar::new(1))] }),
         });
 
         // Collection builtins: HashMap
@@ -224,6 +262,7 @@ impl<'a> TypeChecker<'a> {
             substitution: FxHashMap::default(),
             next_var: 100,
             errors: Vec::new(),
+            type_param_scope: FxHashMap::default(),
         }
     }
 
@@ -261,7 +300,11 @@ impl<'a> TypeChecker<'a> {
                 self.env.insert_mono(func.name.clone(), ty);
             }
             Item::Const(c) => {
-                let ty = self.fresh_var();
+                let ty = if let Some(ty_id) = c.ty {
+                    self.resolve_ast_type(ty_id)
+                } else {
+                    self.fresh_var()
+                };
                 self.env.insert_mono(c.name.clone(), ty);
             }
             Item::TypeDef(td) => {
@@ -287,6 +330,7 @@ impl<'a> TypeChecker<'a> {
                 self.env.insert_mono(s.name.clone(), ty);
             }
             Item::EffectDecl(_) | Item::ExternBlock(_) => {}
+            Item::Error(_) => {}
         }
     }
 
@@ -382,6 +426,13 @@ impl<'a> TypeChecker<'a> {
 
     /// Get the function type from a function definition.
     fn function_type(&mut self, func: &Function) -> Ty {
+        // Register generic type parameters as fresh type variables
+        self.type_param_scope.clear();
+        for tp in &func.type_params {
+            let var = self.fresh_var();
+            self.type_param_scope.insert(tp.clone(), var);
+        }
+
         let params: Vec<Ty> = func.params.iter().map(|p| {
             if let Some(ty_id) = p.ty {
                 self.resolve_ast_type(ty_id)
@@ -397,6 +448,8 @@ impl<'a> TypeChecker<'a> {
             self.fresh_var()
         };
 
+        self.type_param_scope.clear();
+
         Ty::Function {
             params,
             ret: Box::new(ret),
@@ -405,6 +458,9 @@ impl<'a> TypeChecker<'a> {
 
     /// Get the function type from an adaptive function definition.
     fn adaptive_function_type(&mut self, func: &AdaptiveFunction) -> Ty {
+        // Adaptive functions may also have type params (clear scope)
+        self.type_param_scope.clear();
+
         let params: Vec<Ty> = func.params.iter().map(|p| {
             if let Some(ty_id) = p.ty {
                 self.resolve_ast_type(ty_id)
@@ -437,23 +493,27 @@ impl<'a> TypeChecker<'a> {
         match &ty.kind {
             eclexia_ast::TypeKind::Named { name, args } => {
                 if args.is_empty() {
+                    // Check if this is a generic type parameter
+                    if let Some(ty) = self.type_param_scope.get(name) {
+                        return ty.clone();
+                    }
                     match name.as_str() {
-                        "Int" => Ty::Primitive(PrimitiveTy::Int),
-                        "Float" => Ty::Primitive(PrimitiveTy::Float),
-                        "Bool" => Ty::Primitive(PrimitiveTy::Bool),
-                        "String" => Ty::Primitive(PrimitiveTy::String),
-                        "Char" => Ty::Primitive(PrimitiveTy::Char),
-                        "Unit" => Ty::Primitive(PrimitiveTy::Unit),
-                        "I8" => Ty::Primitive(PrimitiveTy::I8),
-                        "I16" => Ty::Primitive(PrimitiveTy::I16),
-                        "I32" => Ty::Primitive(PrimitiveTy::I32),
-                        "I64" => Ty::Primitive(PrimitiveTy::I64),
-                        "U8" => Ty::Primitive(PrimitiveTy::U8),
-                        "U16" => Ty::Primitive(PrimitiveTy::U16),
-                        "U32" => Ty::Primitive(PrimitiveTy::U32),
-                        "U64" => Ty::Primitive(PrimitiveTy::U64),
-                        "F32" => Ty::Primitive(PrimitiveTy::F32),
-                        "F64" => Ty::Primitive(PrimitiveTy::F64),
+                        "Int" | "int" => Ty::Primitive(PrimitiveTy::Int),
+                        "Float" | "float" => Ty::Primitive(PrimitiveTy::Float),
+                        "Bool" | "bool" => Ty::Primitive(PrimitiveTy::Bool),
+                        "String" | "string" => Ty::Primitive(PrimitiveTy::String),
+                        "Char" | "char" => Ty::Primitive(PrimitiveTy::Char),
+                        "Unit" | "unit" => Ty::Primitive(PrimitiveTy::Unit),
+                        "I8" | "i8" => Ty::Primitive(PrimitiveTy::I8),
+                        "I16" | "i16" => Ty::Primitive(PrimitiveTy::I16),
+                        "I32" | "i32" => Ty::Primitive(PrimitiveTy::I32),
+                        "I64" | "i64" => Ty::Primitive(PrimitiveTy::I64),
+                        "U8" | "u8" => Ty::Primitive(PrimitiveTy::U8),
+                        "U16" | "u16" => Ty::Primitive(PrimitiveTy::U16),
+                        "U32" | "u32" => Ty::Primitive(PrimitiveTy::U32),
+                        "U64" | "u64" => Ty::Primitive(PrimitiveTy::U64),
+                        "F32" | "f32" => Ty::Primitive(PrimitiveTy::F32),
+                        "F64" | "f64" => Ty::Primitive(PrimitiveTy::F64),
                         _ => Ty::Named { name: name.clone(), args: vec![] },
                     }
                 } else {
@@ -552,6 +612,7 @@ impl<'a> TypeChecker<'a> {
             Item::TraitDecl(_)
             | Item::EffectDecl(_)
             | Item::ExternBlock(_) => {}
+            Item::Error(_) => {}
         }
     }
 
@@ -731,6 +792,7 @@ impl<'a> TypeChecker<'a> {
             StmtKind::Continue { label: _ } => {
                 // Nothing to type-check
             }
+            StmtKind::Error => {}
         }
     }
 
@@ -1393,8 +1455,7 @@ impl<'a> TypeChecker<'a> {
             }
             BinaryOp::Range | BinaryOp::RangeInclusive => {
                 // Range operators: 0..5 or 0..=5
-                // For now, we require both sides to be integers and return a generic type
-                // TODO: Implement proper Range<T> type
+                // For now, we require both sides to be integers and return an iterable
                 if !self.is_integer(lhs) || !self.is_integer(rhs) {
                     self.errors.push(TypeError::Custom {
                         span,
@@ -1403,9 +1464,8 @@ impl<'a> TypeChecker<'a> {
                     });
                     return Ty::Error;
                 }
-                // Return an opaque "Range" type for now
-                // This allows ranges to be used in for loops
-                lhs.clone()
+                // Return Array<Int> so ranges work in for loops
+                Ty::Array { elem: Box::new(lhs.clone()), size: None }
             }
         }
     }
@@ -1459,7 +1519,7 @@ impl<'a> TypeChecker<'a> {
                     // Validate that the resource name is known
                     let dimension = match resource.as_str() {
                         "energy" => Dimension::energy(),
-                        "time" => Dimension::time(),
+                        "time" | "latency" => Dimension::time(),
                         "memory" => Dimension::memory(),
                         "carbon" => Dimension::carbon(),
                         "power" => Dimension::power(),
@@ -1467,7 +1527,7 @@ impl<'a> TypeChecker<'a> {
                             self.errors.push(TypeError::ResourceViolation {
                                 span: constraint.span,
                                 message: format!("unknown resource type '{}'", other),
-                                hint: Some("valid resource types are: energy, time, memory, carbon, power".to_string()),
+                                hint: Some("valid resource types are: energy, time, latency, memory, carbon, power".to_string()),
                             });
                             continue;
                         }
@@ -1510,7 +1570,7 @@ impl<'a> TypeChecker<'a> {
             // Validate that the resource name is known
             let dimension = match provision.resource.as_str() {
                 "energy" => Dimension::energy(),
-                "time" => Dimension::time(),
+                "time" | "latency" => Dimension::time(),
                 "memory" => Dimension::memory(),
                 "carbon" => Dimension::carbon(),
                 "power" => Dimension::power(),
@@ -1518,7 +1578,7 @@ impl<'a> TypeChecker<'a> {
                     self.errors.push(TypeError::ResourceViolation {
                         span: provision.span,
                         message: format!("unknown resource type '{}'", other),
-                        hint: Some("valid resource types are: energy, time, memory, carbon, power".to_string()),
+                        hint: Some("valid resource types are: energy, time, latency, memory, carbon, power".to_string()),
                     });
                     continue;
                 }

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! AST to HIR lowering.
@@ -139,6 +139,7 @@ impl<'a> LoweringContext<'a> {
                     mutable: s.mutable,
                 }
             }
+            ast::Item::Error(span) => Item::Error(*span),
         }
     }
 
@@ -717,6 +718,7 @@ impl<'a> LoweringContext<'a> {
 
                 StmtKind::Expr(block_expr)
             }
+            ast::StmtKind::Error => StmtKind::Error,
         };
 
         self.hir.stmts.alloc(Stmt {

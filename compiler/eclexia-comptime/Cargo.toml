@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+
+[package]
+name = "eclexia-comptime"
+description = "Compile-time evaluation and constant folding for Eclexia"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+eclexia-ast = { path = "../eclexia-ast" }
+eclexia-hir = { path = "../eclexia-hir" }
+eclexia-mir = { path = "../eclexia-mir" }
+
+smol_str = { workspace = true }
+rustc-hash = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+la-arena = { workspace = true }

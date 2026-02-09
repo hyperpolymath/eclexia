@@ -23,7 +23,7 @@ For detailed technical implementation plans, see [IMPLEMENTATION_ROADMAP.md](IMP
 - [x] Security documentation (SECURITY.md)
 - [x] Code of Conduct (CODE_OF_CONDUCT.md)
 - [x] Contributing guidelines (CONTRIBUTING.md)
-- [x] License setup (MIT OR AGPL-3.0-or-later dual license)
+- [x] License setup (MIT OR PMPL-1.0-or-later dual license)
 - [x] GitHub workflows (CodeQL, Dependabot)
 - [x] Issue templates (bug report, feature request, documentation, question)
 

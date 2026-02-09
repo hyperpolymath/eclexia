@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Source span tracking for error reporting.
@@ -150,7 +150,9 @@ impl Span {
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Spanned<T> {
+    /// Source location of the spanned value
     pub span: Span,
+    /// The wrapped value
     pub value: T,
 }
 

@@ -19,6 +19,16 @@ members = [
     "compiler/eclexia-doc",
     "runtime/eclexia-runtime",
     "compiler/eclexia-lsp",
+    "compiler/eclexia-db",
+    "compiler/eclexia-modules",
+    "compiler/eclexia-comptime",
+    "compiler/eclexia-absinterp",
+    "compiler/eclexia-effects",
+    "compiler/eclexia-specialize",
+    "compiler/eclexia-cranelift",
+    "compiler/eclexia-llvm",
+    "compiler/eclexia-wasm",
+    "compiler/eclexia-tiered",
 ]
 
 [workspace.package]
@@ -28,7 +38,7 @@ authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
 license = "PMPL-1.0-or-later"
 repository = "https://gitlab.com/eclexia-lang/eclexia"
 homepage = "https://eclexia.org"
-rust-version = "1.75"
+rust-version = "1.85"
 
 [workspace.dependencies]
 # Lexer
@@ -70,6 +80,15 @@ tokio = { version = "1.37", features = ["full"] }
 smol_str = "0.2"
 la-arena = "0.3"
 rustc-hash = "1.1"
+
+# Incremental compilation
+salsa = "0.26"
+notify = { version = "6", features = ["macos_fsevent"] }
+parking_lot = "0.12"
+tracing = "0.1"
+
+# Parallel compilation
+rayon = "1.10"
 
 # Testing
 quickcheck = "1.0"

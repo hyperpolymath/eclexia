@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Bytecode generation backend.
@@ -20,11 +20,15 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub enum Instruction {
     // Stack manipulation
-    /// Push constant onto stack
+    /// Push an integer constant onto the stack
     PushInt(i64),
+    /// Push a float constant onto the stack
     PushFloat(f64),
+    /// Push a boolean constant onto the stack
     PushBool(bool),
-    PushString(usize), // Index into string pool
+    /// Push a string constant onto the stack (index into string pool)
+    PushString(usize),
+    /// Push the unit value onto the stack
     PushUnit,
 
     /// Load local variable
@@ -40,45 +44,77 @@ pub enum Instruction {
     Pop,
 
     // Arithmetic
+    /// Integer addition
     AddInt,
+    /// Integer subtraction
     SubInt,
+    /// Integer multiplication
     MulInt,
+    /// Integer division
     DivInt,
+    /// Integer remainder (modulo)
     RemInt,
+    /// Integer negation
     NegInt,
 
+    /// Float addition
     AddFloat,
+    /// Float subtraction
     SubFloat,
+    /// Float multiplication
     MulFloat,
+    /// Float division
     DivFloat,
+    /// Float negation
     NegFloat,
 
     // Comparison
+    /// Integer equality comparison
     EqInt,
+    /// Integer inequality comparison
     NeInt,
+    /// Integer less-than comparison
     LtInt,
+    /// Integer less-than-or-equal comparison
     LeInt,
+    /// Integer greater-than comparison
     GtInt,
+    /// Integer greater-than-or-equal comparison
     GeInt,
 
+    /// Float equality comparison
     EqFloat,
+    /// Float inequality comparison
     NeFloat,
+    /// Float less-than comparison
     LtFloat,
+    /// Float less-than-or-equal comparison
     LeFloat,
+    /// Float greater-than comparison
     GtFloat,
+    /// Float greater-than-or-equal comparison
     GeFloat,
 
     // Logical
+    /// Logical AND of two booleans
     And,
+    /// Logical OR of two booleans
     Or,
+    /// Logical NOT of a boolean
     Not,
 
     // Bitwise
+    /// Bitwise AND of two integers
     BitAnd,
+    /// Bitwise OR of two integers
     BitOr,
+    /// Bitwise XOR of two integers
     BitXor,
+    /// Bitwise left shift
     Shl,
+    /// Bitwise right shift
     Shr,
+    /// Bitwise NOT (complement) of an integer
     BitNot,
 
     // Exponentiation
@@ -228,6 +264,7 @@ pub struct BytecodeGenerator {
 }
 
 impl BytecodeGenerator {
+    /// Create a new bytecode generator with empty state.
     pub fn new() -> Self {
         Self {
             context: CodegenContext::new(),

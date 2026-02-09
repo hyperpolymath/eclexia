@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Bytecode virtual machine.
@@ -14,15 +14,24 @@ use std::collections::{HashMap, HashSet};
 /// A value on the VM stack
 #[derive(Debug, Clone)]
 pub enum Value {
+    /// Unit value (no data)
     Unit,
+    /// Boolean value
     Bool(bool),
+    /// 64-bit signed integer
     Int(i64),
+    /// 64-bit floating-point number
     Float(f64),
+    /// Heap-allocated string
     String(String),
+    /// Unicode character
     Char(char),
-    Function(usize),          // Function index
-    Range(i64, i64),           // Exclusive range (start..end)
-    RangeInclusive(i64, i64),  // Inclusive range (start..=end)
+    /// Function reference by index into the module's function table
+    Function(usize),
+    /// Exclusive range (start..end)
+    Range(i64, i64),
+    /// Inclusive range (start..=end)
+    RangeInclusive(i64, i64),
 }
 
 impl Value {
@@ -255,6 +264,21 @@ impl VirtualMachine {
     pub fn step_one(&mut self) {
         self.single_step = true;
         self.paused = false;
+    }
+
+    /// Continue execution after a debug pause.
+    /// Returns the final value when the program finishes, or `Value::Unit` if paused again.
+    pub fn continue_running(&mut self) -> Result<Value, VmError> {
+        self.paused = false;
+        self.execute()
+    }
+
+    /// Step one instruction and return.
+    /// Returns `Value::Unit` if paused (normal), or the final value if the program ends.
+    pub fn step_instruction(&mut self) -> Result<Value, VmError> {
+        self.single_step = true;
+        self.paused = false;
+        self.execute()
     }
 
     /// Get current stack

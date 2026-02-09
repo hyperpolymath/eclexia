@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Expression and statement evaluation.
@@ -276,6 +276,9 @@ impl Interpreter {
             Item::ExternBlock(_) => {
                 // Extern blocks: foreign function stubs
                 // Would need FFI integration; skip for now
+            }
+            Item::Error(_) => {
+                // Parse error placeholder: silently skip
             }
         }
         Ok(())
@@ -948,6 +951,10 @@ impl Interpreter {
             }
             StmtKind::Continue { .. } => {
                 Err(RuntimeError::Continue)
+            }
+            StmtKind::Error => {
+                // Parse error placeholder: evaluate to unit (no-op)
+                Ok(())
             }
         }
     }

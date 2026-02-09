@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Parser error types.
@@ -13,44 +13,67 @@ pub type ParseResult<T> = Result<T, ParseError>;
 /// A parsing error.
 #[derive(Debug, Error)]
 pub enum ParseError {
+    /// An unexpected token was encountered while parsing.
     #[error("unexpected token {found:?}, expected {expected}")]
     UnexpectedToken {
+        /// Source location of the unexpected token.
         span: Span,
+        /// The token that was found.
         found: TokenKind,
+        /// Description of what was expected.
         expected: String,
+        /// Optional hint for fixing the error.
         hint: Option<String>,
     },
 
+    /// A specific expected token was not found.
     #[error("expected {expected:?}, found {found:?}")]
     ExpectedToken {
+        /// Source location of the error.
         span: Span,
+        /// The token kind that was expected.
         expected: TokenKind,
+        /// The token kind that was found instead.
         found: TokenKind,
+        /// Optional hint for fixing the error.
         hint: Option<String>,
     },
 
+    /// An identifier was expected but not found.
     #[error("expected identifier")]
     ExpectedIdentifier {
+        /// Source location of the error.
         span: Span,
+        /// Optional hint for fixing the error.
         hint: Option<String>,
     },
 
+    /// Unexpected end of file while parsing.
     #[error("unexpected end of file")]
     UnexpectedEof {
+        /// Source location at end of file.
         span: Span,
+        /// Optional hint for fixing the error.
         hint: Option<String>,
     },
 
+    /// An invalid resource literal was encountered.
     #[error("invalid resource literal")]
     InvalidResourceLiteral {
+        /// Source location of the invalid literal.
         span: Span,
+        /// Optional hint for fixing the error.
         hint: Option<String>,
     },
 
+    /// A custom error with a freeform message.
     #[error("{message}")]
     Custom {
+        /// Source location of the error.
         span: Span,
+        /// The error message.
         message: String,
+        /// Optional hint for fixing the error.
         hint: Option<String>,
     },
 }

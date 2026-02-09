@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Package management for Eclexia projects.
@@ -131,7 +131,7 @@ pub fn create_manifest(
             authors,
             edition: "2025".to_string(),
             description: None,
-            license: Some("AGPL-3.0-or-later".to_string()),
+            license: Some("PMPL-1.0-or-later".to_string()),
             repository: None,
         },
         dependencies: HashMap::new(),

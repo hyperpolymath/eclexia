@@ -52,23 +52,41 @@ impl DebugSession {
         self.breakpoints.get_all()
     }
 
-    /// Continue execution until next breakpoint.
+    /// Continue execution until next breakpoint or program end.
     pub fn continue_execution(&mut self) -> Result<ContinueResult, String> {
         self.vm.disable_single_step();
         self.paused = false;
 
-        // TODO: Implement actual execution
-        // For now, return a placeholder
-        Ok(ContinueResult::Breakpoint(0, 0))
+        match self.vm.continue_running() {
+            Ok(value) => {
+                if self.vm.is_paused() {
+                    // Hit a breakpoint
+                    self.paused = true;
+                    if let Some((f, i)) = Inspector::get_current_position(&self.vm) {
+                        Ok(ContinueResult::Breakpoint(f, i))
+                    } else {
+                        Ok(ContinueResult::Error("Paused but no position".to_string()))
+                    }
+                } else {
+                    // Program finished
+                    Ok(ContinueResult::Finished(format!("{:?}", value)))
+                }
+            }
+            Err(e) => Ok(ContinueResult::Error(format!("{}", e))),
+        }
     }
 
     /// Step to next instruction.
     pub fn step(&mut self) -> Result<(), String> {
-        self.vm.enable_single_step();
         self.paused = false;
 
-        // TODO: Implement actual single-step execution
-        Ok(())
+        match self.vm.step_instruction() {
+            Ok(_) => {
+                self.paused = self.vm.is_paused();
+                Ok(())
+            }
+            Err(e) => Err(format!("{}", e)),
+        }
     }
 
     /// Get current instruction.

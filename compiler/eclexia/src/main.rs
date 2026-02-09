@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Eclexia compiler and toolchain CLI.
@@ -90,6 +90,17 @@ enum Commands {
         name: Option<String>,
     },
 
+    /// Create a new Eclexia project from a template
+    New {
+        /// Project name
+        #[arg(value_name = "NAME")]
+        name: String,
+
+        /// Project template
+        #[arg(short, long, default_value = "bin")]
+        template: String,
+    },
+
     /// Run tests
     Test {
         /// Test filter pattern
@@ -158,6 +169,9 @@ fn main() -> miette::Result<()> {
         }
         Commands::Init { name } => {
             commands::init(name.as_deref())?;
+        }
+        Commands::New { name, template } => {
+            commands::new_project(&name, &template)?;
         }
         Commands::Test { filter } => {
             commands::test(filter.as_deref())?;

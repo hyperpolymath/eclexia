@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Symbol resolution and scope tracking for LSP features.
@@ -408,6 +408,7 @@ impl SymbolTable {
                     }
                 }
             }
+            Item::Error(_) => {} // Skip error items silently
         }
     }
 
@@ -532,6 +533,7 @@ impl SymbolTable {
                 }
             }
             StmtKind::Continue { .. } => {}
+            StmtKind::Error => {} // Skip error statements silently
         }
     }
 

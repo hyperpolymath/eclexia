@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Runtime values for the Eclexia interpreter.
@@ -59,9 +59,13 @@ pub enum Value {
 /// A user-defined function.
 #[derive(Debug)]
 pub struct Function {
+    /// Function name identifier
     pub name: SmolStr,
+    /// Parameter names in declaration order
     pub params: Vec<SmolStr>,
+    /// Reference to the function body in the AST
     pub body: FunctionBody,
+    /// Captured closure environment
     pub closure: super::env::Environment,
 }
 
@@ -82,44 +86,63 @@ pub enum FunctionBody {
 /// An adaptive function with multiple solutions.
 #[derive(Debug)]
 pub struct AdaptiveFunction {
+    /// Adaptive function name
     pub name: SmolStr,
+    /// Parameter names in declaration order
     pub params: Vec<SmolStr>,
+    /// Available solution alternatives
     pub solutions: Vec<Solution>,
+    /// Resource requirements from `@requires` constraints
     pub requires: ResourceRequires,
+    /// Captured closure environment
     pub closure: super::env::Environment,
 }
 
 /// Resource requirements/constraints from @requires.
 #[derive(Debug, Clone, Default)]
 pub struct ResourceRequires {
-    pub energy: Option<f64>,    // Max Joules
-    pub latency: Option<f64>,   // Max Milliseconds
-    pub memory: Option<f64>,    // Max Bytes
-    pub carbon: Option<f64>,    // Max gCO2e
+    /// Maximum energy in Joules
+    pub energy: Option<f64>,
+    /// Maximum latency in milliseconds
+    pub latency: Option<f64>,
+    /// Maximum memory in bytes
+    pub memory: Option<f64>,
+    /// Maximum carbon emissions in gCO2e
+    pub carbon: Option<f64>,
 }
 
 /// A solution alternative.
 #[derive(Debug, Clone)]
 pub struct Solution {
+    /// Solution name identifier
     pub name: SmolStr,
+    /// Optional `@when` guard expression
     pub when_expr: Option<ExprId>,
+    /// Resource provisions declared by this solution
     pub provides: ResourceProvides,
+    /// Reference to the solution body in the AST
     pub body: FunctionBody,
 }
 
 /// Resource provisions for a solution.
 #[derive(Debug, Clone, Default)]
 pub struct ResourceProvides {
-    pub energy: Option<f64>,    // Joules
-    pub latency: Option<f64>,   // Milliseconds
-    pub memory: Option<f64>,    // Bytes
-    pub carbon: Option<f64>,    // gCO2e
+    /// Energy cost in Joules
+    pub energy: Option<f64>,
+    /// Latency cost in milliseconds
+    pub latency: Option<f64>,
+    /// Memory cost in bytes
+    pub memory: Option<f64>,
+    /// Carbon emissions in gCO2e
+    pub carbon: Option<f64>,
 }
 
 /// Built-in function type.
 #[derive(Clone)]
 pub struct BuiltinFn {
+    /// Name of the built-in function
     pub name: &'static str,
+    /// The native function pointer implementing this builtin
     pub func: fn(&[Value]) -> Result<Value, super::error::RuntimeError>,
 }
 

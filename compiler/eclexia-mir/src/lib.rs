@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Mid-level Intermediate Representation (MIR) for Eclexia.
@@ -38,6 +38,7 @@ pub struct MirFile {
 }
 
 impl MirFile {
+    /// Create a new empty MIR file
     pub fn new() -> Self {
         Self {
             functions: Vec::new(),
@@ -61,12 +62,19 @@ pub type LocalId = u32;
 /// A function in MIR form
 #[derive(Debug, Clone)]
 pub struct Function {
+    /// Source span
     pub span: Span,
+    /// Function name
     pub name: SmolStr,
+    /// Function parameters
     pub params: Vec<Local>,
+    /// Return type
     pub return_ty: Ty,
+    /// Local variable declarations
     pub locals: Vec<Local>,
+    /// Arena of basic blocks forming the control flow graph
     pub basic_blocks: Arena<BasicBlock>,
+    /// Entry point block
     pub entry_block: BlockId,
     /// Resource constraints for this function
     pub resource_constraints: Vec<ResourceConstraint>,
@@ -77,85 +85,124 @@ pub struct Function {
 /// An adaptive function with multiple solution branches
 #[derive(Debug, Clone)]
 pub struct AdaptiveFunction {
+    /// Source span
     pub span: Span,
+    /// Function name
     pub name: SmolStr,
+    /// Function parameters
     pub params: Vec<Local>,
+    /// Return type
     pub return_ty: Ty,
+    /// Solution branches to choose from at runtime
     pub solutions: Vec<Solution>,
+    /// Resource constraints
     pub resource_constraints: Vec<ResourceConstraint>,
+    /// Optional optimization objective
     pub optimization_objective: Option<Objective>,
 }
 
 /// A solution branch in an adaptive function
 #[derive(Debug, Clone)]
 pub struct Solution {
+    /// Solution name
     pub name: SmolStr,
+    /// Optional guard condition
     pub condition: Option<Value>,
+    /// Lowered function for this solution
     pub function: Function,
+    /// Estimated resource costs
     pub resource_costs: Vec<ResourceCost>,
 }
 
 /// Resource cost annotation for a solution
 #[derive(Debug, Clone)]
 pub struct ResourceCost {
+    /// Resource name
     pub resource: SmolStr,
+    /// Physical dimension of the resource
     pub dimension: Dimension,
+    /// Cost amount
     pub amount: f64,
 }
 
 /// Optimization objective
 #[derive(Debug, Clone)]
 pub struct Objective {
+    /// Minimize or maximize
     pub direction: OptimizeDirection,
+    /// Target metric name
     pub target: SmolStr,
 }
 
+/// Direction for optimization objectives
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OptimizeDirection {
+    /// Minimize the target metric
     Minimize,
+    /// Maximize the target metric
     Maximize,
 }
 
 /// Resource constraint
 #[derive(Debug, Clone)]
 pub struct ResourceConstraint {
+    /// Resource name (e.g., "energy", "time")
     pub resource: SmolStr,
+    /// Physical dimension of the resource
     pub dimension: Dimension,
+    /// Comparison operator
     pub op: ConstraintOp,
+    /// Bound value
     pub bound: f64,
 }
 
+/// Comparison operator for resource constraints
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConstraintOp {
+    /// Less than
     Lt,
+    /// Less than or equal
     Le,
+    /// Greater than
     Gt,
+    /// Greater than or equal
     Ge,
+    /// Equal
     Eq,
+    /// Not equal
     Ne,
 }
 
 /// A basic block in the control flow graph
 #[derive(Debug, Clone)]
 pub struct BasicBlock {
+    /// Block label for debugging
     pub label: SmolStr,
+    /// Instructions in this block
     pub instructions: Vec<Instruction>,
+    /// Control flow terminator
     pub terminator: Terminator,
 }
 
 /// A local variable
 #[derive(Debug, Clone)]
 pub struct Local {
+    /// Unique local identifier
     pub id: LocalId,
+    /// Variable name
     pub name: SmolStr,
+    /// Variable type
     pub ty: Ty,
+    /// Whether this variable is mutable
     pub mutable: bool,
 }
 
 /// A MIR instruction
 #[derive(Debug, Clone)]
 pub struct Instruction {
+    /// Source span
     pub span: Span,
+    /// Instruction kind
     pub kind: InstructionKind,
 }
 
@@ -202,9 +249,13 @@ pub enum InstructionKind {
 /// Resource budget for a call
 #[derive(Debug, Clone)]
 pub struct ResourceBudget {
+    /// Energy budget in joules
     pub energy: Option<f64>,
+    /// Time budget in seconds
     pub time: Option<f64>,
+    /// Memory budget in bytes
     pub memory: Option<f64>,
+    /// Carbon budget in grams CO2
     pub carbon: Option<f64>,
 }
 
@@ -284,17 +335,26 @@ pub enum Value {
 /// A constant value
 #[derive(Debug, Clone)]
 pub struct Constant {
+    /// Type of the constant
     pub ty: Ty,
+    /// Constant value kind
     pub kind: ConstantKind,
 }
 
+/// Kind of constant value
 #[derive(Debug, Clone)]
 pub enum ConstantKind {
+    /// Integer constant
     Int(i64),
+    /// Floating-point constant
     Float(f64),
+    /// String constant
     String(SmolStr),
+    /// Character constant
     Char(char),
+    /// Boolean constant
     Bool(bool),
+    /// Unit constant `()`
     Unit,
     /// Resource literal with dimension
     Resource {
@@ -309,43 +369,62 @@ pub enum ConstantKind {
 /// Binary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
-    // Arithmetic
+    /// Addition (`+`)
     Add,
+    /// Subtraction (`-`)
     Sub,
+    /// Multiplication (`*`)
     Mul,
+    /// Division (`/`)
     Div,
+    /// Remainder (`%`)
     Rem,
+    /// Exponentiation (`**`)
     Pow,
 
-    // Comparison
+    /// Equality comparison (`==`)
     Eq,
+    /// Inequality comparison (`!=`)
     Ne,
+    /// Less than (`<`)
     Lt,
+    /// Less than or equal (`<=`)
     Le,
+    /// Greater than (`>`)
     Gt,
+    /// Greater than or equal (`>=`)
     Ge,
 
-    // Logical
+    /// Logical AND (`&&`)
     And,
+    /// Logical OR (`||`)
     Or,
 
-    // Bitwise
+    /// Bitwise AND (`&`)
     BitAnd,
+    /// Bitwise OR (`|`)
     BitOr,
+    /// Bitwise XOR (`^`)
     BitXor,
+    /// Left shift (`<<`)
     Shl,
+    /// Right shift (`>>`)
     Shr,
 
-    // Range
+    /// Exclusive range (`..`)
     Range,
+    /// Inclusive range (`..=`)
     RangeInclusive,
 }
 
 /// Unary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOp {
+    /// Arithmetic negation (`-`)
     Neg,
+    /// Logical NOT (`!`)
     Not,
+    /// Bitwise NOT (`~`)
     BitNot,
 }
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Parser for the Eclexia programming language.
@@ -51,8 +51,12 @@ impl<'src> Parser<'src> {
             match self.parse_item(&mut file) {
                 Ok(item) => file.items.push(item),
                 Err(e) => {
+                    let error_span = e.span();
                     self.errors.push(e);
                     self.recover_to_item();
+                    // Emit an error placeholder so downstream passes see
+                    // a node for every span in the source
+                    file.items.push(eclexia_ast::Item::Error(error_span));
                 }
             }
         }
@@ -646,8 +650,17 @@ impl<'src> Parser<'src> {
                     stmts.push(stmt_id);
                 }
                 Err(e) => {
+                    let error_span = e.span();
                     self.errors.push(e);
                     self.recover_to_stmt();
+                    // Emit an error placeholder statement so the block
+                    // preserves structure for downstream passes
+                    let error_stmt = eclexia_ast::Stmt {
+                        span: error_span,
+                        kind: eclexia_ast::StmtKind::Error,
+                    };
+                    let stmt_id = file.stmts.alloc(error_stmt);
+                    stmts.push(stmt_id);
                 }
             }
         }

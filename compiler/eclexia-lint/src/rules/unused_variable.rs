@@ -114,6 +114,7 @@ fn collect_used_vars(stmt_id: eclexia_ast::StmtId, ctx: &LintContext, used: &mut
             collect_used_vars_expr(*target, ctx, used);
             collect_used_vars_expr(*value, ctx, used);
         }
+        StmtKind::Error => {} // Skip error statements silently
     }
 }
 

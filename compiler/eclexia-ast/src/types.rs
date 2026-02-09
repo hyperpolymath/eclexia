@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Type representations for the Eclexia type system.
@@ -283,10 +283,15 @@ pub struct ResourceConstraint {
 /// Constraint operator
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConstraintOp {
+    /// Less than (`<`)
     Lt,
+    /// Less than or equal (`<=`)
     Le,
+    /// Greater than (`>`)
     Gt,
+    /// Greater than or equal (`>=`)
     Ge,
+    /// Equal (`==`)
     Eq,
 }
 

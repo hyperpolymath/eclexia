@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! MIR optimization passes.
@@ -11,8 +11,11 @@ use rustc_hash::FxHashSet;
 /// Optimization level
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OptimizationLevel {
+    /// No optimizations
     None,
+    /// Basic optimizations (NOP removal, dead code elimination)
     Basic,
+    /// Aggressive optimizations (constant propagation, block inlining)
     Aggressive,
 }
 

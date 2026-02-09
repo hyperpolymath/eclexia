@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Lexer for the Eclexia programming language.
@@ -21,11 +21,14 @@ use smol_str::SmolStr;
 /// A token with its span in the source.
 #[derive(Debug, Clone)]
 pub struct Token {
+    /// The kind of this token.
     pub kind: TokenKind,
+    /// The source span of this token.
     pub span: Span,
 }
 
 impl Token {
+    /// Create a new token with the given kind and span.
     pub fn new(kind: TokenKind, span: Span) -> Self {
         Self { kind, span }
     }
@@ -38,128 +41,192 @@ impl Token {
 #[logos(skip r"/\*([^*]|\*[^/])*\*/")]
 pub enum TokenKind {
     // === Keywords ===
+    /// The `adaptive` keyword for adaptive function definitions.
     #[token("adaptive")]
     Adaptive,
+    /// The `def` keyword for function definitions.
     #[token("def")]
     Def,
+    /// The `fn` keyword for function definitions.
     #[token("fn")]
     Fn,
+    /// The `let` keyword for variable bindings.
     #[token("let")]
     Let,
+    /// The `mut` keyword for mutable bindings.
     #[token("mut")]
     Mut,
+    /// The `const` keyword for constant declarations.
     #[token("const")]
     Const,
+    /// The `if` keyword for conditional expressions.
     #[token("if")]
     If,
+    /// The `then` keyword for if-then syntax.
     #[token("then")]
     Then,
+    /// The `else` keyword for else branches.
     #[token("else")]
     Else,
+    /// The `match` keyword for pattern matching.
     #[token("match")]
     Match,
+    /// The `while` keyword for while loops.
     #[token("while")]
     While,
+    /// The `for` keyword for for-in loops.
     #[token("for")]
     For,
+    /// The `in` keyword used in for-in loops.
     #[token("in")]
     In,
+    /// The `return` keyword for early returns.
     #[token("return")]
     Return,
+    /// The `break` keyword for breaking out of loops.
     #[token("break")]
     Break,
+    /// The `continue` keyword for skipping to the next loop iteration.
     #[token("continue")]
     Continue,
+    /// The `type` keyword for type definitions.
     #[token("type")]
     Type,
+    /// The `struct` keyword for struct definitions.
     #[token("struct")]
     Struct,
+    /// The `enum` keyword for enum definitions.
     #[token("enum")]
     Enum,
+    /// The `impl` keyword for implementation blocks.
     #[token("impl")]
     Impl,
+    /// The `trait` keyword for trait declarations.
     #[token("trait")]
     Trait,
+    /// The `import` keyword for module imports.
     #[token("import")]
     Import,
+    /// The `export` keyword for module exports.
     #[token("export")]
     Export,
+    /// The `async` keyword for asynchronous blocks and functions.
     #[token("async")]
     Async,
+    /// The `await` keyword for awaiting async expressions.
     #[token("await")]
     Await,
+    /// The `true` boolean literal.
     #[token("true")]
     True,
+    /// The `false` boolean literal.
     #[token("false")]
     False,
+    /// The `and` logical operator keyword.
     #[token("and")]
     And,
+    /// The `or` logical operator keyword.
     #[token("or")]
     Or,
+    /// The `not` logical negation keyword.
     #[token("not")]
     Not,
+    /// The `as` keyword for type casts.
     #[token("as")]
     As,
+    /// The `pub` keyword for visibility modifiers.
     #[token("pub")]
     Pub,
+    /// The `module` keyword for module declarations.
     #[token("module")]
     Module,
+    /// The `mod` keyword for module declarations (short form).
     #[token("mod")]
     Mod,
+    /// The `loop` keyword for infinite loops.
     #[token("loop")]
     Loop,
+    /// The `effect` keyword for algebraic effect declarations.
     #[token("effect")]
     Effect,
+    /// The `handle` keyword for effect handler expressions.
     #[token("handle")]
     Handle,
+    /// The `use` keyword for imports.
     #[token("use")]
     Use,
+    /// The `where` keyword for where clauses.
     #[token("where")]
     Where,
+    /// The `self` keyword (lowercase) for the current instance.
     #[token("self", priority = 5)]
     SelfLower,
+    /// The `Self` keyword (uppercase) for the current type.
     #[token("Self", priority = 5)]
     SelfUpper,
+    /// The `static` keyword for static declarations.
     #[token("static")]
     Static,
+    /// The `extern` keyword for external function blocks.
     #[token("extern")]
     Extern,
+    /// The `case` keyword for case expressions.
     #[token("case")]
     Case,
+    /// The `do` keyword for do-notation blocks.
     #[token("do")]
     Do,
+    /// The `energy` keyword for energy resource constraints.
     #[token("energy")]
     Energy,
+    /// The `latency` keyword for latency resource constraints.
     #[token("latency")]
     Latency,
+    /// The `memory` keyword for memory resource constraints.
     #[token("memory")]
     Memory,
+    /// The `unit` keyword for unit type or unit dimensions.
     #[token("unit")]
     Unit,
+    /// The `carbon` keyword for carbon emission constraints.
     #[token("carbon")]
     Carbon,
+    /// The `ref` keyword for reference bindings.
     #[token("ref")]
     Ref,
+    /// The `super` keyword for parent module access.
     #[token("super")]
     Super,
+    /// The `comptime` keyword for compile-time evaluation.
+    #[token("comptime")]
+    Comptime,
 
     // === Eclexia-specific keywords ===
+    /// The `@solution` annotation for adaptive solution alternatives.
     #[token("@solution")]
     AtSolution,
+    /// The `@when` annotation for conditional solution guards.
     #[token("@when")]
     AtWhen,
+    /// The `@requires` annotation for resource requirement constraints.
     #[token("@requires")]
     AtRequires,
+    /// The `@provides` annotation for resource provision declarations.
     #[token("@provides")]
     AtProvides,
+    /// The `@optimize` annotation for optimization directives.
     #[token("@optimize")]
     AtOptimize,
+    /// The `@observe` annotation for runtime observation hooks.
     #[token("@observe")]
     AtObserve,
+    /// The `@defer_until` annotation for deferred evaluation.
     #[token("@defer_until")]
     AtDeferUntil,
+    /// The `minimize` keyword for optimization direction.
     #[token("minimize")]
     Minimize,
+    /// The `maximize` keyword for optimization direction.
     #[token("maximize")]
     Maximize,
 
@@ -226,6 +293,7 @@ pub enum TokenKind {
     BlockDocComment(SmolStr),
 
     // === Identifiers ===
+    /// An identifier (variable, function, or type name) supporting Unicode XID properties.
     // Note: Keywords take priority. Single underscore is handled separately.
     // Support Unicode XID_Start and XID_Continue properties for mathematical notation (π, τ, etc.)
     #[regex(r"[a-zA-Z_\u{80}-\u{10FFFF}][a-zA-Z0-9_\u{80}-\u{10FFFF}]*", |lex| {
@@ -241,116 +309,169 @@ pub enum TokenKind {
     Ident(SmolStr),
 
     // === Operators ===
+    /// The `+` addition operator.
     #[token("+")]
     Plus,
+    /// The `-` subtraction or negation operator.
     #[token("-")]
     Minus,
+    /// The `*` multiplication or dereference operator.
     #[token("*")]
     Star,
+    /// The `/` division operator.
     #[token("/")]
     Slash,
+    /// The `%` remainder operator.
     #[token("%")]
     Percent,
+    /// The `**` exponentiation operator.
     #[token("**")]
     StarStar,
+    /// The `==` equality comparison operator.
     #[token("==")]
     EqEq,
+    /// The `!=` inequality comparison operator.
     #[token("!=")]
     BangEq,
+    /// The `<` less-than comparison operator.
     #[token("<")]
     Lt,
+    /// The `<=` less-than-or-equal comparison operator.
     #[token("<=")]
     Le,
+    /// The `>` greater-than comparison operator.
     #[token(">")]
     Gt,
+    /// The `>=` greater-than-or-equal comparison operator.
     #[token(">=")]
     Ge,
+    /// The `&&` logical AND operator.
     #[token("&&")]
     AmpAmp,
+    /// The `||` logical OR operator.
     #[token("||")]
     PipePipe,
+    /// The `!` logical NOT operator.
     #[token("!")]
     Bang,
+    /// The `&` bitwise AND or borrow operator.
     #[token("&")]
     Amp,
+    /// The `|` bitwise OR or pipe operator.
     #[token("|")]
     Pipe,
+    /// The `^` bitwise XOR operator.
     #[token("^")]
     Caret,
+    /// The `~` bitwise NOT operator.
     #[token("~")]
     Tilde,
+    /// The `<<` left shift operator.
     #[token("<<")]
     LtLt,
+    /// The `>>` right shift operator.
     #[token(">>")]
     GtGt,
 
     // === Compound assignment ===
+    /// The `+=` addition assignment operator.
     #[token("+=")]
     PlusEq,
+    /// The `-=` subtraction assignment operator.
     #[token("-=")]
     MinusEq,
+    /// The `*=` multiplication assignment operator.
     #[token("*=")]
     StarEq,
+    /// The `/=` division assignment operator.
     #[token("/=")]
     SlashEq,
+    /// The `%=` remainder assignment operator.
     #[token("%=")]
     PercentEq,
+    /// The `^=` bitwise XOR assignment operator.
     #[token("^=")]
     CaretEq,
+    /// The `<<=` left shift assignment operator.
     #[token("<<=")]
     LtLtEq,
+    /// The `>>=` right shift assignment operator.
     #[token(">>=")]
     GtGtEq,
+    /// The `&=` bitwise AND assignment operator.
     #[token("&=")]
     AmpEq,
+    /// The `|=` bitwise OR assignment operator.
     #[token("|=")]
     PipeEq,
+    /// The `**=` exponentiation assignment operator.
     #[token("**=")]
     StarStarEq,
 
     // === Punctuation ===
+    /// The `=` assignment operator.
     #[token("=")]
     Eq,
+    /// The `:` colon separator.
     #[token(":")]
     Colon,
+    /// The `::` path separator.
     #[token("::")]
     ColonColon,
+    /// The `;` semicolon statement terminator.
     #[token(";")]
     Semi,
+    /// The `,` comma separator.
     #[token(",")]
     Comma,
+    /// The `.` field access operator.
     #[token(".")]
     Dot,
+    /// The `..=` inclusive range operator.
     #[token("..=")]
     DotDotEq,
+    /// The `..` exclusive range operator.
     #[token("..")]
     DotDot,
+    /// The `...` rest/spread operator.
     #[token("...")]
     DotDotDot,
+    /// The `->` return type arrow.
     #[token("->")]
     Arrow,
+    /// The `=>` fat arrow for match arms and lambdas.
     #[token("=>")]
     FatArrow,
+    /// The `@` annotation prefix.
     #[token("@")]
     At,
+    /// The `#` attribute prefix.
     #[token("#")]
     Hash,
+    /// The `?` try/optional operator.
     #[token("?")]
     Question,
+    /// The `_` wildcard/discard pattern.
     #[token("_", priority = 10)]
     Underscore,
 
     // === Delimiters ===
+    /// The `(` opening parenthesis.
     #[token("(")]
     LParen,
+    /// The `)` closing parenthesis.
     #[token(")")]
     RParen,
+    /// The `[` opening square bracket.
     #[token("[")]
     LBracket,
+    /// The `]` closing square bracket.
     #[token("]")]
     RBracket,
+    /// The `{` opening curly brace.
     #[token("{")]
     LBrace,
+    /// The `}` closing curly brace.
     #[token("}")]
     RBrace,
 
@@ -365,7 +486,9 @@ pub enum TokenKind {
 /// A resource literal with value and unit.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResourceLiteral {
+    /// The numeric value of the resource literal.
     pub value: f64,
+    /// The unit suffix (e.g., "J", "ms", "gCO2e").
     pub unit: SmolStr,
 }
 

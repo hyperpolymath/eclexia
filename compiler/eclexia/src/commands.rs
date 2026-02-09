@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Command implementations for the Eclexia CLI.
@@ -34,10 +34,26 @@ pub fn build(input: &Path, _output: Option<&Path>, _target: &str) -> miette::Res
         return Err(miette::miette!("Type checking failed with {} errors", type_errors.len()));
     }
 
+    // Lower to HIR
+    let hir_file = eclexia_hir::lower_source_file(&file);
+
+    // Lower to MIR
+    let mir_file = eclexia_mir::lower_hir_file(&hir_file);
+
+    // Generate bytecode
+    use eclexia_codegen::Backend;
+    let mut codegen = eclexia_codegen::BytecodeGenerator::new();
+    let module = codegen.generate(&mir_file)
+        .map_err(|e| miette::miette!("Code generation failed: {}", e))?;
+
     println!("✓ Build successful");
     println!("  {} items parsed", file.items.len());
+    println!("  {} functions compiled", module.functions.len());
 
-    // TODO: Lower to HIR, MIR, and generate code
+    if _output.is_some() {
+        // TODO: Serialize bytecode module to output file once BytecodeModule implements Serialize
+        println!("  (bytecode output not yet supported)");
+    }
 
     Ok(())
 }
@@ -57,6 +73,17 @@ pub fn run(input: &Path, observe_shadow: bool, carbon_report: bool) -> miette::R
             eprintln!("  {}", err.format_with_source(&source));
         }
         return Err(miette::miette!("Parsing failed with {} errors", parse_errors.len()));
+    }
+
+    // Type check
+    let type_errors = eclexia_typeck::check(&file);
+
+    if !type_errors.is_empty() {
+        eprintln!("Type errors:");
+        for err in &type_errors {
+            eprintln!("  {}", err.format_with_source(&source));
+        }
+        return Err(miette::miette!("Type checking failed with {} errors", type_errors.len()));
     }
 
     if observe_shadow {
@@ -255,6 +282,882 @@ def main() -> Unit
     println!("  eclexia run src/main.ecl");
 
     Ok(())
+}
+
+/// Create a new project from a template.
+///
+/// Supported templates:
+/// - `bin` — Binary application (default)
+/// - `lib` — Reusable library
+/// - `web` — TEA web application framework
+/// - `cli` — Command-line tool
+/// - `mcp` — MCP server for AI agents
+/// - `ssg` — Static site generator engine
+/// - `lsp` — Language server protocol extension
+/// - `tool` — Developer tool/utility
+/// - `framework` — Application framework
+/// - `db-connector` — Database connector (Idris2 ABI + Zig FFI + eclexia binding)
+pub fn new_project(name: &str, template: &str) -> miette::Result<()> {
+    let name = sanitize_project_name(name)?;
+
+    let templates = [
+        "bin", "lib", "web", "cli", "mcp", "ssg", "lsp",
+        "tool", "framework", "db-connector",
+    ];
+
+    if !templates.contains(&template) {
+        return Err(miette::miette!(
+            "Unknown template '{}'. Available templates:\n  {}",
+            template,
+            templates.join(", ")
+        ));
+    }
+
+    println!("Creating new Eclexia {} project: {}", template, name);
+
+    // Create base directory structure
+    std::fs::create_dir_all(format!("{}/src", name)).into_diagnostic()?;
+
+    // Generate template-specific files
+    match template {
+        "bin" => mint_bin(name)?,
+        "lib" => mint_lib(name)?,
+        "web" => mint_web(name)?,
+        "cli" => mint_cli(name)?,
+        "mcp" => mint_mcp(name)?,
+        "ssg" => mint_ssg(name)?,
+        "lsp" => mint_lsp(name)?,
+        "tool" => mint_tool(name)?,
+        "framework" => mint_framework(name)?,
+        "db-connector" => mint_db_connector(name)?,
+        _ => unreachable!(),
+    }
+
+    // Create common files for all templates
+    mint_common_files(name, template)?;
+
+    println!("\n✓ Created {} project in {}/", template, name);
+    println!();
+    println!("To get started:");
+    println!("  cd {}", name);
+    match template {
+        "lib" => println!("  eclexia check src/lib.ecl"),
+        "web" => {
+            println!("  eclexia run src/main.ecl");
+            println!("  # Then open http://localhost:8080");
+        }
+        "mcp" => {
+            println!("  eclexia run src/main.ecl");
+            println!("  # MCP server listens on stdin/stdout");
+        }
+        "db-connector" => {
+            println!("  # 1. Review src/abi/Types.idr (Idris2 ABI spec)");
+            println!("  # 2. Build ffi/zig: cd ffi/zig && zig build");
+            println!("  # 3. Use binding: eclexia run src/main.ecl");
+        }
+        _ => println!("  eclexia run src/main.ecl"),
+    }
+
+    Ok(())
+}
+
+/// Generate common files for all project templates.
+fn mint_common_files(name: &str, template: &str) -> miette::Result<()> {
+    // .gitignore
+    let gitignore = "# Eclexia build artifacts\n\
+        /target/\n\
+        *.eclo\n\
+        *.eclprof\n\
+        \n\
+        # IDE\n\
+        .vscode/\n\
+        .idea/\n\
+        \n\
+        # OS\n\
+        .DS_Store\n\
+        Thumbs.db\n";
+    std::fs::write(format!("{}/.gitignore", name), gitignore).into_diagnostic()?;
+
+    // README
+    let readme = format!("# {}\n\n\
+        An Eclexia {} project.\n\n\
+        ## Getting Started\n\n\
+        ```bash\n\
+        eclexia run src/main.ecl\n\
+        ```\n\n\
+        ## License\n\n\
+        PMPL-1.0-or-later\n",
+        name, template);
+    std::fs::write(format!("{}/README.md", name), readme).into_diagnostic()?;
+
+    // eclexia.toml (template-aware)
+    let output_type = match template {
+        "lib" | "framework" => "lib",
+        _ => "bin",
+    };
+    let config = format!(
+        "# SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        # Eclexia project configuration\n\n\
+        [package]\n\
+        name = \"{name}\"\n\
+        version = \"0.1.0\"\n\
+        edition = \"2025\"\n\
+        license = \"PMPL-1.0-or-later\"\n\
+        description = \"An Eclexia {template} project\"\n\
+        authors = [\"Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>\"]\n\n\
+        [build]\n\
+        output-type = \"{output_type}\"\n\n\
+        [dependencies]\n\
+        # Add your dependencies here\n\n\
+        [resources]\n\
+        default-energy-budget = \"1000J\"\n\
+        default-carbon-budget = \"100gCO2e\"\n",
+        name = name, template = template, output_type = output_type
+    );
+    std::fs::write(format!("{}/eclexia.toml", name), config).into_diagnostic()?;
+
+    // tests directory
+    std::fs::create_dir_all(format!("{}/tests", name)).into_diagnostic()?;
+
+    Ok(())
+}
+
+/// Mint a binary application project.
+fn mint_bin(name: &str) -> miette::Result<()> {
+    let main = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! {name} — An Eclexia application.\n\n\
+        def main() -> Unit\n\
+        \x20   @requires: energy < 10J\n\
+        {{\n\
+        \x20   println(\"Hello from {name}!\")\n\
+        }}\n",
+        name = name
+    );
+    std::fs::write(format!("{}/src/main.ecl", name), main).into_diagnostic()?;
+
+    let test = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! Tests for {name}.\n\n\
+        #[test]\n\
+        def test_hello() -> Unit {{\n\
+        \x20   assert(true, \"basic assertion\")\n\
+        }}\n",
+        name = name
+    );
+    std::fs::write(format!("{}/tests/main_test.ecl", name), test).into_diagnostic()?;
+    Ok(())
+}
+
+/// Mint a library project.
+fn mint_lib(name: &str) -> miette::Result<()> {
+    let lib = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! {name} — An Eclexia library.\n\
+        //!\n\
+        //! ## Usage\n\
+        //!\n\
+        //! ```eclexia\n\
+        //! import {name}\n\
+        //!\n\
+        //! def main() -> Unit {{\n\
+        //!     let result = {name}::greet(\"World\")\n\
+        //!     println(result)\n\
+        //! }}\n\
+        //! ```\n\n\
+        /// Greet someone by name.\n\
+        pub def greet(who: String) -> String\n\
+        \x20   @requires: energy < 1J\n\
+        {{\n\
+        \x20   string_concat(\"Hello, \", string_concat(who, \"!\"))\n\
+        }}\n\n\
+        /// Get the library version.\n\
+        pub def version() -> String {{\n\
+        \x20   \"0.1.0\"\n\
+        }}\n",
+        name = name
+    );
+    std::fs::write(format!("{}/src/lib.ecl", name), lib).into_diagnostic()?;
+
+    let test = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! Tests for {name}.\n\n\
+        import {name}\n\n\
+        #[test]\n\
+        def test_greet() -> Unit {{\n\
+        \x20   let result = {name}::greet(\"World\")\n\
+        \x20   assert_eq(result, \"Hello, World!\", \"greeting should match\")\n\
+        }}\n\n\
+        #[test]\n\
+        def test_version() -> Unit {{\n\
+        \x20   let v = {name}::version()\n\
+        \x20   assert(string_len(v) > 0, \"version should not be empty\")\n\
+        }}\n",
+        name = name
+    );
+    std::fs::write(format!("{}/tests/lib_test.ecl", name), test).into_diagnostic()?;
+    Ok(())
+}
+
+/// Mint a TEA web application project.
+fn mint_web(name: &str) -> miette::Result<()> {
+    std::fs::create_dir_all(format!("{}/src/components", name)).into_diagnostic()?;
+
+    // Main entry point with TEA architecture
+    let main = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! {name} — A TEA (The Elm Architecture) web application.\n\
+        //!\n\
+        //! Model-Update-View architecture with resource-aware rendering.\n\n\
+        import tea\n\
+        import tea/html\n\
+        import tea/cmd\n\n\
+        //==========================================================================\n\
+        // Model\n\
+        //==========================================================================\n\n\
+        /// Application state.\n\
+        type Model {{\n\
+        \x20   count: Int,\n\
+        \x20   message: String,\n\
+        }}\n\n\
+        /// Initialize the model.\n\
+        def init() -> (Model, Cmd<Msg>)\n\
+        \x20   @requires: energy < 1J\n\
+        {{\n\
+        \x20   let model = Model {{ count: 0, message: \"Welcome to {name}!\" }}\n\
+        \x20   (model, cmd::none())\n\
+        }}\n\n\
+        //==========================================================================\n\
+        // Messages\n\
+        //==========================================================================\n\n\
+        /// Messages that can update the model.\n\
+        type Msg {{\n\
+        \x20   Increment,\n\
+        \x20   Decrement,\n\
+        \x20   Reset,\n\
+        \x20   SetMessage(String),\n\
+        }}\n\n\
+        //==========================================================================\n\
+        // Update\n\
+        //==========================================================================\n\n\
+        /// Update the model in response to a message.\n\
+        def update(model: Model, msg: Msg) -> (Model, Cmd<Msg>)\n\
+        \x20   @requires: energy < 5J\n\
+        {{\n\
+        \x20   match msg {{\n\
+        \x20       Increment => (Model {{ ..model, count: model.count + 1 }}, cmd::none()),\n\
+        \x20       Decrement => (Model {{ ..model, count: model.count - 1 }}, cmd::none()),\n\
+        \x20       Reset => (Model {{ ..model, count: 0 }}, cmd::none()),\n\
+        \x20       SetMessage(text) => (Model {{ ..model, message: text }}, cmd::none()),\n\
+        \x20   }}\n\
+        }}\n\n\
+        //==========================================================================\n\
+        // View\n\
+        //==========================================================================\n\n\
+        /// Render the model as HTML.\n\
+        def view(model: Model) -> Html<Msg>\n\
+        \x20   @requires: energy < 10J\n\
+        {{\n\
+        \x20   html::div([], [\n\
+        \x20       html::h1([], [html::text(model.message)]),\n\
+        \x20       html::p([], [html::text(int_to_string(model.count))]),\n\
+        \x20       html::button([html::on_click(Increment)], [html::text(\"+\")]),\n\
+        \x20       html::button([html::on_click(Decrement)], [html::text(\"-\")]),\n\
+        \x20       html::button([html::on_click(Reset)], [html::text(\"Reset\")]),\n\
+        \x20   ])\n\
+        }}\n\n\
+        //==========================================================================\n\
+        // Main\n\
+        //==========================================================================\n\n\
+        /// Mount the TEA application.\n\
+        def main() -> Unit {{\n\
+        \x20   tea::mount(\"#app\", init, update, view)\n\
+        }}\n",
+        name = name
+    );
+    std::fs::write(format!("{}/src/main.ecl", name), main).into_diagnostic()?;
+
+    // Router component (compatible with cadre-router pattern)
+    let router = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! Router for {name} — type-safe URL routing.\n\
+        //!\n\
+        //! Compatible with cadre-router patterns.\n\n\
+        import tea/router\n\n\
+        /// Route variants for the application.\n\
+        type Route {{\n\
+        \x20   Home,\n\
+        \x20   About,\n\
+        \x20   NotFound,\n\
+        }}\n\n\
+        /// Parse a URL path into a typed route.\n\
+        pub def parse_route(path: String) -> Route {{\n\
+        \x20   match path {{\n\
+        \x20       \"/\" => Home,\n\
+        \x20       \"/about\" => About,\n\
+        \x20       _ => NotFound,\n\
+        \x20   }}\n\
+        }}\n\n\
+        /// Serialize a route to a URL path.\n\
+        pub def route_to_string(route: Route) -> String {{\n\
+        \x20   match route {{\n\
+        \x20       Home => \"/\",\n\
+        \x20       About => \"/about\",\n\
+        \x20       NotFound => \"/404\",\n\
+        \x20   }}\n\
+        }}\n",
+        name = name
+    );
+    std::fs::write(format!("{}/src/components/router.ecl", name), router).into_diagnostic()?;
+
+    // index.html
+    let html = format!(
+        "<!DOCTYPE html>\n\
+        <html lang=\"en\">\n\
+        <head>\n\
+        \x20   <meta charset=\"UTF-8\">\n\
+        \x20   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n\
+        \x20   <title>{name}</title>\n\
+        </head>\n\
+        <body>\n\
+        \x20   <div id=\"app\"></div>\n\
+        \x20   <script type=\"module\" src=\"/target/main.js\"></script>\n\
+        </body>\n\
+        </html>\n",
+        name = name
+    );
+    std::fs::write(format!("{}/index.html", name), html).into_diagnostic()?;
+
+    Ok(())
+}
+
+/// Mint a CLI tool project.
+fn mint_cli(name: &str) -> miette::Result<()> {
+    let main = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! {name} — A command-line tool.\n\n\
+        /// CLI argument configuration.\n\
+        type Args {{\n\
+        \x20   command: String,\n\
+        \x20   verbose: Bool,\n\
+        \x20   input: Option<String>,\n\
+        }}\n\n\
+        /// Parse command-line arguments.\n\
+        def parse_args(argv: Array<String>) -> Args {{\n\
+        \x20   Args {{\n\
+        \x20       command: if array_len(argv) > 1 {{ array_get(argv, 1).unwrap_or(\"help\") }} else {{ \"help\" }},\n\
+        \x20       verbose: false,\n\
+        \x20       input: if array_len(argv) > 2 {{ array_get(argv, 2) }} else {{ None }},\n\
+        \x20   }}\n\
+        }}\n\n\
+        /// Run a command.\n\
+        def run_command(args: Args) -> Result<Unit, String>\n\
+        \x20   @requires: energy < 100J\n\
+        {{\n\
+        \x20   match args.command {{\n\
+        \x20       \"help\" => {{\n\
+        \x20           println(\"Usage: {name} <command> [options]\")\n\
+        \x20           println(\"\")\n\
+        \x20           println(\"Commands:\")\n\
+        \x20           println(\"  help    Show this help\")\n\
+        \x20           println(\"  version Show version\")\n\
+        \x20           Ok(())\n\
+        \x20       }},\n\
+        \x20       \"version\" => {{\n\
+        \x20           println(\"{name} 0.1.0\")\n\
+        \x20           Ok(())\n\
+        \x20       }},\n\
+        \x20       _ => Err(string_concat(\"Unknown command: \", args.command)),\n\
+        \x20   }}\n\
+        }}\n\n\
+        def main() -> Unit {{\n\
+        \x20   let args = parse_args(@builtin(\"argv\"))\n\
+        \x20   match run_command(args) {{\n\
+        \x20       Ok(_) => (),\n\
+        \x20       Err(e) => {{\n\
+        \x20           println(string_concat(\"Error: \", e))\n\
+        \x20       }},\n\
+        \x20   }}\n\
+        }}\n",
+        name = name
+    );
+    std::fs::write(format!("{}/src/main.ecl", name), main).into_diagnostic()?;
+    Ok(())
+}
+
+/// Mint an MCP server project.
+fn mint_mcp(name: &str) -> miette::Result<()> {
+    let main = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! {name} — An MCP (Model Context Protocol) server.\n\
+        //!\n\
+        //! Exposes tools for AI agents over stdin/stdout JSON-RPC.\n\n\
+        import mcp\n\
+        import json\n\n\
+        /// Define the tools this MCP server provides.\n\
+        def register_tools(server: mcp::Server) -> mcp::Server {{\n\
+        \x20   server\n\
+        \x20       .add_tool(mcp::Tool {{\n\
+        \x20           name: \"hello\",\n\
+        \x20           description: \"Greet someone\",\n\
+        \x20           input_schema: json::object([\n\
+        \x20               (\"name\", json::string_schema(\"Name to greet\")),\n\
+        \x20           ]),\n\
+        \x20           handler: handle_hello,\n\
+        \x20       }})\n\
+        \x20       .add_tool(mcp::Tool {{\n\
+        \x20           name: \"analyze\",\n\
+        \x20           description: \"Analyze resource usage of an expression\",\n\
+        \x20           input_schema: json::object([\n\
+        \x20               (\"expression\", json::string_schema(\"Eclexia expression to analyze\")),\n\
+        \x20           ]),\n\
+        \x20           handler: handle_analyze,\n\
+        \x20       }})\n\
+        }}\n\n\
+        /// Handle the 'hello' tool.\n\
+        def handle_hello(params: json::Value) -> Result<json::Value, String>\n\
+        \x20   @requires: energy < 1J\n\
+        {{\n\
+        \x20   let name = json::get_string(params, \"name\").unwrap_or(\"World\")\n\
+        \x20   Ok(json::string(string_concat(\"Hello, \", string_concat(name, \"!\"))))\n\
+        }}\n\n\
+        /// Handle the 'analyze' tool.\n\
+        def handle_analyze(params: json::Value) -> Result<json::Value, String>\n\
+        \x20   @requires: energy < 50J\n\
+        {{\n\
+        \x20   let expr = json::get_string(params, \"expression\")\n\
+        \x20   match expr {{\n\
+        \x20       Some(e) => Ok(json::object([\n\
+        \x20           (\"expression\", json::string(e)),\n\
+        \x20           (\"estimated_energy\", json::string(\"<1J\")),\n\
+        \x20           (\"status\", json::string(\"within budget\")),\n\
+        \x20       ])),\n\
+        \x20       None => Err(\"Missing 'expression' parameter\"),\n\
+        \x20   }}\n\
+        }}\n\n\
+        def main() -> Unit {{\n\
+        \x20   let server = mcp::Server::new(\"{name}\", \"0.1.0\")\n\
+        \x20   let server = register_tools(server)\n\
+        \x20   mcp::serve_stdio(server)\n\
+        }}\n",
+        name = name
+    );
+    std::fs::write(format!("{}/src/main.ecl", name), main).into_diagnostic()?;
+    Ok(())
+}
+
+/// Mint an SSG engine project.
+fn mint_ssg(name: &str) -> miette::Result<()> {
+    std::fs::create_dir_all(format!("{}/src/templates", name)).into_diagnostic()?;
+    std::fs::create_dir_all(format!("{}/content", name)).into_diagnostic()?;
+    std::fs::create_dir_all(format!("{}/output", name)).into_diagnostic()?;
+
+    let main = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! {name} — A resource-aware static site generator.\n\
+        //!\n\
+        //! Generates static HTML from content files with energy/carbon budgets.\n\n\
+        import io\n\
+        import text\n\n\
+        /// Site configuration.\n\
+        type SiteConfig {{\n\
+        \x20   title: String,\n\
+        \x20   base_url: String,\n\
+        \x20   content_dir: String,\n\
+        \x20   output_dir: String,\n\
+        }}\n\n\
+        /// A content page.\n\
+        type Page {{\n\
+        \x20   title: String,\n\
+        \x20   slug: String,\n\
+        \x20   body: String,\n\
+        }}\n\n\
+        /// Build the entire site.\n\
+        def build_site(config: SiteConfig) -> Result<Int, String>\n\
+        \x20   @requires: energy < 100J\n\
+        \x20   @requires: carbon < 10gCO2e\n\
+        {{\n\
+        \x20   let pages = scan_content(config.content_dir)\n\
+        \x20   let count = array_len(pages)\n\
+        \x20   // Render each page\n\
+        \x20   println(string_concat(\"Building \", string_concat(int_to_string(count), \" pages...\")))\n\
+        \x20   Ok(count)\n\
+        }}\n\n\
+        /// Scan content directory for pages.\n\
+        def scan_content(dir: String) -> Array<Page> {{\n\
+        \x20   // Placeholder: read .ecl content files from directory\n\
+        \x20   [Page {{ title: \"Home\", slug: \"index\", body: \"Welcome!\" }}]\n\
+        }}\n\n\
+        def main() -> Unit {{\n\
+        \x20   let config = SiteConfig {{\n\
+        \x20       title: \"{name}\",\n\
+        \x20       base_url: \"https://example.com\",\n\
+        \x20       content_dir: \"content\",\n\
+        \x20       output_dir: \"output\",\n\
+        \x20   }}\n\
+        \x20   match build_site(config) {{\n\
+        \x20       Ok(n) => println(string_concat(\"Built \", string_concat(int_to_string(n), \" pages\"))),\n\
+        \x20       Err(e) => println(string_concat(\"Error: \", e)),\n\
+        \x20   }}\n\
+        }}\n",
+        name = name
+    );
+    std::fs::write(format!("{}/src/main.ecl", name), main).into_diagnostic()?;
+    Ok(())
+}
+
+/// Mint an LSP extension project.
+fn mint_lsp(name: &str) -> miette::Result<()> {
+    let main = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! {name} — An Eclexia language server extension.\n\
+        //!\n\
+        //! Extends the base eclexia-lsp with custom diagnostics or completions.\n\n\
+        import lsp\n\n\
+        /// Custom diagnostic provider.\n\
+        pub def custom_diagnostics(source: String) -> Array<lsp::Diagnostic> {{\n\
+        \x20   // Add custom lint rules or domain-specific checks\n\
+        \x20   []\n\
+        }}\n\n\
+        /// Custom completion provider.\n\
+        pub def custom_completions(prefix: String, context: lsp::Context) -> Array<lsp::CompletionItem> {{\n\
+        \x20   // Add domain-specific completions\n\
+        \x20   []\n\
+        }}\n\n\
+        def main() -> Unit {{\n\
+        \x20   let server = lsp::Server::new(\"{name}\", \"0.1.0\")\n\
+        \x20   let server = server\n\
+        \x20       .add_diagnostics_provider(custom_diagnostics)\n\
+        \x20       .add_completion_provider(custom_completions)\n\
+        \x20   lsp::serve_stdio(server)\n\
+        }}\n",
+        name = name
+    );
+    std::fs::write(format!("{}/src/main.ecl", name), main).into_diagnostic()?;
+    Ok(())
+}
+
+/// Mint a developer tool project.
+fn mint_tool(name: &str) -> miette::Result<()> {
+    let main = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! {name} — An Eclexia developer tool.\n\n\
+        /// Tool configuration.\n\
+        type Config {{\n\
+        \x20   verbose: Bool,\n\
+        \x20   dry_run: Bool,\n\
+        }}\n\n\
+        /// Run the tool with the given configuration.\n\
+        pub def run(config: Config, inputs: Array<String>) -> Result<Unit, String>\n\
+        \x20   @requires: energy < 50J\n\
+        {{\n\
+        \x20   if config.verbose {{\n\
+        \x20       println(string_concat(\"Processing \", int_to_string(array_len(inputs))))\n\
+        \x20   }}\n\
+        \x20   // Tool logic here\n\
+        \x20   Ok(())\n\
+        }}\n\n\
+        def main() -> Unit {{\n\
+        \x20   let config = Config {{ verbose: true, dry_run: false }}\n\
+        \x20   match run(config, []) {{\n\
+        \x20       Ok(_) => println(\"Done.\"),\n\
+        \x20       Err(e) => println(string_concat(\"Error: \", e)),\n\
+        \x20   }}\n\
+        }}\n",
+        name = name
+    );
+    std::fs::write(format!("{}/src/main.ecl", name), main).into_diagnostic()?;
+    Ok(())
+}
+
+/// Mint an application framework project.
+fn mint_framework(name: &str) -> miette::Result<()> {
+    std::fs::create_dir_all(format!("{}/src/middleware", name)).into_diagnostic()?;
+
+    let lib = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! {name} — An Eclexia application framework.\n\
+        //!\n\
+        //! Provides middleware, routing, and lifecycle management\n\
+        //! with resource-aware execution.\n\n\
+        /// Application context passed through middleware.\n\
+        pub type Context {{\n\
+        \x20   request: Request,\n\
+        \x20   response: Response,\n\
+        \x20   state: Map<String, String>,\n\
+        }}\n\n\
+        /// HTTP request.\n\
+        pub type Request {{\n\
+        \x20   method: String,\n\
+        \x20   path: String,\n\
+        \x20   headers: Map<String, String>,\n\
+        \x20   body: Option<String>,\n\
+        }}\n\n\
+        /// HTTP response.\n\
+        pub type Response {{\n\
+        \x20   status: Int,\n\
+        \x20   headers: Map<String, String>,\n\
+        \x20   body: String,\n\
+        }}\n\n\
+        /// Middleware function type.\n\
+        pub type Middleware = fn(Context, fn(Context) -> Context) -> Context\n\n\
+        /// Application builder.\n\
+        pub type App {{\n\
+        \x20   middlewares: Array<Middleware>,\n\
+        \x20   routes: Array<Route>,\n\
+        }}\n\n\
+        /// Route definition.\n\
+        pub type Route {{\n\
+        \x20   method: String,\n\
+        \x20   path: String,\n\
+        \x20   handler: fn(Context) -> Context,\n\
+        }}\n\n\
+        /// Create a new application.\n\
+        pub def new() -> App {{\n\
+        \x20   App {{ middlewares: [], routes: [] }}\n\
+        }}\n\n\
+        /// Add middleware to the application.\n\
+        pub def use_middleware(app: App, mw: Middleware) -> App {{\n\
+        \x20   App {{ ..app, middlewares: array_push(app.middlewares, mw) }}\n\
+        }}\n\n\
+        /// Add a route to the application.\n\
+        pub def route(app: App, method: String, path: String, handler: fn(Context) -> Context) -> App {{\n\
+        \x20   let r = Route {{ method: method, path: path, handler: handler }}\n\
+        \x20   App {{ ..app, routes: array_push(app.routes, r) }}\n\
+        }}\n\n\
+        /// Start the application.\n\
+        pub def listen(app: App, port: Int) -> Result<Unit, String>\n\
+        \x20   @requires: energy < 1000J\n\
+        {{\n\
+        \x20   println(string_concat(\"Listening on port \", int_to_string(port)))\n\
+        \x20   Ok(())\n\
+        }}\n",
+        name = name
+    );
+    std::fs::write(format!("{}/src/lib.ecl", name), lib).into_diagnostic()?;
+
+    let example = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! Example application using {name}.\n\n\
+        import {name}\n\n\
+        def handle_index(ctx: {name}::Context) -> {name}::Context {{\n\
+        \x20   {{ ..ctx, response: {{ ..ctx.response, status: 200, body: \"Hello!\" }} }}\n\
+        }}\n\n\
+        def main() -> Unit {{\n\
+        \x20   let app = {name}::new()\n\
+        \x20       .route(\"GET\", \"/\", handle_index)\n\
+        \x20   {name}::listen(app, 8080)\n\
+        }}\n",
+        name = name
+    );
+    std::fs::write(format!("{}/src/main.ecl", name), example).into_diagnostic()?;
+    Ok(())
+}
+
+/// Mint a database connector project (Idris2 ABI + Zig FFI + Eclexia binding).
+fn mint_db_connector(name: &str) -> miette::Result<()> {
+    // Create the three-layer directory structure
+    std::fs::create_dir_all(format!("{}/src/abi", name)).into_diagnostic()?;
+    std::fs::create_dir_all(format!("{}/ffi/zig/src", name)).into_diagnostic()?;
+    std::fs::create_dir_all(format!("{}/ffi/zig/test", name)).into_diagnostic()?;
+
+    // Idris2 ABI spec
+    let abi = format!(
+        "-- SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        -- {name} database connector ABI definitions\n\
+        --\n\
+        -- Formally verified interface with dependent type proofs.\n\n\
+        module {capitalized}.ABI.Types\n\n\
+        ||| Connection handle (opaque, non-null after successful connect).\n\
+        export\n\
+        data ConnHandle : Type where\n\
+        \x20 MkConnHandle : Ptr -> ConnHandle\n\n\
+        ||| Result of a database operation.\n\
+        public export\n\
+        data DBResult : Type -> Type where\n\
+        \x20 DBOk    : a -> DBResult a\n\
+        \x20 DBError : String -> DBResult a\n\n\
+        ||| Query result row.\n\
+        public export\n\
+        record Row where\n\
+        \x20 constructor MkRow\n\
+        \x20 columns : List (String, String)\n\n\
+        ||| Connection configuration.\n\
+        public export\n\
+        record ConnConfig where\n\
+        \x20 constructor MkConnConfig\n\
+        \x20 host     : String\n\
+        \x20 port     : Nat\n\
+        \x20 database : String\n\
+        \x20 user     : String\n\
+        \x20 password : String\n\n\
+        ||| Proof that port is in valid range.\n\
+        export\n\
+        validPort : (n : Nat) -> Dec (LTE 1 n, LTE n 65535)\n",
+        name = name, capitalized = capitalize(name)
+    );
+    std::fs::write(format!("{}/src/abi/Types.idr", name), abi).into_diagnostic()?;
+
+    // Zig FFI implementation
+    let ffi = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        // {name} database connector FFI implementation\n\n\
+        const std = @import(\"std\");\n\n\
+        pub const ConnHandle = opaque {{}};\n\n\
+        pub const Result = enum(c_int) {{\n\
+        \x20   ok = 0,\n\
+        \x20   connection_failed = 1,\n\
+        \x20   query_failed = 2,\n\
+        \x20   invalid_param = 3,\n\
+        \x20   null_pointer = 4,\n\
+        }};\n\n\
+        export fn {name_under}_connect(\n\
+        \x20   host: [*:0]const u8,\n\
+        \x20   port: u16,\n\
+        \x20   database: [*:0]const u8,\n\
+        \x20   user: [*:0]const u8,\n\
+        \x20   password: [*:0]const u8,\n\
+        ) ?*ConnHandle {{\n\
+        \x20   // TODO: Link against database client library\n\
+        \x20   _ = .{{ host, port, database, user, password }};\n\
+        \x20   return null;\n\
+        }}\n\n\
+        export fn {name_under}_disconnect(handle: ?*ConnHandle) void {{\n\
+        \x20   _ = handle;\n\
+        }}\n\n\
+        export fn {name_under}_query(\n\
+        \x20   handle: ?*ConnHandle,\n\
+        \x20   sql: [*:0]const u8,\n\
+        ) Result {{\n\
+        \x20   _ = .{{ handle, sql }};\n\
+        \x20   return .ok;\n\
+        }}\n",
+        name = name, name_under = name.replace('-', "_")
+    );
+    std::fs::write(format!("{}/ffi/zig/src/main.zig", name), ffi).into_diagnostic()?;
+
+    // Zig build file
+    let build_zig = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\n\
+        const std = @import(\"std\");\n\n\
+        pub fn build(b: *std.Build) void {{\n\
+        \x20   const target = b.standardTargetOptions(.{{}});\n\
+        \x20   const optimize = b.standardOptimizeOption(.{{}});\n\n\
+        \x20   const lib = b.addSharedLibrary(.{{\n\
+        \x20       .name = \"{name_under}\",\n\
+        \x20       .root_source_file = b.path(\"src/main.zig\"),\n\
+        \x20       .target = target,\n\
+        \x20       .optimize = optimize,\n\
+        \x20   }});\n\
+        \x20   b.installArtifact(lib);\n\n\
+        \x20   const tests = b.addTest(.{{\n\
+        \x20       .root_source_file = b.path(\"src/main.zig\"),\n\
+        \x20       .target = target,\n\
+        \x20       .optimize = optimize,\n\
+        \x20   }});\n\
+        \x20   const test_step = b.step(\"test\", \"Run tests\");\n\
+        \x20   test_step.dependOn(&b.addRunArtifact(tests).step);\n\
+        }}\n",
+        name_under = name.replace('-', "_")
+    );
+    std::fs::write(format!("{}/ffi/zig/build.zig", name), build_zig).into_diagnostic()?;
+
+    // Eclexia binding (user-facing API)
+    let binding = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! {name} — Database connector for Eclexia.\n\
+        //!\n\
+        //! ## Usage\n\
+        //!\n\
+        //! ```eclexia\n\
+        //! import {name_under}\n\
+        //!\n\
+        //! def main() -> Unit {{\n\
+        //!     let conn = {name_under}::connect(\"localhost\", 5432, \"mydb\", \"user\", \"pass\")\n\
+        //!     let rows = conn.query(\"SELECT * FROM users\")\n\
+        //! }}\n\
+        //! ```\n\n\
+        /// Database connection.\n\
+        pub type Connection {{\n\
+        \x20   handle: @extern_ptr,\n\
+        }}\n\n\
+        /// Query result.\n\
+        pub type QueryResult {{\n\
+        \x20   rows: Array<Row>,\n\
+        \x20   affected: Int,\n\
+        }}\n\n\
+        /// A result row.\n\
+        pub type Row {{\n\
+        \x20   columns: Array<(String, String)>,\n\
+        }}\n\n\
+        // FFI declarations\n\
+        extern \"C\" {{\n\
+        \x20   fn {name_under}_connect(host: Ptr, port: Int, db: Ptr, user: Ptr, pass: Ptr) -> Ptr;\n\
+        \x20   fn {name_under}_disconnect(handle: Ptr) -> Unit;\n\
+        \x20   fn {name_under}_query(handle: Ptr, sql: Ptr) -> Int;\n\
+        }}\n\n\
+        /// Connect to the database.\n\
+        pub def connect(host: String, port: Int, database: String, user: String, password: String) -> Result<Connection, String>\n\
+        \x20   @requires: energy < 50J\n\
+        {{\n\
+        \x20   let handle = {name_under}_connect(host, port, database, user, password)\n\
+        \x20   if handle == null {{\n\
+        \x20       Err(\"Connection failed\")\n\
+        \x20   }} else {{\n\
+        \x20       Ok(Connection {{ handle: handle }})\n\
+        \x20   }}\n\
+        }}\n\n\
+        /// Execute a query.\n\
+        pub def query(conn: Connection, sql: String) -> Result<QueryResult, String>\n\
+        \x20   @requires: energy < 100J\n\
+        {{\n\
+        \x20   let result = {name_under}_query(conn.handle, sql)\n\
+        \x20   if result == 0 {{\n\
+        \x20       Ok(QueryResult {{ rows: [], affected: 0 }})\n\
+        \x20   }} else {{\n\
+        \x20       Err(\"Query failed\")\n\
+        \x20   }}\n\
+        }}\n\n\
+        /// Close the connection.\n\
+        pub def disconnect(conn: Connection) -> Unit {{\n\
+        \x20   {name_under}_disconnect(conn.handle)\n\
+        }}\n",
+        name = name, name_under = name.replace('-', "_")
+    );
+    std::fs::write(format!("{}/src/lib.ecl", name), binding).into_diagnostic()?;
+
+    // Example main using the connector
+    let main = format!(
+        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        //! Example usage of {name} connector.\n\n\
+        import {name_under}\n\n\
+        def main() -> Unit {{\n\
+        \x20   match {name_under}::connect(\"localhost\", 5432, \"testdb\", \"user\", \"pass\") {{\n\
+        \x20       Ok(conn) => {{\n\
+        \x20           println(\"Connected!\")\n\
+        \x20           match {name_under}::query(conn, \"SELECT 1\") {{\n\
+        \x20               Ok(result) => println(\"Query ok\"),\n\
+        \x20               Err(e) => println(string_concat(\"Query error: \", e)),\n\
+        \x20           }}\n\
+        \x20           {name_under}::disconnect(conn)\n\
+        \x20       }},\n\
+        \x20       Err(e) => println(string_concat(\"Connection error: \", e)),\n\
+        \x20   }}\n\
+        }}\n",
+        name = name, name_under = name.replace('-', "_")
+    );
+    std::fs::write(format!("{}/src/main.ecl", name), main).into_diagnostic()?;
+
+    Ok(())
+}
+
+/// Capitalize the first letter of a string.
+fn capitalize(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+    }
 }
 
 /// Run tests.

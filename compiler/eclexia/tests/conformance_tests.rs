@@ -11,7 +11,7 @@ use std::process::Command;
 /// Run a valid test file (should succeed)
 fn run_valid_test(path: &Path) -> Result<(), String> {
     let output = Command::new("cargo")
-        .args(&["run", "--", "run", path.to_str().unwrap()])
+        .args(&["run", "--bin", "eclexia", "--", "run", path.to_str().unwrap()])
         .output()
         .map_err(|e| format!("Failed to execute: {}", e))?;
 
@@ -28,7 +28,7 @@ fn run_valid_test(path: &Path) -> Result<(), String> {
 /// Run an invalid test file (should fail with error)
 fn run_invalid_test(path: &Path) -> Result<(), String> {
     let output = Command::new("cargo")
-        .args(&["run", "--", "run", path.to_str().unwrap()])
+        .args(&["run", "--bin", "eclexia", "--", "run", path.to_str().unwrap()])
         .output()
         .map_err(|e| format!("Failed to execute: {}", e))?;
 
