@@ -60,7 +60,21 @@ impl TypeChecker<'_> {
                 Ok(())
             }
 
-            (Ty::Primitive(p1), Ty::Primitive(p2)) if p1 == p2 => Ok(()),
+            (Ty::Primitive(p1), Ty::Primitive(p2)) => {
+                use eclexia_ast::types::PrimitiveTy::*;
+                if p1 == p2
+                    || matches!((p1, p2), (Float, F64) | (F64, Float) | (Int, I64) | (I64, Int))
+                {
+                    Ok(())
+                } else {
+                    Err(TypeError::Mismatch {
+                        span,
+                        expected: t1,
+                        found: t2,
+                        hint: None,
+                    })
+                }
+            }
 
             (Ty::Function { params: p1, ret: r1 }, Ty::Function { params: p2, ret: r2 }) => {
                 if p1.len() != p2.len() {

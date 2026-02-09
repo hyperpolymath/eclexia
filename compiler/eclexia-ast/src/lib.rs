@@ -194,6 +194,8 @@ pub enum Item {
     StaticDecl(StaticDecl),
     /// Extern block
     ExternBlock(ExternBlock),
+    /// Macro definition
+    MacroDef(MacroDef),
     /// Error placeholder for resilient parsing
     Error(Span),
 }
@@ -571,6 +573,84 @@ pub enum ExternItem {
     },
 }
 
+// === Macro Definition ===
+
+/// Macro definition (declarative, hygienic)
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MacroDef {
+    /// Source location of the macro definition.
+    pub span: Span,
+    /// Visibility modifier.
+    pub visibility: Visibility,
+    /// Name of the macro.
+    pub name: Ident,
+    /// Macro rules (pattern → template pairs).
+    pub rules: Vec<MacroRule>,
+}
+
+/// A single macro rule (pattern → template).
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MacroRule {
+    /// Source location of this rule.
+    pub span: Span,
+    /// Pattern tokens to match against invocation.
+    pub pattern: Vec<MacroToken>,
+    /// Template tokens to expand.
+    pub template: Vec<MacroToken>,
+}
+
+/// A token in a macro pattern or template.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum MacroToken {
+    /// Literal token (keyword, punctuation, literal).
+    Literal(Ident),
+    /// Metavariable ($name:kind).
+    MetaVar { name: Ident, kind: MacroVarKind },
+    /// Repetition ($(...)*  or  $(...)+  or  $(...)?).
+    Repetition {
+        tokens: Vec<MacroToken>,
+        separator: Option<Ident>,
+        kind: RepetitionKind,
+    },
+}
+
+/// Kind of macro metavariable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum MacroVarKind {
+    /// Expression.
+    Expr,
+    /// Statement.
+    Stmt,
+    /// Type.
+    Ty,
+    /// Pattern.
+    Pat,
+    /// Identifier.
+    Ident,
+    /// Block.
+    Block,
+    /// Literal.
+    Literal,
+    /// Token tree (any).
+    Tt,
+}
+
+/// Kind of macro repetition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum RepetitionKind {
+    /// Zero or more (*).
+    ZeroOrMore,
+    /// One or more (+).
+    OneOrMore,
+    /// Zero or one (?).
+    Optional,
+}
+
 // === Type Definition (unchanged but with visibility) ===
 
 /// Type definition
@@ -798,6 +878,18 @@ pub enum ExprKind {
     AsyncBlock(Block),
     /// Await expression (expr.await)
     Await(ExprId),
+    /// Spawn expression (spawn { ... } or spawn expr)
+    Spawn(ExprId),
+    /// Channel creation (chan<T>() or chan<T>(capacity))
+    Channel { elem_ty: Option<TypeId>, capacity: Option<ExprId> },
+    /// Send on channel (send(ch, value))
+    Send { channel: ExprId, value: ExprId },
+    /// Receive from channel (recv(ch))
+    Recv(ExprId),
+    /// Select expression (select { ch1 => ..., ch2 => ... })
+    Select { arms: Vec<SelectArm> },
+    /// Yield expression (yield or yield value)
+    YieldExpr(Option<ExprId>),
     /// Handle expression (handle expr { handlers })
     Handle {
         expr: ExprId,
@@ -818,6 +910,20 @@ pub enum ExprKind {
     PathExpr(Vec<Ident>),
     /// Error placeholder for recovery
     Error,
+}
+
+/// Select arm for channel select expressions.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SelectArm {
+    /// Source location of the select arm.
+    pub span: Span,
+    /// Channel expression to receive from.
+    pub channel: ExprId,
+    /// Variable to bind the received value.
+    pub binding: Option<Ident>,
+    /// Body expression to evaluate when this arm fires.
+    pub body: ExprId,
 }
 
 /// Match arm

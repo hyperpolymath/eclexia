@@ -29,6 +29,7 @@ members = [
     "compiler/eclexia-llvm",
     "compiler/eclexia-wasm",
     "compiler/eclexia-tiered",
+    "runtime/eclexia-async",
 ]
 
 [workspace.package]

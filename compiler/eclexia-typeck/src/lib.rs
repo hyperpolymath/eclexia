@@ -329,7 +329,7 @@ impl<'a> TypeChecker<'a> {
                 let ty = self.resolve_ast_type(s.ty);
                 self.env.insert_mono(s.name.clone(), ty);
             }
-            Item::EffectDecl(_) | Item::ExternBlock(_) => {}
+            Item::EffectDecl(_) | Item::ExternBlock(_) | Item::MacroDef(_) => {}
             Item::Error(_) => {}
         }
     }
@@ -517,6 +517,25 @@ impl<'a> TypeChecker<'a> {
                         _ => Ty::Named { name: name.clone(), args: vec![] },
                     }
                 } else {
+                    // Handle Resource<Dimension> types specially
+                    if name.as_str() == "Resource" && args.len() == 1 {
+                        let dim_ty = &self.file.types[args[0]];
+                        if let eclexia_ast::TypeKind::Named { name: dim_name, args: dim_args } = &dim_ty.kind {
+                            if dim_args.is_empty() {
+                                let dimension = match dim_name.as_str() {
+                                    "Energy" | "energy" => Some(Dimension::energy()),
+                                    "Time" | "time" | "Latency" | "latency" => Some(Dimension::time()),
+                                    "Memory" | "memory" => Some(Dimension::memory()),
+                                    "Carbon" | "carbon" => Some(Dimension::carbon()),
+                                    "Power" | "power" => Some(Dimension::power()),
+                                    _ => None,
+                                };
+                                if let Some(dim) = dimension {
+                                    return Ty::Resource { base: PrimitiveTy::Float, dimension: dim };
+                                }
+                            }
+                        }
+                    }
                     let arg_tys: Vec<Ty> = args.iter().map(|a| self.resolve_ast_type(*a)).collect();
                     Ty::Named { name: name.clone(), args: arg_tys }
                 }
@@ -611,7 +630,8 @@ impl<'a> TypeChecker<'a> {
             }
             Item::TraitDecl(_)
             | Item::EffectDecl(_)
-            | Item::ExternBlock(_) => {}
+            | Item::ExternBlock(_)
+            | Item::MacroDef(_) => {}
             Item::Error(_) => {}
         }
     }
@@ -631,6 +651,36 @@ impl<'a> TypeChecker<'a> {
             let mut body_env = self.env.child();
             for (param, param_ty) in func.params.iter().zip(params.iter()) {
                 body_env.insert_mono(param.name.clone(), param_ty.clone());
+            }
+
+            // Inject resource names from @requires constraints into scope
+            for constraint in &func.constraints {
+                if let ConstraintKind::Resource { resource, amount: _, .. } = &constraint.kind {
+                    if let Some(dim) = Self::resource_name_to_dimension(resource.as_str()) {
+                        body_env.insert_mono(
+                            resource.clone(),
+                            Ty::Resource { base: PrimitiveTy::Float, dimension: dim },
+                        );
+                    }
+                }
+            }
+
+            // Also inject resource names from @requires attributes (annotation syntax)
+            for attr in &func.attributes {
+                if attr.name.as_str() == "requires" {
+                    // Args come in pairs: [resource_name, amount, resource_name2, amount2, ...]
+                    let mut i = 0;
+                    while i < attr.args.len() {
+                        let resource = &attr.args[i];
+                        if let Some(dim) = Self::resource_name_to_dimension(resource.as_str()) {
+                            body_env.insert_mono(
+                                resource.clone(),
+                                Ty::Resource { base: PrimitiveTy::Float, dimension: dim },
+                            );
+                        }
+                        i += 2; // Skip the amount arg
+                    }
+                }
             }
 
             let old_env = std::mem::replace(&mut self.env, body_env);
@@ -1098,8 +1148,16 @@ impl<'a> TypeChecker<'a> {
                 Ty::Named { name: name.clone(), args: vec![] }
             }
 
-            ExprKind::Resource(_) => {
-                Ty::Primitive(PrimitiveTy::Float)
+            ExprKind::Resource(amount) => {
+                if let Some(ref unit_name) = amount.unit {
+                    if let Some(unit) = eclexia_ast::dimension::parse_unit(unit_name.as_str()) {
+                        Ty::Resource { base: PrimitiveTy::Float, dimension: unit.dimension }
+                    } else {
+                        Ty::Primitive(PrimitiveTy::Float)
+                    }
+                } else {
+                    Ty::Primitive(PrimitiveTy::Float)
+                }
             }
 
             ExprKind::Cast { expr: inner, target_ty } => {
@@ -1114,6 +1172,12 @@ impl<'a> TypeChecker<'a> {
                             || (s.is_integer() && *t == PrimitiveTy::Char)
                             || (*s == PrimitiveTy::Char && t.is_integer())
                     }
+                    // Allow numeric ↔ Resource casts (dimension tagging/untagging)
+                    (Ty::Primitive(p), Ty::Resource { .. }) | (Ty::Resource { .. }, Ty::Primitive(p)) => {
+                        p.is_numeric()
+                    }
+                    // Allow Resource ↔ Resource casts (dimension conversion)
+                    (Ty::Resource { .. }, Ty::Resource { .. }) => true,
                     (Ty::Error, _) | (_, Ty::Error) => true,
                     (Ty::Var(_), _) | (_, Ty::Var(_)) => true, // Allow casts involving type vars
                     _ => false,
@@ -1204,6 +1268,47 @@ impl<'a> TypeChecker<'a> {
             }
 
             ExprKind::Error => Ty::Error,
+
+            // Concurrency expressions — type checking stubs
+            ExprKind::Spawn(inner) => {
+                self.infer_expr(*inner);
+                self.fresh_var() // Returns a future/handle type
+            }
+            ExprKind::Channel { elem_ty, capacity } => {
+                if let Some(cap) = capacity {
+                    self.infer_expr(*cap);
+                }
+                if let Some(ty_id) = elem_ty {
+                    let _elem = self.resolve_ast_type(*ty_id);
+                }
+                self.fresh_var() // Returns a channel type
+            }
+            ExprKind::Send { channel, value } => {
+                self.infer_expr(*channel);
+                self.infer_expr(*value);
+                Ty::Primitive(PrimitiveTy::Unit)
+            }
+            ExprKind::Recv(channel) => {
+                self.infer_expr(*channel);
+                self.fresh_var() // Returns the channel's element type
+            }
+            ExprKind::Select { arms } => {
+                let mut result_ty = self.fresh_var();
+                for arm in arms {
+                    let arm_ty = self.infer_expr(arm.body);
+                    if let Err(e) = self.unify(&result_ty, &arm_ty, expr.span) {
+                        self.errors.push(e);
+                    }
+                    result_ty = arm_ty;
+                }
+                result_ty
+            }
+            ExprKind::YieldExpr(value) => {
+                if let Some(expr_id) = value {
+                    self.infer_expr(*expr_id);
+                }
+                Ty::Primitive(PrimitiveTy::Unit)
+            }
         }
     }
 
@@ -1509,6 +1614,18 @@ impl<'a> TypeChecker<'a> {
     /// Check if a type is an integer.
     fn is_integer(&self, ty: &Ty) -> bool {
         matches!(ty, Ty::Primitive(p) if p.is_integer())
+    }
+
+    /// Map a resource name to its dimension.
+    fn resource_name_to_dimension(name: &str) -> Option<Dimension> {
+        match name {
+            "energy" => Some(Dimension::energy()),
+            "time" | "latency" => Some(Dimension::time()),
+            "memory" => Some(Dimension::memory()),
+            "carbon" => Some(Dimension::carbon()),
+            "power" => Some(Dimension::power()),
+            _ => None,
+        }
     }
 
     /// Check resource constraints on a function.

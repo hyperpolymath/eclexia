@@ -140,6 +140,10 @@ impl<'a> LoweringContext<'a> {
                 }
             }
             ast::Item::Error(span) => Item::Error(*span),
+            ast::Item::MacroDef(_) => {
+                // Macro definitions are not lowered to HIR
+                Item::Error(Span::default())
+            }
         }
     }
 
@@ -1006,6 +1010,29 @@ impl<'a> LoweringContext<'a> {
                 }
             }
             ast::ExprKind::Error => ExprKind::Literal(Literal::Unit),
+
+            // Concurrency primitives (not yet fully lowered to HIR)
+            ast::ExprKind::Spawn(inner) => {
+                let _inner_id = self.lower_expr(*inner);
+                ExprKind::Literal(Literal::Unit) // TODO: spawn support in HIR
+            }
+            ast::ExprKind::Channel { .. } => {
+                ExprKind::Literal(Literal::Unit) // TODO: channel support in HIR
+            }
+            ast::ExprKind::Send { .. } => {
+                ExprKind::Literal(Literal::Unit) // TODO: send support in HIR
+            }
+            ast::ExprKind::Recv(inner) => {
+                let _inner_id = self.lower_expr(*inner);
+                ExprKind::Literal(Literal::Unit) // TODO: recv support in HIR
+            }
+            ast::ExprKind::Select { .. } => {
+                ExprKind::Literal(Literal::Unit) // TODO: select support in HIR
+            }
+            ast::ExprKind::YieldExpr(val) => {
+                let _val_id = val.map(|v| self.lower_expr(v));
+                ExprKind::Literal(Literal::Unit) // TODO: yield support in HIR
+            }
         };
 
         self.hir.exprs.alloc(Expr {

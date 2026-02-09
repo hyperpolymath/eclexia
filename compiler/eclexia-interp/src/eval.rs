@@ -102,11 +102,12 @@ impl Interpreter {
                 self.global.define(func.name.clone(), value);
             }
             Item::AdaptiveFunction(func) => {
-                // Parse @requires constraints
+                // Parse @requires constraints from both sources
                 let mut requires = ResourceRequires::default();
+
+                // Source 1: constraint syntax (@requires: energy < 50J)
                 for constraint in &func.constraints {
                     if let ConstraintKind::Resource { resource, op, amount } = &constraint.kind {
-                        // Only support < and <= for @requires
                         if matches!(op, CompareOp::Lt | CompareOp::Le) {
                             match resource.as_str() {
                                 "energy" => requires.energy = Some(amount.value),
@@ -114,6 +115,28 @@ impl Interpreter {
                                 "memory" => requires.memory = Some(amount.value),
                                 "carbon" => requires.carbon = Some(amount.value),
                                 _ => {}
+                            }
+                        }
+                    }
+                }
+
+                // Source 2: attribute syntax @requires(energy: 50J)
+                for attr in &func.attributes {
+                    if attr.name.as_str() == "requires" {
+                        for chunk in attr.args.chunks(2) {
+                            if chunk.len() == 2 {
+                                let num_str: String = chunk[1].chars()
+                                    .take_while(|c| c.is_ascii_digit() || *c == '.')
+                                    .collect();
+                                if let Ok(val) = num_str.parse::<f64>() {
+                                    match chunk[0].as_str() {
+                                        "energy" => requires.energy = Some(val),
+                                        "latency" => requires.latency = Some(val),
+                                        "memory" => requires.memory = Some(val),
+                                        "carbon" => requires.carbon = Some(val),
+                                        _ => {}
+                                    }
+                                }
                             }
                         }
                     }
@@ -276,6 +299,9 @@ impl Interpreter {
             Item::ExternBlock(_) => {
                 // Extern blocks: foreign function stubs
                 // Would need FFI integration; skip for now
+            }
+            Item::MacroDef(_) => {
+                // Macro definitions: would need macro expansion; skip for now
             }
             Item::Error(_) => {
                 // Parse error placeholder: silently skip
@@ -614,6 +640,14 @@ impl Interpreter {
             }
 
             ExprKind::Error => Err(RuntimeError::custom("error expression")),
+
+            // Concurrency expressions — not yet supported in interpreter
+            ExprKind::Spawn(_) => Err(RuntimeError::custom("spawn not yet supported in interpreter")),
+            ExprKind::Channel { .. } => Err(RuntimeError::custom("channels not yet supported in interpreter")),
+            ExprKind::Send { .. } => Err(RuntimeError::custom("send not yet supported in interpreter")),
+            ExprKind::Recv(_) => Err(RuntimeError::custom("recv not yet supported in interpreter")),
+            ExprKind::Select { .. } => Err(RuntimeError::custom("select not yet supported in interpreter")),
+            ExprKind::YieldExpr(_) => Err(RuntimeError::custom("yield not yet supported in interpreter")),
         }
     }
 
@@ -1025,17 +1059,93 @@ impl Interpreter {
                                             }
                                         }
                                     }
-                                    // Also check constraints (for @requires: syntax)
+                                    // Parse and enforce @requires constraints.
+                                    // Constraints come from two sources:
+                                    //   1. f.constraints (parsed from `@requires: energy < 50J`)
+                                    //   2. f.attributes  (parsed from `@requires(energy: 50J)`)
+                                    let mut fn_energy_limit: Option<f64> = None;
+
+                                    // Source 1: constraint syntax
                                     for constraint in &f.constraints {
-                                        if let ConstraintKind::Resource { resource, .. } = &constraint.kind {
+                                        if let ConstraintKind::Resource { resource, op, amount } = &constraint.kind {
                                             call_env.define(resource.clone(), Value::String(resource.clone()));
+                                            if matches!(op, CompareOp::Lt | CompareOp::Le) {
+                                                match resource.as_str() {
+                                                    "energy" => fn_energy_limit = Some(amount.value),
+                                                    _ => {}
+                                                }
+                                            }
                                         }
                                     }
-                                    match self.eval_block(&f.body, file, &call_env) {
-                                        Ok(v) => return Ok(v),
-                                        Err(RuntimeError::Return(v)) => return Ok(v),
-                                        Err(e) => return Err(e),
+
+                                    // Source 2: attribute syntax @requires(energy: 50J)
+                                    for attr in &f.attributes {
+                                        if attr.name.as_str() == "requires" {
+                                            for chunk in attr.args.chunks(2) {
+                                                if chunk.len() == 2 {
+                                                    let resource_name = &chunk[0];
+                                                    let amount_str = &chunk[1];
+                                                    call_env.define(resource_name.clone(), Value::String(resource_name.clone()));
+                                                    if resource_name.as_str() == "energy" {
+                                                        // Parse amount: "0J", "15J", "25J" etc.
+                                                        let num_str: String = amount_str.chars()
+                                                            .take_while(|c| c.is_ascii_digit() || *c == '.')
+                                                            .collect();
+                                                        if let Ok(val) = num_str.parse::<f64>() {
+                                                            fn_energy_limit = Some(val);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
+                                    // Enforce @requires energy budget.
+                                    // A function with @requires(energy: N) declares a
+                                    // ceiling of N joules.  Calling it adds N to the
+                                    // caller's tracked consumption.  If the body's
+                                    // sub-calls exceed N, we reject.
+                                    if let Some(limit) = fn_energy_limit {
+                                        // Zero budget means impossible to execute
+                                        if limit == 0.0 {
+                                            return Err(RuntimeError::ResourceViolation {
+                                                message: format!(
+                                                    "function '{}' has @requires(energy: 0J) — zero budget cannot be satisfied",
+                                                    f.name
+                                                ),
+                                                hint: Some("increase the energy budget or remove the @requires constraint".to_string()),
+                                            });
+                                        }
+                                        // Add declared cost to caller's accounting
+                                        self.energy_used += limit;
+                                        // Check caller's budget immediately
+                                        if self.energy_used > self.energy_budget {
+                                            return Err(RuntimeError::ResourceViolation {
+                                                message: format!(
+                                                    "calling '{}' would use {:.1}J total, exceeding budget of {:.1}J",
+                                                    f.name, self.energy_used, self.energy_budget
+                                                ),
+                                                hint: Some("reduce resource consumption or increase the @requires budget".to_string()),
+                                            });
+                                        }
+                                    }
+                                    // Save and set callee's own budget scope
+                                    let saved_energy = self.energy_used;
+                                    let saved_budget = self.energy_budget;
+                                    if let Some(limit) = fn_energy_limit {
+                                        self.energy_used = 0.0;
+                                        self.energy_budget = limit;
+                                    }
+                                    let result = match self.eval_block(&f.body, file, &call_env) {
+                                        Ok(v) => Ok(v),
+                                        Err(RuntimeError::Return(v)) => Ok(v),
+                                        Err(e) => Err(e),
+                                    };
+                                    // Restore caller's budget scope
+                                    if fn_energy_limit.is_some() {
+                                        self.energy_used = saved_energy;
+                                        self.energy_budget = saved_budget;
+                                    }
+                                    return result;
                                 }
                             }
                         }
@@ -1095,13 +1205,30 @@ impl Interpreter {
                     }
                 } else {
                     // No @when clauses: evaluate all feasible solutions, pick the one
-                    // with the maximum numeric result (economics optimization)
+                    // with the maximum numeric result (economics optimization).
+                    // Solutions are first filtered by @requires feasibility.
+                    let energy_limit = func.requires.energy.unwrap_or(self.energy_budget);
+                    let latency_limit = func.requires.latency.unwrap_or(f64::INFINITY);
+                    let carbon_limit = func.requires.carbon.unwrap_or(self.carbon_budget);
+
                     let mut best_result: Option<(usize, Value)> = None;
 
                     for item in &file.items {
                         if let Item::AdaptiveFunction(f) = item {
                             if f.name == func.name {
                                 for (i, sol) in f.solutions.iter().enumerate() {
+                                    // Check feasibility: solution @provides must fit within @requires
+                                    let sol_provides = &func.solutions[i].provides;
+                                    if sol_provides.energy.unwrap_or(0.0) > energy_limit {
+                                        continue;
+                                    }
+                                    if sol_provides.latency.unwrap_or(0.0) > latency_limit {
+                                        continue;
+                                    }
+                                    if sol_provides.carbon.unwrap_or(0.0) > carbon_limit {
+                                        continue;
+                                    }
+
                                     let sol_env = call_env.child();
                                     match self.eval_block(&sol.body, file, &sol_env) {
                                         Ok(v) | Err(RuntimeError::Return(v)) => {

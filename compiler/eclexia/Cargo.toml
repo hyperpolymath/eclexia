@@ -28,7 +28,10 @@ eclexia-lint = { path = "../eclexia-lint" }
 eclexia-debugger = { path = "../eclexia-debugger" }
 eclexia-doc = { path = "../eclexia-doc" }
 eclexia-runtime = { path = "../../runtime/eclexia-runtime" }
+eclexia-db = { path = "../eclexia-db" }
+eclexia-tiered = { path = "../eclexia-tiered" }
 
+notify = { workspace = true }
 clap = { workspace = true }
 miette = { workspace = true }
 rustyline = { workspace = true }

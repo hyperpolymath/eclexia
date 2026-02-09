@@ -5,6 +5,7 @@
 
 use std::path::Path;
 use miette::{Context, IntoDiagnostic};
+use std::time::Duration;
 
 /// Build an Eclexia program.
 pub fn build(input: &Path, _output: Option<&Path>, _target: &str) -> miette::Result<()> {
@@ -1603,4 +1604,349 @@ pub fn doc(inputs: &[std::path::PathBuf], output_dir: &std::path::Path, format: 
     println!("\n✓ Documentation generated in {}/", output_dir.display());
 
     Ok(())
+}
+
+/// Watch for file changes and rebuild incrementally.
+pub fn watch(path: &Path, debounce_ms: u64) -> miette::Result<()> {
+    let debounce = Duration::from_millis(debounce_ms);
+
+    // Determine directory to watch
+    let watch_path = if path.is_dir() {
+        path.to_path_buf()
+    } else {
+        path.parent().unwrap_or(Path::new(".")).to_path_buf()
+    };
+
+    // Collect initial .ecl files
+    let ecl_files: Vec<_> = glob::glob(&format!("{}/**/*.ecl", watch_path.display()))
+        .into_diagnostic()?
+        .filter_map(|p| p.ok())
+        .collect();
+
+    if ecl_files.is_empty() {
+        return Err(miette::miette!("No .ecl files found in {}", watch_path.display()));
+    }
+
+    println!("Watching {} file(s) in {} (debounce: {}ms)", ecl_files.len(), watch_path.display(), debounce_ms);
+    println!("Press Ctrl+C to stop.\n");
+
+    // Initial compilation
+    for file_path in &ecl_files {
+        match check_file(file_path) {
+            Ok(()) => println!("  ✓ {}", file_path.display()),
+            Err(msg) => println!("  ✗ {}: {}", file_path.display(), msg),
+        }
+    }
+
+    println!("\n--- Watching for changes ---\n");
+
+    // File watcher
+    use std::sync::mpsc;
+    let (tx, rx) = mpsc::channel::<notify::Event>();
+
+    let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+        if let Ok(event) = res {
+            if matches!(event.kind,
+                notify::EventKind::Modify(_) | notify::EventKind::Create(_) | notify::EventKind::Remove(_)
+            ) {
+                let _ = tx.send(event);
+            }
+        }
+    }).into_diagnostic().wrap_err("Failed to create file watcher")?;
+
+    use notify::Watcher;
+    watcher.watch(&watch_path, notify::RecursiveMode::Recursive)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Failed to watch {}", watch_path.display()))?;
+
+    // Event loop with debouncing
+    loop {
+        let first_event = rx.recv().into_diagnostic()?;
+        let mut changed: std::collections::HashSet<std::path::PathBuf> = std::collections::HashSet::new();
+        for p in &first_event.paths {
+            if p.extension().and_then(|e| e.to_str()) == Some("ecl") {
+                changed.insert(p.clone());
+            }
+        }
+
+        // Debounce window
+        let deadline = std::time::Instant::now() + debounce;
+        while std::time::Instant::now() < deadline {
+            match rx.recv_timeout(debounce) {
+                Ok(event) => {
+                    for p in &event.paths {
+                        if p.extension().and_then(|e| e.to_str()) == Some("ecl") {
+                            changed.insert(p.clone());
+                        }
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => break,
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(miette::miette!("File watcher disconnected"));
+                }
+            }
+        }
+
+        if changed.is_empty() {
+            continue;
+        }
+
+        let timestamp = chrono_lite_timestamp();
+        println!("[{}] {} file(s) changed:", timestamp, changed.len());
+
+        for file_path in &changed {
+            match check_file(file_path) {
+                Ok(()) => println!("  ✓ {}", file_path.display()),
+                Err(msg) => println!("  ✗ {}: {}", file_path.display(), msg),
+            }
+        }
+        println!();
+    }
+}
+
+/// Check a single file (parse + type check). Returns Ok or error message.
+fn check_file(file_path: &Path) -> Result<(), String> {
+    let source = std::fs::read_to_string(file_path)
+        .map_err(|e| format!("read error: {}", e))?;
+
+    let (file, parse_errors) = eclexia_parser::parse(&source);
+    if !parse_errors.is_empty() {
+        let msgs: Vec<String> = parse_errors.iter()
+            .map(|e| e.format_with_source(&source))
+            .collect();
+        return Err(format!("{} parse error(s):\n    {}", parse_errors.len(), msgs.join("\n    ")));
+    }
+
+    let type_errors = eclexia_typeck::check(&file);
+    if !type_errors.is_empty() {
+        let msgs: Vec<String> = type_errors.iter()
+            .map(|e| e.format_with_source(&source))
+            .collect();
+        return Err(format!("{} type error(s):\n    {}", type_errors.len(), msgs.join("\n    ")));
+    }
+
+    Ok(())
+}
+
+/// Simple timestamp without chrono dependency.
+fn chrono_lite_timestamp() -> String {
+    use std::time::SystemTime;
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = now.as_secs();
+    let hours = (secs / 3600) % 24;
+    let minutes = (secs / 60) % 60;
+    let seconds = secs % 60;
+    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+}
+
+/// Disassemble an Eclexia source file to show its bytecode.
+pub fn disasm(input: &Path) -> miette::Result<()> {
+    let source = std::fs::read_to_string(input)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Failed to read {}", input.display()))?;
+
+    // Parse
+    let (file, parse_errors) = eclexia_parser::parse(&source);
+    if !parse_errors.is_empty() {
+        eprintln!("Parse errors:");
+        for err in &parse_errors {
+            eprintln!("  {}", err.format_with_source(&source));
+        }
+        return Err(miette::miette!("Parsing failed with {} errors", parse_errors.len()));
+    }
+
+    // Type check
+    let type_errors = eclexia_typeck::check(&file);
+    if !type_errors.is_empty() {
+        eprintln!("Type errors:");
+        for err in &type_errors {
+            eprintln!("  {}", err.format_with_source(&source));
+        }
+        return Err(miette::miette!("Type checking failed with {} errors", type_errors.len()));
+    }
+
+    // Lower to HIR -> MIR -> Bytecode
+    let hir_file = eclexia_hir::lower_source_file(&file);
+    let mir_file = eclexia_mir::lower_hir_file(&hir_file);
+
+    use eclexia_codegen::Backend;
+    let mut codegen = eclexia_codegen::BytecodeGenerator::new();
+    let module = codegen.generate(&mir_file)
+        .map_err(|e| miette::miette!("Code generation failed: {}", e))?;
+
+    // Display disassembly
+    println!("; Eclexia bytecode disassembly: {}", input.display());
+    println!("; {} function(s), {} string(s), {} integer(s), {} float(s)",
+        module.functions.len(), module.strings.len(),
+        module.integers.len(), module.floats.len());
+
+    if let Some(entry) = module.entry_point {
+        println!("; entry point: function #{}", entry);
+    }
+    println!();
+
+    // String pool
+    if !module.strings.is_empty() {
+        println!("; === String Pool ===");
+        for (i, s) in module.strings.iter().enumerate() {
+            println!(";   [{}] {:?}", i, s);
+        }
+        println!();
+    }
+
+    // Integer pool
+    if !module.integers.is_empty() {
+        println!("; === Integer Pool ===");
+        for (i, n) in module.integers.iter().enumerate() {
+            println!(";   [{}] {}", i, n);
+        }
+        println!();
+    }
+
+    // Float pool
+    if !module.floats.is_empty() {
+        println!("; === Float Pool ===");
+        for (i, f) in module.floats.iter().enumerate() {
+            println!(";   [{}] {}", i, f);
+        }
+        println!();
+    }
+
+    // Functions
+    for (func_idx, func) in module.functions.iter().enumerate() {
+        println!("; === Function #{}: {} ===", func_idx, func.name);
+        println!(";   params: {}, locals: {}, return: {:?}",
+            func.param_count, func.local_count, func.return_ty);
+
+        if func.is_adaptive {
+            println!(";   [adaptive]");
+        }
+
+        if !func.resource_constraints.is_empty() {
+            println!(";   constraints:");
+            for (name, dim, limit) in &func.resource_constraints {
+                println!(";     {} ({:?}) <= {}", name, dim, limit);
+            }
+        }
+
+        if !func.labels.is_empty() {
+            println!(";   labels:");
+            for (label, offset) in &func.labels {
+                println!(";     {} -> {}", label, offset);
+            }
+        }
+
+        println!();
+
+        for (offset, instr) in func.instructions.iter().enumerate() {
+            let label_marker = func.labels.iter()
+                .find(|(_, &off)| off == offset)
+                .map(|(name, _)| format!(" <{}>", name))
+                .unwrap_or_default();
+
+            println!("  {:04}{:16} {}", offset, label_marker, format_instruction(instr, &module));
+        }
+
+        println!();
+    }
+
+    Ok(())
+}
+
+/// Format a single bytecode instruction for display.
+fn format_instruction(instr: &eclexia_codegen::bytecode::Instruction, module: &eclexia_codegen::bytecode::BytecodeModule) -> String {
+    use eclexia_codegen::bytecode::Instruction;
+
+    match instr {
+        // Stack
+        Instruction::PushInt(n) => format!("push_int       {}", n),
+        Instruction::PushFloat(f) => format!("push_float     {}", f),
+        Instruction::PushBool(b) => format!("push_bool      {}", b),
+        Instruction::PushString(idx) => {
+            let s = module.strings.get(*idx).map(|s| s.as_str()).unwrap_or("???");
+            format!("push_string    [{}] {:?}", idx, s)
+        }
+        Instruction::PushUnit => "push_unit".to_string(),
+        Instruction::LoadLocal(n) => format!("load_local     %{}", n),
+        Instruction::StoreLocal(n) => format!("store_local    %{}", n),
+        Instruction::Dup => "dup".to_string(),
+        Instruction::Pop => "pop".to_string(),
+
+        // Arithmetic
+        Instruction::AddInt => "add_int".to_string(),
+        Instruction::SubInt => "sub_int".to_string(),
+        Instruction::MulInt => "mul_int".to_string(),
+        Instruction::DivInt => "div_int".to_string(),
+        Instruction::RemInt => "rem_int".to_string(),
+        Instruction::NegInt => "neg_int".to_string(),
+        Instruction::AddFloat => "add_float".to_string(),
+        Instruction::SubFloat => "sub_float".to_string(),
+        Instruction::MulFloat => "mul_float".to_string(),
+        Instruction::DivFloat => "div_float".to_string(),
+        Instruction::NegFloat => "neg_float".to_string(),
+
+        // Comparison
+        Instruction::EqInt => "eq_int".to_string(),
+        Instruction::NeInt => "ne_int".to_string(),
+        Instruction::LtInt => "lt_int".to_string(),
+        Instruction::LeInt => "le_int".to_string(),
+        Instruction::GtInt => "gt_int".to_string(),
+        Instruction::GeInt => "ge_int".to_string(),
+        Instruction::EqFloat => "eq_float".to_string(),
+        Instruction::NeFloat => "ne_float".to_string(),
+        Instruction::LtFloat => "lt_float".to_string(),
+        Instruction::LeFloat => "le_float".to_string(),
+        Instruction::GtFloat => "gt_float".to_string(),
+        Instruction::GeFloat => "ge_float".to_string(),
+
+        // Logical & bitwise
+        Instruction::And => "and".to_string(),
+        Instruction::Or => "or".to_string(),
+        Instruction::Not => "not".to_string(),
+        Instruction::BitAnd => "bit_and".to_string(),
+        Instruction::BitOr => "bit_or".to_string(),
+        Instruction::BitXor => "bit_xor".to_string(),
+        Instruction::Shl => "shl".to_string(),
+        Instruction::Shr => "shr".to_string(),
+        Instruction::BitNot => "bit_not".to_string(),
+
+        // Exponentiation & range
+        Instruction::PowInt => "pow_int".to_string(),
+        Instruction::PowFloat => "pow_float".to_string(),
+        Instruction::Range => "range".to_string(),
+        Instruction::RangeInclusive => "range_incl".to_string(),
+
+        // Control flow
+        Instruction::Jump(target) => format!("jump           @{:04}", target),
+        Instruction::JumpIf(target) => format!("jump_if        @{:04}", target),
+        Instruction::JumpIfNot(target) => format!("jump_if_not    @{:04}", target),
+        Instruction::Return => "return".to_string(),
+        Instruction::ReturnValue => "return_val".to_string(),
+
+        // Calls
+        Instruction::Call(func_idx, argc) => format!("call           fn#{} ({})", func_idx, argc),
+        Instruction::CallIndirect(argc) => format!("call_indirect  ({})", argc),
+        Instruction::PushFunction(idx) => format!("push_fn        fn#{}", idx),
+
+        // Field/index
+        Instruction::FieldAccess(name) => format!("field_access   .{}", name),
+        Instruction::IndexAccess => "index_access".to_string(),
+
+        // Resources
+        Instruction::TrackResource { resource, dimension } => {
+            format!("track_resource {} ({:?})", resource, dimension)
+        }
+        Instruction::ShadowPriceHook { resource, dimension } => {
+            format!("shadow_hook    {} ({:?})", resource, dimension)
+        }
+
+        // Type operations
+        Instruction::Cast { from, to } => format!("cast           {:?} -> {:?}", from, to),
+
+        // Debug
+        Instruction::DebugPrint => "debug_print".to_string(),
+        Instruction::Nop => "nop".to_string(),
+    }
 }

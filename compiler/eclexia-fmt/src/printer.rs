@@ -83,6 +83,7 @@ impl<'a> Printer<'a> {
             Item::StaticDecl(decl) => self.format_static_decl(decl, file),
             Item::ExternBlock(block) => self.format_extern_block(block, file),
             Item::Error(_) => {} // Skip error items silently
+            Item::MacroDef(_) => {} // Skip macro definitions (not yet formatted)
         }
     }
 
@@ -919,6 +920,13 @@ impl<'a> Printer<'a> {
                 }
             }
             ExprKind::Error => self.write("/* error */"),
+            // Concurrency primitives (not yet fully formatted)
+            ExprKind::Spawn(_) => self.write("/* spawn */"),
+            ExprKind::Channel { .. } => self.write("/* channel */"),
+            ExprKind::Send { .. } => self.write("/* send */"),
+            ExprKind::Recv(_) => self.write("/* recv */"),
+            ExprKind::Select { .. } => self.write("/* select */"),
+            ExprKind::YieldExpr(_) => self.write("yield"),
         }
     }
 

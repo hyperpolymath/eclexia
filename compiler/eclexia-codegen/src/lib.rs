@@ -15,7 +15,7 @@
 //! - Adaptive function dispatch
 //! - Efficient calling conventions
 
-mod bytecode;
+pub mod bytecode;
 mod cranelift_backend;
 mod vm;
 

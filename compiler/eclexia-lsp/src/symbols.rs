@@ -409,6 +409,15 @@ impl SymbolTable {
                 }
             }
             Item::Error(_) => {} // Skip error items silently
+            Item::MacroDef(m) => {
+                let doc = extract_doc_comment(source, m.span.start as usize);
+                self.define_symbol(Symbol {
+                    name: m.name.clone(),
+                    kind: SymbolKind::Function, // macros appear as function-like symbols
+                    definition_span: m.span,
+                    doc,
+                });
+            }
         }
     }
 

@@ -1808,7 +1808,10 @@ impl<'src> Parser<'src> {
                 | TokenKind::Static
                 | TokenKind::Extern
                 | TokenKind::Struct
-                | TokenKind::Enum => return,
+                | TokenKind::Enum
+                | TokenKind::Hash
+                | TokenKind::AtRequires
+                | TokenKind::AtProvides => return,
                 _ => {
                     self.advance();
                 }
@@ -1827,6 +1830,10 @@ impl<'src> Parser<'src> {
                 | TokenKind::Loop
                 | TokenKind::Break
                 | TokenKind::Continue
+                | TokenKind::Match
+                | TokenKind::Def
+                | TokenKind::Fn
+                | TokenKind::Struct
                 | TokenKind::RBrace => return,
                 TokenKind::Semi => {
                     self.advance();
@@ -1837,6 +1844,36 @@ impl<'src> Parser<'src> {
                 }
             }
         }
+    }
+
+    /// Skip tokens until we reach a matching closing delimiter.
+    /// Tracks nesting depth to handle nested delimiters correctly.
+    /// Returns the span of the closing delimiter, or a dummy span on EOF.
+    fn recover_to_closing_delimiter(&mut self, close: TokenKind) -> Span {
+        let mut depth = 0u32;
+        while !self.is_eof() {
+            let kind = self.peek().kind.clone();
+
+            // Track nesting: opening delimiters increase depth
+            match &kind {
+                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => {
+                    depth += 1;
+                    self.advance();
+                }
+                _ if std::mem::discriminant(&kind) == std::mem::discriminant(&close) => {
+                    if depth == 0 {
+                        let span = self.advance().span;
+                        return span;
+                    }
+                    depth -= 1;
+                    self.advance();
+                }
+                _ => {
+                    self.advance();
+                }
+            }
+        }
+        Span::dummy()
     }
 }
 
@@ -1889,5 +1926,61 @@ mod tests {
         } else {
             panic!("Expected adaptive function");
         }
+    }
+
+    #[test]
+    fn test_recovery_multiple_items_after_error() {
+        // First function has a syntax error, second should still parse
+        let source = r#"
+            def bad( {
+                oops
+            }
+
+            def good(x: Int) -> Int {
+                x + 1
+            }
+        "#;
+
+        let (file, errors) = parse(source);
+        // Should have at least one error from the bad function
+        assert!(!errors.is_empty(), "Expected errors from bad function");
+        // Should have recovered and found the second good function
+        let func_count = file.items.iter().filter(|i| matches!(i, Item::Function(_))).count();
+        assert!(func_count >= 1, "Expected at least one parsed function after recovery, got {}", func_count);
+    }
+
+    #[test]
+    fn test_recovery_statement_level() {
+        // A block with a bad statement followed by a good one
+        let source = r#"
+            def foo() -> Int {
+                let x = @@@;
+                let y = 42;
+                y
+            }
+        "#;
+
+        let (file, errors) = parse(source);
+        assert!(!errors.is_empty(), "Expected errors from bad statement");
+        // The function should still be parsed
+        assert_eq!(file.items.len(), 1);
+    }
+
+    #[test]
+    fn test_recovery_item_error_nodes() {
+        // Error items should create Item::Error nodes
+        let source = r#"
+            @@@ garbage
+
+            def good() -> Int { 42 }
+        "#;
+
+        let (file, errors) = parse(source);
+        assert!(!errors.is_empty());
+        // Should have an error item and then the good function
+        let has_error = file.items.iter().any(|i| matches!(i, Item::Error(_)));
+        let has_function = file.items.iter().any(|i| matches!(i, Item::Function(_)));
+        assert!(has_error, "Expected an error item node");
+        assert!(has_function, "Expected the good function to be parsed");
     }
 }

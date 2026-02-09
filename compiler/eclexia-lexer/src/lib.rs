@@ -200,6 +200,27 @@ pub enum TokenKind {
     /// The `comptime` keyword for compile-time evaluation.
     #[token("comptime")]
     Comptime,
+    /// The `spawn` keyword for launching concurrent tasks.
+    #[token("spawn")]
+    Spawn,
+    /// The `select` keyword for waiting on multiple channels.
+    #[token("select")]
+    Select,
+    /// The `chan` keyword for channel creation.
+    #[token("chan")]
+    Chan,
+    /// The `send` keyword for sending on channels.
+    #[token("send")]
+    Send,
+    /// The `recv` keyword for receiving from channels.
+    #[token("recv")]
+    Recv,
+    /// The `yield` keyword for yielding from async tasks.
+    #[token("yield")]
+    Yield,
+    /// The `macro` keyword for macro definitions.
+    #[token("macro")]
+    Macro,
 
     // === Eclexia-specific keywords ===
     /// The `@solution` annotation for adaptive solution alternatives.

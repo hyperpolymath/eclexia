@@ -396,6 +396,7 @@ dependencies = [
  "clap",
  "eclexia-ast",
  "eclexia-codegen",
+ "eclexia-db",
  "eclexia-debugger",
  "eclexia-doc",
  "eclexia-fmt",
@@ -406,9 +407,11 @@ dependencies = [
  "eclexia-mir",
  "eclexia-parser",
  "eclexia-runtime",
+ "eclexia-tiered",
  "eclexia-typeck",
  "glob",
  "miette",
+ "notify",
  "reqwest",
  "rustyline",
  "serde",
@@ -437,6 +440,18 @@ dependencies = [
  "la-arena",
  "serde",
  "smol_str",
+]
+
+[[package]]
+name = "eclexia-async"
+version = "0.1.0"
+dependencies = [
+ "eclexia-ast",
+ "eclexia-runtime",
+ "parking_lot",
+ "smol_str",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

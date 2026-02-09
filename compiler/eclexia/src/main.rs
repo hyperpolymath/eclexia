@@ -146,6 +146,24 @@ enum Commands {
 
     /// Install dependencies from package.toml
     Install,
+
+    /// Watch for file changes and rebuild incrementally
+    Watch {
+        /// Input file or directory to watch
+        #[arg(value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Debounce delay in milliseconds
+        #[arg(long, default_value = "100")]
+        debounce: u64,
+    },
+
+    /// Disassemble compiled bytecode
+    Disasm {
+        /// Input file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+    },
 }
 
 fn main() -> miette::Result<()> {
@@ -190,6 +208,12 @@ fn main() -> miette::Result<()> {
         }
         Commands::Install => {
             commands::install()?;
+        }
+        Commands::Watch { path, debounce } => {
+            commands::watch(&path, debounce)?;
+        }
+        Commands::Disasm { input } => {
+            commands::disasm(&input)?;
         }
     }
 

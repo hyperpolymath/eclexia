@@ -5,6 +5,7 @@
 
 use eclexia_ast::*;
 use eclexia_lexer::{TokenKind, ResourceLiteral};
+use smol_str::SmolStr;
 
 use crate::{Parser, ParseResult, ParseError};
 
@@ -208,6 +209,11 @@ impl<'src> Parser<'src> {
             // Workaround: Use explicit constructor functions or parse struct literals
             // only in unambiguous contexts (future enhancement).
             TokenKind::Ident(name) => ExprKind::Var(name),
+            // Resource keywords are contextual — valid as variable names
+            TokenKind::Energy => ExprKind::Var(SmolStr::new("energy")),
+            TokenKind::Latency => ExprKind::Var(SmolStr::new("latency")),
+            TokenKind::Memory => ExprKind::Var(SmolStr::new("memory")),
+            TokenKind::Carbon => ExprKind::Var(SmolStr::new("carbon")),
 
             // Parenthesized expression or tuple
             TokenKind::LParen => {
@@ -215,7 +221,17 @@ impl<'src> Parser<'src> {
                     self.advance();
                     ExprKind::Literal(Literal::Unit)
                 } else {
-                    let first = self.parse_expr(file)?;
+                    let first = match self.parse_expr(file) {
+                        Ok(expr) => expr,
+                        Err(e) => {
+                            self.errors.push(e);
+                            let end = self.recover_to_closing_delimiter(TokenKind::RParen);
+                            return Ok(file.exprs.alloc(Expr {
+                                span: token.span.merge(end),
+                                kind: ExprKind::Error,
+                            }));
+                        }
+                    };
 
                     if self.check(TokenKind::Comma) {
                         // Tuple
@@ -225,7 +241,19 @@ impl<'src> Parser<'src> {
                             if self.check(TokenKind::RParen) {
                                 break;
                             }
-                            elems.push(self.parse_expr(file)?);
+                            match self.parse_expr(file) {
+                                Ok(expr) => elems.push(expr),
+                                Err(e) => {
+                                    self.errors.push(e);
+                                    // Skip to comma or closing paren
+                                    while !self.is_eof()
+                                        && !self.check(TokenKind::Comma)
+                                        && !self.check(TokenKind::RParen)
+                                    {
+                                        self.advance();
+                                    }
+                                }
+                            }
                         }
                         self.expect(TokenKind::RParen)?;
                         ExprKind::Tuple(elems)
@@ -243,11 +271,31 @@ impl<'src> Parser<'src> {
                     self.advance();
                     ExprKind::Array(Vec::new())
                 } else {
-                    let first = self.parse_expr(file)?;
+                    let first = match self.parse_expr(file) {
+                        Ok(expr) => expr,
+                        Err(e) => {
+                            self.errors.push(e);
+                            let end = self.recover_to_closing_delimiter(TokenKind::RBracket);
+                            return Ok(file.exprs.alloc(Expr {
+                                span: token.span.merge(end),
+                                kind: ExprKind::Error,
+                            }));
+                        }
+                    };
                     if self.check(TokenKind::Semi) {
                         // Array repeat: [value; count]
                         self.advance();
-                        let count = self.parse_expr(file)?;
+                        let count = match self.parse_expr(file) {
+                            Ok(expr) => expr,
+                            Err(e) => {
+                                self.errors.push(e);
+                                let end = self.recover_to_closing_delimiter(TokenKind::RBracket);
+                                return Ok(file.exprs.alloc(Expr {
+                                    span: token.span.merge(end),
+                                    kind: ExprKind::Error,
+                                }));
+                            }
+                        };
                         self.expect(TokenKind::RBracket)?;
                         ExprKind::ArrayRepeat { value: first, count }
                     } else {
@@ -258,7 +306,19 @@ impl<'src> Parser<'src> {
                             if self.check(TokenKind::RBracket) {
                                 break;
                             }
-                            elems.push(self.parse_expr(file)?);
+                            match self.parse_expr(file) {
+                                Ok(expr) => elems.push(expr),
+                                Err(e) => {
+                                    self.errors.push(e);
+                                    // Skip to comma or closing bracket
+                                    while !self.is_eof()
+                                        && !self.check(TokenKind::Comma)
+                                        && !self.check(TokenKind::RBracket)
+                                    {
+                                        self.advance();
+                                    }
+                                }
+                            }
                         }
                         self.expect(TokenKind::RBracket)?;
                         ExprKind::Array(elems)
@@ -307,8 +367,19 @@ impl<'src> Parser<'src> {
 
                 let mut arms = Vec::new();
                 while !self.check(TokenKind::RBrace) && !self.is_eof() {
-                    let arm = self.parse_match_arm(file)?;
-                    arms.push(arm);
+                    match self.parse_match_arm(file) {
+                        Ok(arm) => arms.push(arm),
+                        Err(e) => {
+                            self.errors.push(e);
+                            // Skip to next arm (comma) or end of match (})
+                            while !self.is_eof()
+                                && !self.check(TokenKind::Comma)
+                                && !self.check(TokenKind::RBrace)
+                            {
+                                self.advance();
+                            }
+                        }
+                    }
 
                     if !self.check(TokenKind::Comma) {
                         break;
@@ -630,7 +701,19 @@ impl<'src> Parser<'src> {
                     let mut args = Vec::new();
                     if !self.check(TokenKind::RParen) {
                         loop {
-                            args.push(self.parse_expr(file)?);
+                            match self.parse_expr(file) {
+                                Ok(arg) => args.push(arg),
+                                Err(e) => {
+                                    self.errors.push(e);
+                                    // Skip to comma or closing paren
+                                    while !self.is_eof()
+                                        && !self.check(TokenKind::Comma)
+                                        && !self.check(TokenKind::RParen)
+                                    {
+                                        self.advance();
+                                    }
+                                }
+                            }
                             if !self.check(TokenKind::Comma) {
                                 break;
                             }
@@ -1037,6 +1120,11 @@ impl<'src> Parser<'src> {
                 self.expect(TokenKind::RBracket)?;
                 Pattern::Slice(patterns)
             }
+            // Resource keywords are contextual — valid as variable names in patterns
+            TokenKind::Energy => Pattern::Var(SmolStr::new("energy")),
+            TokenKind::Latency => Pattern::Var(SmolStr::new("latency")),
+            TokenKind::Memory => Pattern::Var(SmolStr::new("memory")),
+            TokenKind::Carbon => Pattern::Var(SmolStr::new("carbon")),
             _ => return Err(ParseError::unexpected_token(token, "pattern")),
         };
 
