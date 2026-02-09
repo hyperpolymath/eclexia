@@ -40,7 +40,7 @@
 - **Missing:** Concurrency primitives, networking, regex
 
 ### Developer Tooling
-- CLI: build, run, check, fmt, lint, repl, init, test, bench, debug, doc, install
+- CLI: build (--analyze), run, check, fmt, lint, repl, init, test, bench, debug, doc, install, watch, disasm
 - REPL with expression evaluation
 - Testing framework (#[test] attributes)
 - Benchmarking framework (#[bench] attributes)
@@ -70,8 +70,8 @@
 
 - **Native backends:** Cranelift, LLVM, WASM crates exist but only estimate sizes — no real codegen
 - **Runtime integration:** scheduler/profiler/carbon/shadow implemented but not wired to real system metrics
-- **Reactive compilation:** 10 crates exist structurally but are not wired into CLI
-- **Bytecode serialization:** BytecodeModule now has Serialize — JSON output works, binary file format pending
+- **Reactive compilation:** eclexia-absinterp and eclexia-comptime wired into `build --analyze`; remaining 5 crates not yet wired
+- **Bytecode serialization:** .eclb binary format implemented (write/read/round-trip verified)
 - **Package registry:** Client stub exists, no server deployed
 - **Concurrency:** AST nodes parsed (spawn, channel, send, recv, select, yield) but interpreter returns errors
 - **Macro expansion in HIR:** MacroCall lowers to Unit — only interpreter supports macro eval
@@ -82,8 +82,9 @@
 
 ## Security Status (panic-attack scan 2026-02-09)
 
-- **15 weak points** (314 unwraps, 28 unsafe blocks, 49 panic sites)
-- Top offenders: builtins.rs (96 unwraps), parser/lib.rs (84)
+- **15 weak points** (331 unwraps, 28 unsafe blocks, 48 panic sites)
+- Top offenders: builtins.rs (96 unwraps in tests), parser/lib.rs (84)
+- 3 dangerous production unwraps fixed (modules, REPL, LSP)
 - 2 Critical: believe_me in Idris2 ABI files (intentional pattern)
 - 1 Command injection risk: recoverer-setup.sh (47 unquoted vars)
 - 47,295 total lines scanned
