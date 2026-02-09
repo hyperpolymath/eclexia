@@ -8,7 +8,7 @@ use miette::{Context, IntoDiagnostic};
 use std::time::Duration;
 
 /// Build an Eclexia program.
-pub fn build(input: &Path, _output: Option<&Path>, _target: &str) -> miette::Result<()> {
+pub fn build(input: &Path, _output: Option<&Path>, _target: &str, analyze: bool) -> miette::Result<()> {
     let source = std::fs::read_to_string(input)
         .into_diagnostic()
         .wrap_err_with(|| format!("Failed to read {}", input.display()))?;
@@ -41,6 +41,11 @@ pub fn build(input: &Path, _output: Option<&Path>, _target: &str) -> miette::Res
     // Lower to MIR
     let mir_file = eclexia_mir::lower_hir_file(&hir_file);
 
+    // Run analysis passes if requested
+    if analyze {
+        run_mir_analysis(&mir_file);
+    }
+
     // Generate bytecode
     use eclexia_codegen::Backend;
     let mut codegen = eclexia_codegen::BytecodeGenerator::new();
@@ -69,6 +74,90 @@ pub fn build(input: &Path, _output: Option<&Path>, _target: &str) -> miette::Res
     }
 
     Ok(())
+}
+
+/// Run MIR-level analysis passes: constant folding, resource analysis, budget verification.
+fn run_mir_analysis(mir: &eclexia_mir::MirFile) {
+    println!("\n--- MIR Analysis ---");
+
+    // Compile-time constant folding analysis
+    let foldable = eclexia_comptime::const_fold::analyze_foldable(mir);
+    println!("  Constant folding: {} foldable instruction(s)", foldable);
+
+    // Compile-time resource budget verification
+    let comptime_verdicts = eclexia_comptime::resource_verify::verify_resource_budgets(mir);
+    if !comptime_verdicts.is_empty() {
+        println!("  Compile-time resource verification:");
+        for verdict in &comptime_verdicts {
+            match verdict {
+                eclexia_comptime::ResourceVerification::Proved { function, resource, .. } => {
+                    println!("    ✓ {}.{} provably within budget", function, resource);
+                }
+                eclexia_comptime::ResourceVerification::Violated {
+                    function, resource, estimated_usage, budget, ..
+                } => {
+                    println!(
+                        "    ✗ {}.{} VIOLATED: estimated {:.2} > budget {:.2}",
+                        function, resource, estimated_usage, budget
+                    );
+                }
+                eclexia_comptime::ResourceVerification::Inconclusive { function, resource, reason } => {
+                    println!("    ? {}.{} inconclusive: {}", function, resource, reason);
+                }
+            }
+        }
+    }
+
+    // Abstract interpretation resource bounds
+    let resource_analyses = eclexia_absinterp::resource::analyze_resources(mir);
+    let has_resources = resource_analyses.iter().any(|a| !a.resource_bounds.is_empty());
+    if has_resources {
+        println!("  Resource bounds (abstract interpretation):");
+        for analysis in &resource_analyses {
+            if analysis.resource_bounds.is_empty() {
+                continue;
+            }
+            println!("    fn {}:", analysis.function);
+            for bound in &analysis.resource_bounds {
+                if bound.max_usage.is_infinite() {
+                    println!("      {}: [{:.2}, +inf)", bound.resource, bound.min_usage);
+                } else {
+                    println!(
+                        "      {}: [{:.2}, {:.2}]",
+                        bound.resource, bound.min_usage, bound.max_usage
+                    );
+                }
+            }
+        }
+    }
+
+    // Budget verdicts from abstract interpretation
+    let budget_verdicts = eclexia_absinterp::resource::verify_budgets(mir);
+    if !budget_verdicts.is_empty() {
+        println!("  Budget verdicts:");
+        for (func, resource, verdict) in &budget_verdicts {
+            match verdict {
+                eclexia_absinterp::BudgetVerdict::Proved => {
+                    println!("    ✓ {}.{} provably within budget", func, resource);
+                }
+                eclexia_absinterp::BudgetVerdict::Disproved { min_usage, limit } => {
+                    println!(
+                        "    ✗ {}.{} EXCEEDED: min {:.2} > limit {:.2}",
+                        func, resource, min_usage, limit
+                    );
+                }
+                eclexia_absinterp::BudgetVerdict::Unknown => {
+                    println!("    ? {}.{} inconclusive", func, resource);
+                }
+            }
+        }
+    }
+
+    if comptime_verdicts.is_empty() && !has_resources && budget_verdicts.is_empty() {
+        println!("  No resource constraints to analyze");
+    }
+
+    println!();
 }
 
 /// Build and run an Eclexia program (source .ecl or bytecode .eclb).

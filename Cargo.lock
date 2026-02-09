@@ -390,8 +390,10 @@ name = "eclexia"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "eclexia-absinterp",
  "eclexia-ast",
  "eclexia-codegen",
+ "eclexia-comptime",
  "eclexia-db",
  "eclexia-debugger",
  "eclexia-doc",
