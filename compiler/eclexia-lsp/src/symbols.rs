@@ -773,13 +773,7 @@ impl SymbolTable {
         }
 
         // Check if position is in a symbol definition
-        for symbol in self.all_symbols() {
-            if symbol.definition_span.contains(position.start) {
-                return Some(symbol);
-            }
-        }
-
-        None
+        self.all_symbols().into_iter().find(|&symbol| symbol.definition_span.contains(position.start)).map(|v| v as _)
     }
 
     /// Find all references to a symbol
@@ -818,16 +812,14 @@ fn extract_doc_comment(source: &str, def_start: usize) -> Option<String> {
 
     while current > 0 {
         // Move to previous line
-        if current > 0 {
-            current -= 1; // Skip newline
-        }
+        current = current.saturating_sub(1);
         while current > 0 && bytes[current - 1] != b'\n' {
             current -= 1;
         }
 
         // Extract the line
-        let line_end = if current < bytes.len() && bytes[current..].iter().position(|&b| b == b'\n').is_some() {
-            current + bytes[current..].iter().position(|&b| b == b'\n').unwrap()
+        let line_end = if let Some(pos) = bytes[current..].iter().position(|&b| b == b'\n') {
+            current + pos
         } else {
             bytes.len()
         };

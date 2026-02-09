@@ -199,10 +199,12 @@ impl ModuleResolver {
                         continue;
                     }
                 }
-                let new_prefix = relative_prefix.join(path.file_name().unwrap());
+                let Some(fname) = path.file_name() else { continue };
+                let new_prefix = relative_prefix.join(fname);
                 self.discover_recursive(&path, &new_prefix, modules)?;
             } else if path.extension().and_then(|e| e.to_str()) == Some("ecl") {
-                let relative = relative_prefix.join(path.file_name().unwrap());
+                let Some(fname) = path.file_name() else { continue };
+                let relative = relative_prefix.join(fname);
                 if let Some(module_id) = ModuleId::from_file_path(&relative) {
                     self.resolved
                         .insert(module_id.clone(), path.canonicalize().unwrap_or(path));

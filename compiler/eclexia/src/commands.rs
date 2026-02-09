@@ -239,10 +239,8 @@ pub fn fmt(inputs: &[std::path::PathBuf], check: bool) -> miette::Result<()> {
                     .wrap_err_with(|| format!("Failed to write {}", input.display()))?;
                 println!("✓ Formatted {}", input.display());
             }
-        } else {
-            if !check {
-                println!("✓ {} (no changes needed)", input.display());
-            }
+        } else if !check {
+            println!("✓ {} (no changes needed)", input.display());
         }
     }
 
@@ -1228,10 +1226,8 @@ pub fn test(filter: Option<&str>) -> miette::Result<()> {
     let mut test_files = Vec::new();
 
     for pattern in test_patterns {
-        for entry in glob::glob(pattern).into_diagnostic()? {
-            if let Ok(path) = entry {
-                test_files.push(path);
-            }
+        for path in glob::glob(pattern).into_diagnostic()?.flatten() {
+            test_files.push(path);
         }
     }
 
@@ -1298,10 +1294,8 @@ pub fn bench(filter: Option<&str>) -> miette::Result<()> {
     let mut bench_files = Vec::new();
 
     for pattern in bench_patterns {
-        for entry in glob::glob(pattern).into_diagnostic()? {
-            if let Ok(path) = entry {
-                bench_files.push(path);
-            }
+        for path in glob::glob(pattern).into_diagnostic()?.flatten() {
+            bench_files.push(path);
         }
     }
 
@@ -1480,14 +1474,14 @@ pub fn debug(input: &std::path::Path) -> miette::Result<()> {
     // REPL loop
     loop {
         print!("(eclexia-dbg) ");
-        io::stdout().flush().unwrap();
+        let _ = io::stdout().flush();
 
         let mut line = String::new();
         if io::stdin().read_line(&mut line).is_err() {
             break;
         }
 
-        let parts: Vec<&str> = line.trim().split_whitespace().collect();
+        let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.is_empty() {
             continue;
         }
