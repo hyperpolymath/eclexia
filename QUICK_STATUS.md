@@ -71,8 +71,10 @@
 - **Native backends:** Cranelift, LLVM, WASM crates exist but only estimate sizes — no real codegen
 - **Runtime integration:** scheduler/profiler/carbon/shadow implemented but not wired to real system metrics
 - **Reactive compilation:** 4/7 crates wired into `build --analyze` (absinterp, comptime, specialize, effects); remaining 3 not yet wired (db, modules, tiered)
-- **Shadow prices:** ShadowPriceRegistry defaults replace hardcoded 1.0; dynamic prices computed from VM resource usage via ShadowPriceEngine
+- **Shadow prices:** ShadowPriceRegistry real defaults (energy=0.000033, time=0.001, carbon=0.00005); dynamic prices computed from VM resource usage via ShadowPriceEngine
 - **Bytecode serialization:** .eclb binary format implemented (write/read/round-trip verified)
+- **Bytecode builtins:** CallBuiltin instruction + VM dispatch (println, print, to_string, abs, sqrt, etc.) — `build` now works on files using builtins
+- **Adaptive def MIR:** Fixed — `build --analyze` no longer panics on adaptive def constructs
 - **Package registry:** Client stub exists, no server deployed
 - **Concurrency:** AST nodes parsed (spawn, channel, send, recv, select, yield) but interpreter returns errors
 - **Macro expansion in HIR:** MacroCall lowers to Unit — only interpreter supports macro eval
@@ -83,7 +85,7 @@
 
 ## Security Status (panic-attack scan 2026-02-09)
 
-- **15 weak points** (331 unwraps, 28 unsafe blocks, 48 panic sites)
+- **15 weak points** (327 unwraps, 28 unsafe blocks, 48 panic sites)
 - Top offenders: builtins.rs (96 unwraps in tests), parser/lib.rs (84)
 - 3 dangerous production unwraps fixed (modules, REPL, LSP)
 - 2 Critical: believe_me in Idris2 ABI files (intentional pattern)

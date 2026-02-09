@@ -40,8 +40,8 @@
       (reactive-comptime (completion 80) (status "wired into CLI via build --analyze"))
       (reactive-db (completion 60) (status "Salsa incremental, 8 tests, not wired to CLI"))
       (reactive-modules (completion 60) (status "dep graph, parallel compilation, 21 tests, not wired"))
-      (reactive-effects (completion 60) (status "evidence passing, row polymorphism, 26 tests, not wired"))
-      (reactive-specialize (completion 60) (status "binding-time analysis, 14 tests, not wired"))
+      (reactive-effects (completion 80) (status "evidence passing, row polymorphism, 26 tests, wired into CLI via build --analyze"))
+      (reactive-specialize (completion 80) (status "binding-time analysis, 14 tests, wired into CLI via build --analyze"))
       (reactive-tiered (completion 60) (status "tiered execution, PGO, 26 tests, not wired")))
     (working-features
       ("resource-tracking" "adaptive-functions" "pattern-matching"
@@ -75,8 +75,8 @@
   (blockers-and-issues
     (critical)
     (high
-      ("5 reactive crates not yet wired into CLI"
-       "shadow prices hardcoded 1.0 — not connected to real VM metrics"))
+      ("3 reactive crates not yet wired into CLI (db, modules, tiered)"
+       "build command builtins limited to ~20 functions in VM dispatch"))
     (medium
       ("code coverage at 17.92% (target 80%)"
        "22 formal verification theorems Admitted (not proven)"
