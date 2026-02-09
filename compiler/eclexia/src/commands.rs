@@ -279,14 +279,49 @@ fn run_bytecode(input: &Path, observe_shadow: bool, carbon_report: bool) -> miet
         Ok(result) => {
             println!("\nResult: {:?}", result);
 
-            if carbon_report {
+            if carbon_report || observe_shadow {
                 let resources = vm.get_resource_usage();
-                println!("\n--- Carbon Report ---");
-                if resources.is_empty() {
-                    println!("  No resource usage tracked");
-                } else {
-                    for (name, amount) in &resources {
-                        println!("  {}: {:.4}", name, amount);
+
+                if carbon_report {
+                    println!("\n--- Carbon Report ---");
+                    if resources.is_empty() {
+                        println!("  No resource usage tracked");
+                    } else {
+                        for (name, amount) in &resources {
+                            println!("  {}: {:.4}", name, amount);
+                        }
+                    }
+                }
+
+                // Compute dynamic shadow prices from actual resource usage
+                if observe_shadow && !resources.is_empty() {
+                    use eclexia_ast::dimension::Dimension;
+                    let mut engine = eclexia_runtime::ShadowPriceEngine::new();
+                    // Default budgets (from RuntimeConfig defaults)
+                    let budgets = [
+                        ("energy", Dimension::energy(), 1000.0),
+                        ("time", Dimension::time(), 1.0),
+                        ("memory", Dimension::memory(), 1024.0),
+                        ("carbon", Dimension::carbon(), 100.0),
+                    ];
+                    for (name, dim, budget) in &budgets {
+                        let usage = resources.get(*name).copied().unwrap_or(0.0);
+                        if usage > 0.0 {
+                            engine.add_constraint(eclexia_runtime::ResourceConstraint {
+                                name: smol_str::SmolStr::new(*name),
+                                dimension: *dim,
+                                budget: *budget,
+                                usage,
+                            });
+                        }
+                    }
+                    if engine.constraint_count() > 0 {
+                        let result = engine.compute();
+                        println!("\n--- Dynamic Shadow Prices (from resource usage) ---");
+                        for (name, price) in &result.prices {
+                            println!("  λ_{} = {:.6}{}", name, price,
+                                if result.converged { "" } else { " (not converged)" });
+                        }
                     }
                 }
             }
