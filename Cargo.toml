@@ -30,6 +30,8 @@ members = [
     "compiler/eclexia-wasm",
     "compiler/eclexia-tiered",
     "runtime/eclexia-async",
+    "runtime/eclexia-tea",
+    "runtime/eclexia-dom",
 ]
 
 [workspace.package]

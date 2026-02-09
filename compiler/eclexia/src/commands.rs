@@ -46,30 +46,93 @@ pub fn build(input: &Path, _output: Option<&Path>, _target: &str, analyze: bool)
         run_mir_analysis(&mir_file, &file);
     }
 
-    // Generate bytecode
+    // Select backend based on target
     use eclexia_codegen::Backend;
-    let mut codegen = eclexia_codegen::BytecodeGenerator::new();
-    let module = codegen.generate(&mir_file)
-        .map_err(|e| miette::miette!("Code generation failed: {}", e))?;
 
-    println!("✓ Build successful");
-    println!("  {} items parsed", file.items.len());
-    println!("  {} functions compiled", module.functions.len());
+    match _target {
+        "wasm" => {
+            // WASM backend: generate real .wasm binary
+            let mut wasm_backend = eclexia_wasm::WasmBackend::new();
+            let wasm_module = wasm_backend.generate(&mir_file)
+                .map_err(|e| miette::miette!("WASM code generation failed: {}", e))?;
 
-    if let Some(output) = _output {
-        if eclexia_codegen::bytecode::BytecodeModule::is_eclb_path(output) {
-            // Binary .eclb format
-            module.write_eclb(output)
-                .map_err(|e| miette::miette!("{}", e))?;
-            println!("  Bytecode written to {} (.eclb binary)", output.display());
-        } else {
-            // JSON format for .json or any other extension
-            let json = serde_json::to_vec_pretty(&module)
-                .map_err(|e| miette::miette!("Failed to serialize bytecode: {}", e))?;
-            std::fs::write(output, &json)
+            println!("✓ Build successful (target: wasm)");
+            println!("  {} items parsed", file.items.len());
+            println!("  {} functions compiled", wasm_module.functions.len());
+            println!("  {} imports required", wasm_module.imports.len());
+            println!("  {} exports", wasm_module.exports.len());
+            println!("  {} bytes binary size", wasm_module.binary_size);
+
+            let out_path = _output
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| input.with_extension("wasm"));
+            std::fs::write(&out_path, wasm_module.to_bytes())
                 .into_diagnostic()
-                .wrap_err_with(|| format!("Failed to write bytecode to {}", output.display()))?;
-            println!("  Bytecode written to {} (JSON)", output.display());
+                .wrap_err_with(|| format!("Failed to write WASM to {}", out_path.display()))?;
+            println!("  WASM module written to {}", out_path.display());
+        }
+        "cranelift" => {
+            // Cranelift native backend
+            let mut cl_backend = eclexia_cranelift::CraneliftBackend::host();
+            let native_module = cl_backend.generate(&mir_file)
+                .map_err(|e| miette::miette!("Cranelift code generation failed: {}", e))?;
+
+            let real_count = native_module.functions.iter().filter(|f| f.is_real_codegen).count();
+            let est_count = native_module.functions.len() - real_count;
+
+            println!("✓ Build successful (target: cranelift, {})", native_module.target);
+            println!("  {} items parsed", file.items.len());
+            println!("  {} functions compiled ({} real native, {} estimated)",
+                native_module.functions.len(), real_count, est_count);
+            println!("  {} bytes total code size", native_module.total_code_size);
+
+            for func in &native_module.functions {
+                let tag = if func.is_real_codegen { "native" } else { "est" };
+                println!("    {} ({}, {} bytes)", func.name, tag, func.code_size);
+            }
+        }
+        "llvm" => {
+            // LLVM backend (stub — reports estimated sizes)
+            let mut llvm_backend = eclexia_llvm::LlvmBackend::new();
+            let llvm_module = llvm_backend.generate(&mir_file)
+                .map_err(|e| miette::miette!("LLVM code generation failed: {}", e))?;
+
+            println!("✓ Build analysis (target: llvm — stub, no real codegen yet)");
+            println!("  {} items parsed", file.items.len());
+            println!("  {} functions analyzed", llvm_module.functions.len());
+            println!("  Optimization: {}", llvm_module.opt_level);
+            println!("  Estimated code size: {} bytes", llvm_module.estimated_code_size);
+
+            for func in &llvm_module.functions {
+                println!("    {} (~{} bytes estimated)", func.name, func.estimated_size);
+            }
+        }
+        _ => {
+            // Default: bytecode backend ("native" or anything else)
+            let mut codegen = eclexia_codegen::BytecodeGenerator::new();
+            let module = codegen.generate(&mir_file)
+                .map_err(|e| miette::miette!("Code generation failed: {}", e))?;
+
+            println!("✓ Build successful");
+            println!("  {} items parsed", file.items.len());
+            println!("  {} functions compiled", module.functions.len());
+
+            if let Some(output) = _output {
+                if eclexia_codegen::bytecode::BytecodeModule::is_eclb_path(output) {
+                    // Binary .eclb format
+                    module.write_eclb(output)
+                        .map_err(|e| miette::miette!("{}", e))?;
+                    println!("  Bytecode written to {} (.eclb binary)", output.display());
+                } else {
+                    // JSON format for .json or any other extension
+                    let json = serde_json::to_vec_pretty(&module)
+                        .map_err(|e| miette::miette!("Failed to serialize bytecode: {}", e))?;
+                    std::fs::write(output, &json)
+                        .into_diagnostic()
+                        .wrap_err_with(|| format!("Failed to write bytecode to {}", output.display()))?;
+                    println!("  Bytecode written to {} (JSON)", output.display());
+                }
+            }
         }
     }
 
@@ -1517,7 +1580,7 @@ pub fn test(filter: Option<&str>) -> miette::Result<()> {
 }
 
 /// Run benchmarks.
-pub fn bench(filter: Option<&str>) -> miette::Result<()> {
+pub fn bench(filter: Option<&str>, energy_enabled: bool) -> miette::Result<()> {
     use crate::bench_runner;
 
     // Look for benchmark files in src/ and benches/
@@ -1563,7 +1626,7 @@ pub fn bench(filter: Option<&str>) -> miette::Result<()> {
             continue;
         }
 
-        let summary = bench_runner::run_all_benchmarks(&file, filter, ITERATIONS, true);
+        let summary = bench_runner::run_all_benchmarks(&file, filter, ITERATIONS, true, energy_enabled);
         total_summary.benchmarks_run += summary.benchmarks_run;
         total_summary.benchmarks_failed += summary.benchmarks_failed;
         total_summary.benchmarks_ignored += summary.benchmarks_ignored;

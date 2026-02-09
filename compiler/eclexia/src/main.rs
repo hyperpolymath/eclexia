@@ -42,7 +42,7 @@ enum Commands {
         #[arg(short, long)]
         output: Option<PathBuf>,
 
-        /// Target platform (native, wasm)
+        /// Target platform (native, wasm, cranelift, llvm)
         #[arg(short, long, default_value = "native")]
         target: String,
 
@@ -117,6 +117,10 @@ enum Commands {
         /// Benchmark filter pattern
         #[arg(value_name = "FILTER")]
         filter: Option<String>,
+
+        /// Enable RAPL energy measurement and carbon estimation
+        #[arg(long = "energy")]
+        energy: bool,
     },
 
     /// Lint Eclexia source code
@@ -198,8 +202,8 @@ fn main() -> miette::Result<()> {
         Commands::Test { filter } => {
             commands::test(filter.as_deref())?;
         }
-        Commands::Bench { filter } => {
-            commands::bench(filter.as_deref())?;
+        Commands::Bench { filter, energy } => {
+            commands::bench(filter.as_deref(), energy)?;
         }
         Commands::Lint { input } => {
             commands::lint(&input)?;
