@@ -44,10 +44,7 @@ pub enum TypeError {
     },
 
     #[error("occurs check failed: infinite type")]
-    OccursCheck {
-        span: Span,
-        hint: Option<String>,
-    },
+    OccursCheck { span: Span, hint: Option<String> },
 
     #[error("infinite type: type variable {var:?} occurs in {ty}")]
     InfiniteType {
@@ -67,11 +64,7 @@ pub enum TypeError {
 
 impl TypeError {
     /// Create an undefined variable error with suggestions.
-    pub fn undefined_with_suggestions(
-        span: Span,
-        name: String,
-        available_names: &[&str],
-    ) -> Self {
+    pub fn undefined_with_suggestions(span: Span, name: String, available_names: &[&str]) -> Self {
         let hint = find_closest_match(&name, available_names)
             .map(|suggestion| format!("did you mean '{}'?", suggestion));
 

@@ -12,8 +12,9 @@ use eclexia_ast::dimension::Dimension;
 use smol_str::SmolStr;
 use std::collections::VecDeque;
 
-use crate::shadow_prices::ShadowPriceRegistry;
+use crate::carbon::{CarbonMonitor, CarbonSignal};
 use crate::resource_tracker::ResourceBudget;
+use crate::shadow_prices::ShadowPriceRegistry;
 
 /// A task submitted to the scheduler.
 #[derive(Debug, Clone)]
@@ -24,14 +25,17 @@ pub struct ScheduledTask {
     /// Human-readable task name.
     pub name: SmolStr,
 
-    /// Estimated resource requirements per dimension.
-    pub estimated_costs: Vec<(Dimension, f64)>,
+    /// Estimated resource requirements per resource/dimension.
+    pub estimated_costs: Vec<(SmolStr, Dimension, f64)>,
 
     /// Priority (higher = more urgent, range 0..=100).
     pub priority: u8,
 
     /// Whether this task can be deferred to a lower-cost window.
     pub deferrable: bool,
+
+    /// Optional carbon intensity signal threshold to wait for.
+    pub defer_until: Option<CarbonSignal>,
 }
 
 /// Scheduling decision for a task.
@@ -63,6 +67,9 @@ pub struct Scheduler {
 
     /// Total tasks deferred (lifetime counter).
     total_deferred: u64,
+
+    /// Carbon monitor for defer decisions.
+    carbon_monitor: CarbonMonitor,
 }
 
 impl Scheduler {
@@ -74,6 +81,7 @@ impl Scheduler {
             defer_threshold: 100.0,
             total_scheduled: 0,
             total_deferred: 0,
+            carbon_monitor: CarbonMonitor::new(),
         }
     }
 
@@ -86,9 +94,10 @@ impl Scheduler {
     pub fn submit(
         &mut self,
         name: SmolStr,
-        estimated_costs: Vec<(Dimension, f64)>,
+        estimated_costs: Vec<(SmolStr, Dimension, f64)>,
         priority: u8,
         deferrable: bool,
+        defer_until: Option<CarbonSignal>,
         prices: &ShadowPriceRegistry,
         budget: &ResourceBudget,
     ) -> (u64, ScheduleDecision) {
@@ -101,6 +110,7 @@ impl Scheduler {
             estimated_costs,
             priority,
             deferrable,
+            defer_until,
         };
 
         let decision = self.evaluate(&task, prices, budget);
@@ -130,14 +140,14 @@ impl Scheduler {
         let total_cost: f64 = task
             .estimated_costs
             .iter()
-            .map(|(dim, amount)| {
-                let price = prices.get_price(&SmolStr::new("_global"), *dim);
+            .map(|(resource, dim, amount)| {
+                let price = prices.get_price(resource, *dim);
                 price * amount
             })
             .sum();
 
         // Check budget limits.
-        for (dim, amount) in &task.estimated_costs {
+        for (_, dim, amount) in &task.estimated_costs {
             if let Some(limit) = budget.get_limit(dim) {
                 if *amount > limit {
                     return ScheduleDecision::Reject {
@@ -153,6 +163,28 @@ impl Scheduler {
         // High-priority tasks always run.
         if task.priority >= 80 {
             return ScheduleDecision::RunNow;
+        }
+
+        // Defer until carbon signal drops below a requested level.
+        if let Some(required_signal) = task.defer_until {
+            if self.carbon_monitor.signal().level() > required_signal.level() {
+                return ScheduleDecision::Defer {
+                    reason: SmolStr::new(format!(
+                        "waiting for carbon signal {:?} (current: {:?})",
+                        required_signal,
+                        self.carbon_monitor.signal()
+                    )),
+                };
+            }
+        }
+
+        if task.deferrable && self.carbon_monitor.should_defer() {
+            return ScheduleDecision::Defer {
+                reason: SmolStr::new(format!(
+                    "carbon signal {:?} requests deferral",
+                    self.carbon_monitor.signal()
+                )),
+            };
         }
 
         // Deferrable tasks with high cost get deferred.
@@ -209,6 +241,16 @@ impl Scheduler {
             currently_deferred: self.queue.len() as u64,
         }
     }
+
+    /// Update carbon monitor with a new intensity reading.
+    pub fn update_carbon(&mut self, region: SmolStr, intensity: f64) {
+        self.carbon_monitor.update_intensity(region, intensity);
+    }
+
+    /// Get the current carbon signal.
+    pub fn carbon_signal(&self) -> CarbonSignal {
+        self.carbon_monitor.signal()
+    }
 }
 
 impl Default for Scheduler {
@@ -228,6 +270,7 @@ pub struct SchedulerStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::carbon::CarbonSignal;
 
     #[test]
     fn test_high_priority_always_runs() {
@@ -237,9 +280,10 @@ mod tests {
 
         let (_, decision) = sched.submit(
             SmolStr::new("urgent"),
-            vec![(Dimension::energy(), 9999.0)],
+            vec![(SmolStr::new("energy"), Dimension::energy(), 9999.0)],
             90,
             true,
+            None,
             &prices,
             &budget,
         );
@@ -259,9 +303,10 @@ mod tests {
 
         let (_, decision) = sched.submit(
             SmolStr::new("big_task"),
-            vec![(Dimension::energy(), 50.0)],
+            vec![(SmolStr::new("energy"), Dimension::energy(), 50.0)],
             50,
             false,
+            None,
             &prices,
             &budget,
         );
@@ -273,16 +318,17 @@ mod tests {
         let mut sched = Scheduler::new();
         let mut prices = ShadowPriceRegistry::new();
         // Set a high shadow price to make the task expensive.
-        prices.update_price(SmolStr::new("_global"), Dimension::energy(), 200.0);
+        prices.update_price(SmolStr::new("energy"), Dimension::energy(), 200.0);
         sched.set_defer_threshold(50.0);
 
         let budget = ResourceBudget::unlimited();
 
         let (_, decision) = sched.submit(
             SmolStr::new("flexible"),
-            vec![(Dimension::energy(), 1.0)],
+            vec![(SmolStr::new("energy"), Dimension::energy(), 1.0)],
             30,
             true,
+            None,
             &prices,
             &budget,
         );
@@ -294,24 +340,45 @@ mod tests {
     fn test_drain_ready_releases_tasks() {
         let mut sched = Scheduler::new();
         let mut prices = ShadowPriceRegistry::new();
-        prices.update_price(SmolStr::new("_global"), Dimension::energy(), 200.0);
+        prices.update_price(SmolStr::new("energy"), Dimension::energy(), 200.0);
         sched.set_defer_threshold(50.0);
 
         let budget = ResourceBudget::unlimited();
         sched.submit(
             SmolStr::new("flex1"),
-            vec![(Dimension::energy(), 1.0)],
+            vec![(SmolStr::new("energy"), Dimension::energy(), 1.0)],
             30,
             true,
+            None,
             &prices,
             &budget,
         );
         assert_eq!(sched.deferred_count(), 1);
 
         // Drop the price so it's below threshold.
-        prices.update_price(SmolStr::new("_global"), Dimension::energy(), 10.0);
+        prices.update_price(SmolStr::new("energy"), Dimension::energy(), 10.0);
         let ready = sched.drain_ready(&prices, &budget);
         assert_eq!(ready.len(), 1);
         assert_eq!(sched.deferred_count(), 0);
+    }
+
+    #[test]
+    fn test_defer_until_waits_for_green() {
+        let mut sched = Scheduler::new();
+        let prices = ShadowPriceRegistry::new();
+        let budget = ResourceBudget::unlimited();
+        sched.update_carbon(SmolStr::new("grid"), 600.0);
+
+        let (_, decision) = sched.submit(
+            SmolStr::new("eco"),
+            vec![(SmolStr::new("energy"), Dimension::energy(), 1.0)],
+            30,
+            true,
+            Some(CarbonSignal::Green),
+            &prices,
+            &budget,
+        );
+
+        assert!(matches!(decision, ScheduleDecision::Defer { .. }));
     }
 }

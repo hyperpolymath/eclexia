@@ -69,10 +69,7 @@ impl PackageManager {
             self.cache.add(name, version, package_dir.clone())?;
 
             // Store checksum for lock file
-            checksums.insert(
-                format!("{}@{}", name, version),
-                metadata.checksum.clone(),
-            );
+            checksums.insert(format!("{}@{}", name, version), metadata.checksum.clone());
 
             println!("  Installed to {}", package_dir.display());
         }

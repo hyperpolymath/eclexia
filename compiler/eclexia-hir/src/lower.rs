@@ -7,8 +7,8 @@
 //! high-level intermediate representation (HIR).
 
 use crate::*;
-use eclexia_ast::{self as ast, SourceFile};
 use eclexia_ast::types::Ty;
+use eclexia_ast::{self as ast, SourceFile};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
@@ -101,12 +101,10 @@ impl<'a> LoweringContext<'a> {
                     }),
                 })
             }
-            ast::Item::TraitDecl(t) => {
-                Item::TraitDecl {
-                    span: t.span,
-                    name: t.name.clone(),
-                }
-            }
+            ast::Item::TraitDecl(t) => Item::TraitDecl {
+                span: t.span,
+                name: t.name.clone(),
+            },
             ast::Item::ImplBlock(i) => {
                 // Extract self type name
                 let self_ty_name = match &self.source.types[i.self_ty].kind {
@@ -119,7 +117,9 @@ impl<'a> LoweringContext<'a> {
                 }
             }
             ast::Item::ModuleDecl(m) => {
-                let mod_items: Vec<Item> = m.items.as_ref()
+                let mod_items: Vec<Item> = m
+                    .items
+                    .as_ref()
                     .map(|items| items.iter().map(|item| self.lower_item(item)).collect())
                     .unwrap_or_default();
                 Item::Module {
@@ -370,7 +370,11 @@ impl<'a> LoweringContext<'a> {
                         fields: v
                             .fields
                             .as_ref()
-                            .map(|flds| flds.iter().map(|&ty_id| self.convert_type(&self.source.types[ty_id])).collect())
+                            .map(|flds| {
+                                flds.iter()
+                                    .map(|&ty_id| self.convert_type(&self.source.types[ty_id]))
+                                    .collect()
+                            })
                             .unwrap_or_default(),
                     })
                     .collect(),
@@ -418,7 +422,12 @@ impl<'a> LoweringContext<'a> {
         let stmt = &self.source.stmts[stmt_id];
 
         let kind = match &stmt.kind {
-            ast::StmtKind::Let { ref pattern, mutable, ty, value } => {
+            ast::StmtKind::Let {
+                ref pattern,
+                mutable,
+                ty,
+                value,
+            } => {
                 let init = Some(self.lower_expr(*value));
                 let var_ty = if let Some(ty_id) = ty {
                     self.convert_type(&self.source.types[*ty_id])
@@ -441,16 +450,27 @@ impl<'a> LoweringContext<'a> {
                     }
                     ast::Pattern::Tuple(pats) => {
                         // let (a, b) = expr → let _tup = expr; let a = _tup.0; let b = _tup.1
-                        let tup_local = self.define_local(stmt.span, SmolStr::new("_tup"), var_ty.clone(), false);
+                        let tup_local = self.define_local(
+                            stmt.span,
+                            SmolStr::new("_tup"),
+                            var_ty.clone(),
+                            false,
+                        );
                         let tup_let = self.hir.stmts.alloc(Stmt {
                             span: stmt.span,
-                            kind: StmtKind::Let { local: tup_local, init },
+                            kind: StmtKind::Let {
+                                local: tup_local,
+                                init,
+                            },
                         });
                         // Emit element bindings as expr stmts; return tup_let
                         for (i, pat) in pats.iter().enumerate() {
                             if let ast::Pattern::Var(name) = pat {
                                 let elem_ty = match &var_ty {
-                                    Ty::Tuple(elems) => elems.get(i).cloned().unwrap_or(Ty::Primitive(PrimitiveTy::Unit)),
+                                    Ty::Tuple(elems) => elems
+                                        .get(i)
+                                        .cloned()
+                                        .unwrap_or(Ty::Primitive(PrimitiveTy::Unit)),
                                     _ => Ty::Primitive(PrimitiveTy::Unit),
                                 };
                                 let tup_ref = self.hir.exprs.alloc(Expr {
@@ -466,10 +486,14 @@ impl<'a> LoweringContext<'a> {
                                         field: SmolStr::new(i.to_string()),
                                     },
                                 });
-                                let elem_local = self.define_local(stmt.span, name.clone(), elem_ty, *mutable);
+                                let elem_local =
+                                    self.define_local(stmt.span, name.clone(), elem_ty, *mutable);
                                 self.hir.stmts.alloc(Stmt {
                                     span: stmt.span,
-                                    kind: StmtKind::Let { local: elem_local, init: Some(field_expr) },
+                                    kind: StmtKind::Let {
+                                        local: elem_local,
+                                        init: Some(field_expr),
+                                    },
                                 });
                             }
                         }
@@ -497,7 +521,8 @@ impl<'a> LoweringContext<'a> {
                     }
                     _ => {
                         // Literal, Slice, Or, Range patterns: bind to _
-                        let local = self.define_local(stmt.span, SmolStr::new("_"), var_ty, *mutable);
+                        let local =
+                            self.define_local(stmt.span, SmolStr::new("_"), var_ty, *mutable);
                         StmtKind::Let { local, init }
                     }
                 }
@@ -520,17 +545,13 @@ impl<'a> LoweringContext<'a> {
                     body,
                 }
             }
-            ast::StmtKind::Break { label, value } => {
-                StmtKind::Break {
-                    label: label.clone(),
-                    value: value.map(|v| self.lower_expr(v)),
-                }
-            }
-            ast::StmtKind::Continue { label } => {
-                StmtKind::Continue {
-                    label: label.clone(),
-                }
-            }
+            ast::StmtKind::Break { label, value } => StmtKind::Break {
+                label: label.clone(),
+                value: value.map(|v| self.lower_expr(v)),
+            },
+            ast::StmtKind::Continue { label } => StmtKind::Continue {
+                label: label.clone(),
+            },
             ast::StmtKind::While { condition, body } => {
                 let cond_id = self.lower_expr(*condition);
                 let body = self.lower_block(body);
@@ -544,7 +565,11 @@ impl<'a> LoweringContext<'a> {
                 });
                 StmtKind::Expr(loop_expr)
             }
-            ast::StmtKind::For { ref pattern, iter, body } => {
+            ast::StmtKind::For {
+                ref pattern,
+                iter,
+                body,
+            } => {
                 let name = self.extract_pattern_name(pattern);
 
                 // Desugar: for x in array { body } =>
@@ -560,15 +585,14 @@ impl<'a> LoweringContext<'a> {
                 let iter_ty = self.hir.exprs[iter_expr].ty.clone();
 
                 // let _iter = <iter_expr>
-                let iter_local = self.define_local(
-                    stmt.span,
-                    SmolStr::new("_iter"),
-                    iter_ty.clone(),
-                    false,
-                );
+                let iter_local =
+                    self.define_local(stmt.span, SmolStr::new("_iter"), iter_ty.clone(), false);
                 let iter_let_stmt = self.hir.stmts.alloc(Stmt {
                     span: stmt.span,
-                    kind: StmtKind::Let { local: iter_local, init: Some(iter_expr) },
+                    kind: StmtKind::Let {
+                        local: iter_local,
+                        init: Some(iter_expr),
+                    },
                 });
 
                 // let _i = 0
@@ -585,7 +609,10 @@ impl<'a> LoweringContext<'a> {
                 });
                 let idx_let_stmt = self.hir.stmts.alloc(Stmt {
                     span: stmt.span,
-                    kind: StmtKind::Let { local: idx_local, init: Some(zero) },
+                    kind: StmtKind::Let {
+                        local: idx_local,
+                        init: Some(zero),
+                    },
                 });
 
                 // Determine element type
@@ -647,7 +674,10 @@ impl<'a> LoweringContext<'a> {
                 let elem_local = self.define_local(stmt.span, name, elem_ty, false);
                 let elem_let = self.hir.stmts.alloc(Stmt {
                     span: stmt.span,
-                    kind: StmtKind::Let { local: elem_local, init: Some(elem_expr) },
+                    kind: StmtKind::Let {
+                        local: elem_local,
+                        init: Some(elem_expr),
+                    },
                 });
 
                 // Lower original body
@@ -745,7 +775,12 @@ impl<'a> LoweringContext<'a> {
                 } else {
                     // Not a local variable - might be a function name
                     // Create a placeholder local for it (will be resolved in MIR)
-                    let local_id = self.define_local(expr.span, name.clone(), Ty::Primitive(PrimitiveTy::Unit), false);
+                    let local_id = self.define_local(
+                        expr.span,
+                        name.clone(),
+                        Ty::Primitive(PrimitiveTy::Unit),
+                        false,
+                    );
                     ExprKind::Local(local_id)
                 }
             }
@@ -832,7 +867,8 @@ impl<'a> LoweringContext<'a> {
                         } else {
                             Ty::Primitive(PrimitiveTy::Unit)
                         };
-                        let local = self.define_local(p.span, p.name.clone(), param_ty.clone(), false);
+                        let local =
+                            self.define_local(p.span, p.name.clone(), param_ty.clone(), false);
                         Param {
                             span: p.span,
                             name: p.name.clone(),
@@ -865,10 +901,14 @@ impl<'a> LoweringContext<'a> {
 
                 let scrut_expr = self.lower_expr(*scrutinee);
                 let scrut_ty = self.hir.exprs[scrut_expr].ty.clone();
-                let scrut_local = self.define_local(expr.span, SmolStr::new("_scrut"), scrut_ty.clone(), false);
+                let scrut_local =
+                    self.define_local(expr.span, SmolStr::new("_scrut"), scrut_ty.clone(), false);
                 let scrut_let = self.hir.stmts.alloc(Stmt {
                     span: expr.span,
-                    kind: StmtKind::Let { local: scrut_local, init: Some(scrut_expr) },
+                    kind: StmtKind::Let {
+                        local: scrut_local,
+                        init: Some(scrut_expr),
+                    },
                 });
 
                 // Build if-else chain from arms (in reverse to nest else branches)
@@ -960,23 +1000,30 @@ impl<'a> LoweringContext<'a> {
             ast::ExprKind::ArrayRepeat { value, count } => {
                 let val = self.lower_expr(*value);
                 let cnt = self.lower_expr(*count);
-                ExprKind::ArrayRepeat { value: val, count: cnt }
+                ExprKind::ArrayRepeat {
+                    value: val,
+                    count: cnt,
+                }
             }
             ast::ExprKind::Try(inner) => {
                 let inner_id = self.lower_expr(*inner);
                 ExprKind::Try(inner_id)
             }
-            ast::ExprKind::Borrow { expr: inner, mutable } => {
+            ast::ExprKind::Borrow {
+                expr: inner,
+                mutable,
+            } => {
                 let inner_id = self.lower_expr(*inner);
-                ExprKind::Borrow { expr: inner_id, mutable: *mutable }
+                ExprKind::Borrow {
+                    expr: inner_id,
+                    mutable: *mutable,
+                }
             }
             ast::ExprKind::Deref(inner) => {
                 let inner_id = self.lower_expr(*inner);
                 ExprKind::Deref(inner_id)
             }
-            ast::ExprKind::AsyncBlock(block) => {
-                ExprKind::Block(self.lower_block(block))
-            }
+            ast::ExprKind::AsyncBlock(block) => ExprKind::Block(self.lower_block(block)),
             ast::ExprKind::Await(inner) => {
                 let inner_id = self.lower_expr(*inner);
                 return inner_id;
@@ -985,56 +1032,54 @@ impl<'a> LoweringContext<'a> {
                 let inner_id = self.lower_expr(*inner);
                 return inner_id;
             }
-            ast::ExprKind::ReturnExpr(val) => {
-                ExprKind::ReturnExpr(val.map(|v| self.lower_expr(v)))
-            }
-            ast::ExprKind::BreakExpr { label, value } => {
-                ExprKind::BreakExpr {
-                    label: label.clone(),
-                    value: value.map(|v| self.lower_expr(v)),
-                }
-            }
-            ast::ExprKind::ContinueExpr { label } => {
-                ExprKind::ContinueExpr {
-                    label: label.clone(),
-                }
-            }
+            ast::ExprKind::ReturnExpr(val) => ExprKind::ReturnExpr(val.map(|v| self.lower_expr(v))),
+            ast::ExprKind::BreakExpr { label, value } => ExprKind::BreakExpr {
+                label: label.clone(),
+                value: value.map(|v| self.lower_expr(v)),
+            },
+            ast::ExprKind::ContinueExpr { label } => ExprKind::ContinueExpr {
+                label: label.clone(),
+            },
             ast::ExprKind::PathExpr(segments) => {
                 // Treat path as a variable reference to the last segment
-                let name = segments.last().cloned().unwrap_or_else(|| SmolStr::new("_"));
+                let name = segments
+                    .last()
+                    .cloned()
+                    .unwrap_or_else(|| SmolStr::new("_"));
                 if let Some(local_id) = self.lookup_local(name.as_str()) {
                     ExprKind::Local(local_id)
                 } else {
-                    let local_id = self.define_local(expr.span, name, Ty::Primitive(PrimitiveTy::Unit), false);
+                    let local_id =
+                        self.define_local(expr.span, name, Ty::Primitive(PrimitiveTy::Unit), false);
                     ExprKind::Local(local_id)
                 }
             }
             ast::ExprKind::Error => ExprKind::Literal(Literal::Unit),
 
-            // Concurrency primitives (not yet fully lowered to HIR)
+            // Concurrency primitives (lowering pending in HIR)
             ast::ExprKind::Spawn(inner) => {
                 let _inner_id = self.lower_expr(*inner);
-                ExprKind::Literal(Literal::Unit) // TODO: spawn support in HIR
+                ExprKind::Literal(Literal::Unit) // NOTE: spawn support in HIR pending.
             }
             ast::ExprKind::Channel { .. } => {
-                ExprKind::Literal(Literal::Unit) // TODO: channel support in HIR
+                ExprKind::Literal(Literal::Unit) // NOTE: channel support in HIR pending.
             }
             ast::ExprKind::Send { .. } => {
-                ExprKind::Literal(Literal::Unit) // TODO: send support in HIR
+                ExprKind::Literal(Literal::Unit) // NOTE: send support in HIR pending.
             }
             ast::ExprKind::Recv(inner) => {
                 let _inner_id = self.lower_expr(*inner);
-                ExprKind::Literal(Literal::Unit) // TODO: recv support in HIR
+                ExprKind::Literal(Literal::Unit) // NOTE: recv support in HIR pending.
             }
             ast::ExprKind::Select { .. } => {
-                ExprKind::Literal(Literal::Unit) // TODO: select support in HIR
+                ExprKind::Literal(Literal::Unit) // NOTE: select support in HIR pending.
             }
             ast::ExprKind::YieldExpr(val) => {
                 let _val_id = val.map(|v| self.lower_expr(v));
-                ExprKind::Literal(Literal::Unit) // TODO: yield support in HIR
+                ExprKind::Literal(Literal::Unit) // NOTE: yield support in HIR pending.
             }
             ast::ExprKind::MacroCall { .. } => {
-                ExprKind::Literal(Literal::Unit) // TODO: macro expansion in HIR
+                ExprKind::Literal(Literal::Unit) // NOTE: macro expansion in HIR pending.
             }
         };
 
@@ -1075,7 +1120,12 @@ impl<'a> LoweringContext<'a> {
                 let local_id = if let Some(id) = self.lookup_local(name.as_str()) {
                     id
                 } else {
-                    self.define_local(expr.span, name.clone(), Ty::Primitive(PrimitiveTy::Unit), true)
+                    self.define_local(
+                        expr.span,
+                        name.clone(),
+                        Ty::Primitive(PrimitiveTy::Unit),
+                        true,
+                    )
                 };
                 Place::Local(local_id)
             }
@@ -1100,7 +1150,12 @@ impl<'a> LoweringContext<'a> {
             }
             _ => {
                 // Fallback: evaluate as expr, assign to temp
-                let local = self.define_local(expr.span, SmolStr::new("_assign"), Ty::Primitive(PrimitiveTy::Unit), true);
+                let local = self.define_local(
+                    expr.span,
+                    SmolStr::new("_assign"),
+                    Ty::Primitive(PrimitiveTy::Unit),
+                    true,
+                );
                 Place::Local(local)
             }
         }
@@ -1135,10 +1190,18 @@ impl<'a> LoweringContext<'a> {
                     ty: Ty::Primitive(PrimitiveTy::Unit),
                     kind: ExprKind::Local(scrut_local),
                 });
-                let _local = self.define_local(arm.span, name.clone(), Ty::Primitive(PrimitiveTy::Unit), false);
+                let _local = self.define_local(
+                    arm.span,
+                    name.clone(),
+                    Ty::Primitive(PrimitiveTy::Unit),
+                    false,
+                );
                 let bind_stmt = self.hir.stmts.alloc(Stmt {
                     span: arm.span,
-                    kind: StmtKind::Let { local: _local, init: Some(scrut_ref) },
+                    kind: StmtKind::Let {
+                        local: _local,
+                        init: Some(scrut_ref),
+                    },
                 });
                 return self.hir.exprs.alloc(Expr {
                     span: arm.span,
@@ -1201,7 +1264,10 @@ impl<'a> LoweringContext<'a> {
 
     /// Check if a pattern is a wildcard/catch-all
     fn is_wildcard_pattern(&self, pattern: &ast::Pattern) -> bool {
-        matches!(pattern, ast::Pattern::Wildcard | ast::Pattern::Var(_) | ast::Pattern::Rest)
+        matches!(
+            pattern,
+            ast::Pattern::Wildcard | ast::Pattern::Var(_) | ast::Pattern::Rest
+        )
     }
 
     /// Lower a pattern to a boolean condition expression
@@ -1237,11 +1303,13 @@ impl<'a> LoweringContext<'a> {
             }
             ast::Pattern::Constructor { name, .. } => {
                 // scrutinee == ConstructorName (tag comparison)
-                let tag_local = self.define_local(span, name.clone(), Ty::Primitive(PrimitiveTy::Unit), false);
                 let tag_ref = self.hir.exprs.alloc(Expr {
                     span,
                     ty: Ty::Primitive(PrimitiveTy::Unit),
-                    kind: ExprKind::Local(tag_local),
+                    kind: ExprKind::Struct {
+                        name: name.clone(),
+                        fields: Vec::new(),
+                    },
                 });
                 self.hir.exprs.alloc(Expr {
                     span,
@@ -1277,7 +1345,11 @@ impl<'a> LoweringContext<'a> {
                 }
                 result
             }
-            ast::Pattern::Range { start, end, inclusive } => {
+            ast::Pattern::Range {
+                start,
+                end,
+                inclusive,
+            } => {
                 // start..=end → scrutinee >= start && scrutinee <= end
                 let mut conditions = vec![];
                 if let Some(start_pat) = start {
@@ -1315,7 +1387,11 @@ impl<'a> LoweringContext<'a> {
                             ty: Ty::Primitive(PrimitiveTy::Unit),
                             kind: ExprKind::Local(scrut_local),
                         });
-                        let op = if *inclusive { BinaryOp::Le } else { BinaryOp::Lt };
+                        let op = if *inclusive {
+                            BinaryOp::Le
+                        } else {
+                            BinaryOp::Lt
+                        };
                         conditions.push(self.hir.exprs.alloc(Expr {
                             span,
                             ty: Ty::Primitive(PrimitiveTy::Bool),
@@ -1441,7 +1517,11 @@ impl<'a> LoweringContext<'a> {
             ast::TypeKind::Reference { ty, mutable } => {
                 let inner_ty = self.convert_type(&self.source.types[*ty]);
                 Ty::Named {
-                    name: if *mutable { SmolStr::new("&mut") } else { SmolStr::new("&") },
+                    name: if *mutable {
+                        SmolStr::new("&mut")
+                    } else {
+                        SmolStr::new("&")
+                    },
                     args: vec![inner_ty],
                 }
             }
@@ -1462,7 +1542,11 @@ impl<'a> LoweringContext<'a> {
 pub fn lower_source_file(source: &SourceFile) -> HirFile {
     let mut ctx = LoweringContext::new(source);
 
-    let items: Vec<Item> = source.items.iter().map(|item| ctx.lower_item(item)).collect();
+    let items: Vec<Item> = source
+        .items
+        .iter()
+        .map(|item| ctx.lower_item(item))
+        .collect();
 
     ctx.hir.items = items;
     ctx.hir

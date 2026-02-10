@@ -57,14 +57,26 @@ mod tests {
 
     #[test]
     fn test_binding_time_join_static() {
-        assert_eq!(BindingTime::Static.join(BindingTime::Static), BindingTime::Static);
+        assert_eq!(
+            BindingTime::Static.join(BindingTime::Static),
+            BindingTime::Static
+        );
     }
 
     #[test]
     fn test_binding_time_join_dynamic() {
-        assert_eq!(BindingTime::Static.join(BindingTime::Dynamic), BindingTime::Dynamic);
-        assert_eq!(BindingTime::Dynamic.join(BindingTime::Static), BindingTime::Dynamic);
-        assert_eq!(BindingTime::Dynamic.join(BindingTime::Dynamic), BindingTime::Dynamic);
+        assert_eq!(
+            BindingTime::Static.join(BindingTime::Dynamic),
+            BindingTime::Dynamic
+        );
+        assert_eq!(
+            BindingTime::Dynamic.join(BindingTime::Static),
+            BindingTime::Dynamic
+        );
+        assert_eq!(
+            BindingTime::Dynamic.join(BindingTime::Dynamic),
+            BindingTime::Dynamic
+        );
     }
 
     #[test]

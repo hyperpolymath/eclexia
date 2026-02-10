@@ -3,8 +3,11 @@
 
 //! Symbol resolution and scope tracking for LSP features.
 
-use eclexia_ast::{Ident, Item, SourceFile, ExprId, StmtId, ExprKind, StmtKind, Block, Pattern, ExternItem, ImplItem};
 use eclexia_ast::span::Span;
+use eclexia_ast::{
+    Block, ExprId, ExprKind, ExternItem, Ident, ImplItem, Item, Pattern, SourceFile, StmtId,
+    StmtKind,
+};
 use std::collections::HashMap;
 
 /// A symbol in the program (variable, function, type, etc.)
@@ -207,9 +210,10 @@ impl SymbolTable {
             }
             Item::Import(import) => {
                 // Register the imported name (last segment or alias)
-                let name = import.alias.clone().unwrap_or_else(|| {
-                    import.path.last().cloned().unwrap_or_default()
-                });
+                let name = import
+                    .alias
+                    .clone()
+                    .unwrap_or_else(|| import.path.last().cloned().unwrap_or_default());
                 if !name.is_empty() {
                     let symbol = Symbol {
                         name,
@@ -465,10 +469,7 @@ impl SymbolTable {
 
     /// Get all symbols in the global scope (for document outline)
     pub fn global_symbols(&self) -> Vec<&Symbol> {
-        self.scopes[self.global_scope]
-            .symbols
-            .values()
-            .collect()
+        self.scopes[self.global_scope].symbols.values().collect()
     }
 
     /// Get all symbols in all scopes (for find-all functionality)
@@ -511,7 +512,11 @@ impl SymbolTable {
                 self.collect_expr_references(*condition, file);
                 self.collect_block_references(body, file);
             }
-            StmtKind::For { pattern, iter, body } => {
+            StmtKind::For {
+                pattern,
+                iter,
+                body,
+            } => {
                 // Enter for-loop scope
                 self.enter_scope(body.span);
 
@@ -570,7 +575,11 @@ impl SymbolTable {
                     self.collect_expr_references(arg, file);
                 }
             }
-            ExprKind::MethodCall { receiver, method, args } => {
+            ExprKind::MethodCall {
+                receiver,
+                method,
+                args,
+            } => {
                 self.collect_expr_references(*receiver, file);
                 // Add reference to the method name
                 self.references.push(SymbolReference {
@@ -595,7 +604,11 @@ impl SymbolTable {
                 self.collect_expr_references(*expr, file);
                 self.collect_expr_references(*index, file);
             }
-            ExprKind::If { condition, then_branch, else_branch } => {
+            ExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 self.collect_expr_references(*condition, file);
                 self.collect_block_references(then_branch, file);
                 if let Some(else_block) = else_branch {
@@ -736,7 +749,10 @@ impl SymbolTable {
                     }
                 }
             }
-            Pattern::Binding { name, pattern: inner } => {
+            Pattern::Binding {
+                name,
+                pattern: inner,
+            } => {
                 // name @ pattern -- bind name and recurse into the inner pattern
                 self.define_symbol(Symbol {
                     name: name.clone(),
@@ -773,7 +789,10 @@ impl SymbolTable {
         }
 
         // Check if position is in a symbol definition
-        self.all_symbols().into_iter().find(|&symbol| symbol.definition_span.contains(position.start)).map(|v| v as _)
+        self.all_symbols()
+            .into_iter()
+            .find(|&symbol| symbol.definition_span.contains(position.start))
+            .map(|v| v as _)
     }
 
     /// Find all references to a symbol

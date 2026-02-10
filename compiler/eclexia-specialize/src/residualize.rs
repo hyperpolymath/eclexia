@@ -121,7 +121,7 @@ pub fn select_best_solution<'a>(
 mod tests {
     use super::*;
     use eclexia_ast::dimension::Dimension;
-    use eclexia_mir::{ResourceCost, ResourceConstraint, Solution};
+    use eclexia_mir::{ResourceConstraint, ResourceCost, Solution};
     use smol_str::SmolStr;
 
     fn make_solution(name: &str, energy_cost: f64) -> Solution {

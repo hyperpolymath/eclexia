@@ -55,7 +55,10 @@ impl TypeEnv {
 
     /// Register impl block methods for a type.
     pub fn register_impl_methods(&mut self, type_name: SmolStr, methods: Vec<(SmolStr, Ty)>) {
-        self.impl_methods.entry(type_name).or_default().extend(methods);
+        self.impl_methods
+            .entry(type_name)
+            .or_default()
+            .extend(methods);
     }
 
     /// Look up a struct field type.
@@ -103,9 +106,9 @@ impl TypeEnv {
 
     /// Look up a binding.
     pub fn lookup(&self, name: &str) -> Option<&TypeScheme> {
-        self.bindings.get(name).or_else(|| {
-            self.parent.as_ref().and_then(|p| p.lookup(name))
-        })
+        self.bindings
+            .get(name)
+            .or_else(|| self.parent.as_ref().and_then(|p| p.lookup(name)))
     }
 
     /// Insert a monomorphic type.

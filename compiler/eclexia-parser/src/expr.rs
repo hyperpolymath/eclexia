@@ -4,10 +4,10 @@
 //! Expression parsing using Pratt parsing for operators.
 
 use eclexia_ast::*;
-use eclexia_lexer::{TokenKind, ResourceLiteral};
+use eclexia_lexer::{ResourceLiteral, TokenKind};
 use smol_str::SmolStr;
 
-use crate::{Parser, ParseResult, ParseError};
+use crate::{ParseError, ParseResult, Parser};
 
 /// Operator precedence levels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -52,11 +52,16 @@ pub enum Precedence {
 
 impl<'src> Parser<'src> {
     /// Parse an expression.
+    /// Parse an expression using the full range of operator precedences.
     pub fn parse_expr(&mut self, file: &mut SourceFile) -> ParseResult<ExprId> {
         self.parse_expr_prec(file, Precedence::None)
     }
 
     /// Parse an expression without struct literals (for contexts where { starts a block).
+    /// Parse an expression specifically disabling struct literal parsing.
+    ///
+    /// This is used in contexts where an opening curly brace `{` should always indicate
+    /// a block, not a struct literal, to avoid parsing ambiguities.
     pub fn parse_expr_no_struct(&mut self, file: &mut SourceFile) -> ParseResult<ExprId> {
         // Set flag to disable struct literals
         let old_flag = self.no_struct_literals;
@@ -71,7 +76,12 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse an expression with a minimum precedence.
-    fn parse_expr_prec(&mut self, file: &mut SourceFile, min_prec: Precedence) -> ParseResult<ExprId> {
+    /// Parse an expression with a minimum precedence using the Pratt parsing algorithm.
+    fn parse_expr_prec(
+        &mut self,
+        file: &mut SourceFile,
+        min_prec: Precedence,
+    ) -> ParseResult<ExprId> {
         let mut lhs = self.parse_prefix(file)?;
 
         loop {
@@ -87,6 +97,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a prefix expression (primary or unary).
+    /// Parse a prefix expression (primary expression or an expression preceded by a unary operator).
     fn parse_prefix(&mut self, file: &mut SourceFile) -> ParseResult<ExprId> {
         let token = self.peek().clone();
 
@@ -98,7 +109,12 @@ impl<'src> Parser<'src> {
                     TokenKind::Minus => UnaryOp::Neg,
                     TokenKind::Bang | TokenKind::Not => UnaryOp::Not,
                     TokenKind::Tilde => UnaryOp::BitNot,
-                    _ => return Err(ParseError::custom(token.span, "internal error: unexpected unary operator")),
+                    _ => {
+                        return Err(ParseError::custom(
+                            token.span,
+                            "internal error: unexpected unary operator",
+                        ))
+                    }
                 };
                 let operand = self.parse_expr_prec(file, Precedence::Unary)?;
                 let span = token.span.merge(file.exprs[operand].span);
@@ -122,7 +138,10 @@ impl<'src> Parser<'src> {
                 let span = token.span.merge(file.exprs[operand].span);
                 let expr = Expr {
                     span,
-                    kind: ExprKind::Borrow { expr: operand, mutable },
+                    kind: ExprKind::Borrow {
+                        expr: operand,
+                        mutable,
+                    },
                 };
                 Ok(file.exprs.alloc(expr))
             }
@@ -143,11 +162,18 @@ impl<'src> Parser<'src> {
             TokenKind::DotDot | TokenKind::DotDotEq => {
                 let inclusive = matches!(token.kind, TokenKind::DotDotEq);
                 self.advance();
-                let op = if inclusive { BinaryOp::RangeInclusive } else { BinaryOp::Range };
+                let op = if inclusive {
+                    BinaryOp::RangeInclusive
+                } else {
+                    BinaryOp::Range
+                };
                 // Check if there's an operand (..b vs just ..)
-                if self.check(TokenKind::Semi) || self.check(TokenKind::RBrace)
-                    || self.check(TokenKind::RParen) || self.check(TokenKind::RBracket)
-                    || self.check(TokenKind::Comma) || self.is_eof()
+                if self.check(TokenKind::Semi)
+                    || self.check(TokenKind::RBrace)
+                    || self.check(TokenKind::RParen)
+                    || self.check(TokenKind::RBracket)
+                    || self.check(TokenKind::Comma)
+                    || self.is_eof()
                 {
                     // Full range: ..
                     let unit = file.exprs.alloc(Expr {
@@ -156,7 +182,11 @@ impl<'src> Parser<'src> {
                     });
                     let range_expr = Expr {
                         span: token.span,
-                        kind: ExprKind::Binary { op, lhs: unit, rhs: unit },
+                        kind: ExprKind::Binary {
+                            op,
+                            lhs: unit,
+                            rhs: unit,
+                        },
                     };
                     return Ok(file.exprs.alloc(range_expr));
                 }
@@ -179,13 +209,16 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a primary expression.
+    /// Parse a primary expression (literals, identifiers, parenthesized expressions, blocks, etc.).
     fn parse_primary(&mut self, file: &mut SourceFile) -> ParseResult<ExprId> {
         let token = self.advance();
 
         let kind = match token.kind {
             // Literals
-            TokenKind::Integer(n) | TokenKind::HexInteger(n)
-            | TokenKind::OctalInteger(n) | TokenKind::BinaryInteger(n) => ExprKind::Literal(Literal::Int(n)),
+            TokenKind::Integer(n)
+            | TokenKind::HexInteger(n)
+            | TokenKind::OctalInteger(n)
+            | TokenKind::BinaryInteger(n) => ExprKind::Literal(Literal::Int(n)),
             TokenKind::Float(f) => ExprKind::Literal(Literal::Float(f)),
             TokenKind::String(s) => ExprKind::Literal(Literal::String(s)),
             TokenKind::Char(c) => ExprKind::Literal(Literal::Char(c)),
@@ -297,7 +330,10 @@ impl<'src> Parser<'src> {
                             }
                         };
                         self.expect(TokenKind::RBracket)?;
-                        ExprKind::ArrayRepeat { value: first, count }
+                        ExprKind::ArrayRepeat {
+                            value: first,
+                            count,
+                        }
                     } else {
                         // Array literal: [a, b, c]
                         let mut elems = vec![first];
@@ -442,7 +478,9 @@ impl<'src> Parser<'src> {
                         resume_param,
                         body: handler_body,
                     });
-                    if !self.check(TokenKind::Comma) { break; }
+                    if !self.check(TokenKind::Comma) {
+                        break;
+                    }
                     self.advance();
                 }
                 self.expect(TokenKind::RBrace)?;
@@ -451,7 +489,8 @@ impl<'src> Parser<'src> {
 
             // Return as expression
             TokenKind::Return => {
-                let value = if !self.check(TokenKind::Semi) && !self.check(TokenKind::RBrace)
+                let value = if !self.check(TokenKind::Semi)
+                    && !self.check(TokenKind::RBrace)
                     && !self.check(TokenKind::Comma)
                 {
                     Some(self.parse_expr(file)?)
@@ -463,13 +502,15 @@ impl<'src> Parser<'src> {
 
             // Break as expression
             TokenKind::Break => {
-                let label = if matches!(self.peek().kind, TokenKind::Ident(ref s) if s.starts_with('\'')) {
+                let label = if matches!(self.peek().kind, TokenKind::Ident(ref s) if s.starts_with('\''))
+                {
                     let s = self.expect_ident()?;
                     Some(s)
                 } else {
                     None
                 };
-                let value = if !self.check(TokenKind::Semi) && !self.check(TokenKind::RBrace)
+                let value = if !self.check(TokenKind::Semi)
+                    && !self.check(TokenKind::RBrace)
                     && !self.check(TokenKind::Comma)
                 {
                     Some(self.parse_expr(file)?)
@@ -481,7 +522,8 @@ impl<'src> Parser<'src> {
 
             // Continue as expression
             TokenKind::Continue => {
-                let label = if matches!(self.peek().kind, TokenKind::Ident(ref s) if s.starts_with('\'')) {
+                let label = if matches!(self.peek().kind, TokenKind::Ident(ref s) if s.starts_with('\''))
+                {
                     let s = self.expect_ident()?;
                     Some(s)
                 } else {
@@ -548,7 +590,14 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a block expression when we've already consumed the opening brace.
-    fn parse_block_inner(&mut self, file: &mut SourceFile, start: eclexia_ast::span::Span) -> ParseResult<Block> {
+    /// Parse a block expression when the opening brace `{` has already been consumed.
+    ///
+    /// This method is an internal helper used by `parse_primary` when encountering a block.
+    fn parse_block_inner(
+        &mut self,
+        file: &mut SourceFile,
+        start: eclexia_ast::span::Span,
+    ) -> ParseResult<Block> {
         let mut stmts = Vec::new();
         let mut expr = None;
 
@@ -580,8 +629,16 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse postfix operations WITHOUT struct literals (for use in contexts where { starts a block).
+    /// Parse postfix operations when struct literals are explicitly disabled.
+    ///
+    /// This is an internal helper to handle postfix expressions in contexts where
+    /// an opening curly brace `{` should not be interpreted as a struct literal.
     #[allow(dead_code)]
-    fn parse_postfix_no_struct(&mut self, file: &mut SourceFile, mut expr: ExprId) -> ParseResult<ExprId> {
+    fn parse_postfix_no_struct(
+        &mut self,
+        file: &mut SourceFile,
+        mut expr: ExprId,
+    ) -> ParseResult<ExprId> {
         loop {
             match self.peek().kind {
                 // Try operator: expr?
@@ -692,6 +749,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse postfix operations (calls, field access, indexing).
+    /// Parse postfix operations (function calls, field access, indexing, try operator, macro invocations, struct literals).
     fn parse_postfix(&mut self, file: &mut SourceFile, mut expr: ExprId) -> ParseResult<ExprId> {
         loop {
             match self.peek().kind {
@@ -851,7 +909,12 @@ impl<'src> Parser<'src> {
                     // Extract the struct name - safe: guarded by matches! check above
                     let name = match &file.exprs[expr].kind {
                         ExprKind::Var(n) => n.clone(),
-                        _ => return Err(ParseError::custom(file.exprs[expr].span, "internal error: expected identifier for struct literal")),
+                        _ => {
+                            return Err(ParseError::custom(
+                                file.exprs[expr].span,
+                                "internal error: expected identifier for struct literal",
+                            ))
+                        }
                     };
 
                     self.advance(); // consume {
@@ -893,6 +956,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse an infix expression.
+    /// Parse an infix expression (binary operators like `+`, `-`, `*`, `==`, `as`).
     fn parse_infix(
         &mut self,
         file: &mut SourceFile,
@@ -968,6 +1032,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a match arm.
+    /// Parse a single `match` arm (`pattern if guard => body`).
     fn parse_match_arm(&mut self, file: &mut SourceFile) -> ParseResult<MatchArm> {
         let start = self.peek().span;
         let pattern = self.parse_pattern()?;
@@ -993,6 +1058,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a pattern.
+    /// Parse a pattern, potentially including `or` patterns (`|`).
     pub(crate) fn parse_pattern(&mut self) -> ParseResult<Pattern> {
         let mut pat = self.parse_single_pattern()?;
 
@@ -1010,6 +1076,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a single pattern (without or).
+    /// Parse a single pattern (without `or` combinators).
     fn parse_single_pattern(&mut self) -> ParseResult<Pattern> {
         let token = self.advance();
 
@@ -1026,7 +1093,10 @@ impl<'src> Parser<'src> {
                     false
                 };
                 let name = self.expect_ident()?;
-                Pattern::Reference { pattern: Box::new(Pattern::Var(name)), mutable }
+                Pattern::Reference {
+                    pattern: Box::new(Pattern::Var(name)),
+                    mutable,
+                }
             }
             // Reference pattern: &pat or &mut pat
             TokenKind::Amp => {
@@ -1037,7 +1107,10 @@ impl<'src> Parser<'src> {
                     false
                 };
                 let inner = self.parse_single_pattern()?;
-                Pattern::Reference { pattern: Box::new(inner), mutable }
+                Pattern::Reference {
+                    pattern: Box::new(inner),
+                    mutable,
+                }
             }
             TokenKind::Ident(name) => {
                 if self.check(TokenKind::LParen) {
@@ -1087,18 +1160,27 @@ impl<'src> Parser<'src> {
                         }
                     }
                     self.expect(TokenKind::RBrace)?;
-                    Pattern::Struct { name, fields: field_pats, rest }
+                    Pattern::Struct {
+                        name,
+                        fields: field_pats,
+                        rest,
+                    }
                 } else if self.check(TokenKind::At) {
                     // Binding pattern: name @ pattern
                     self.advance();
                     let inner = self.parse_single_pattern()?;
-                    Pattern::Binding { name, pattern: Box::new(inner) }
+                    Pattern::Binding {
+                        name,
+                        pattern: Box::new(inner),
+                    }
                 } else {
                     Pattern::Var(name)
                 }
             }
-            TokenKind::Integer(n) | TokenKind::HexInteger(n)
-            | TokenKind::OctalInteger(n) | TokenKind::BinaryInteger(n) => {
+            TokenKind::Integer(n)
+            | TokenKind::HexInteger(n)
+            | TokenKind::OctalInteger(n)
+            | TokenKind::BinaryInteger(n) => {
                 let lit_pat = Pattern::Literal(Literal::Int(n));
                 // Check for range pattern: 1..5 or 1..=5
                 if self.check(TokenKind::DotDot) || self.check(TokenKind::DotDotEq) {

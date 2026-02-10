@@ -26,10 +26,7 @@ pub fn verify_resource_budgets(mir: &MirFile) -> Vec<ResourceVerification> {
 }
 
 /// Verify resource constraints for a single function.
-fn verify_function(
-    func: &eclexia_mir::Function,
-    mir: &MirFile,
-) -> Vec<ResourceVerification> {
+fn verify_function(func: &eclexia_mir::Function, mir: &MirFile) -> Vec<ResourceVerification> {
     let mut results = Vec::new();
 
     // Collect resource tracking instructions
@@ -38,9 +35,7 @@ fn verify_function(
     for (_, block) in func.basic_blocks.iter() {
         for instr in &block.instructions {
             if let InstructionKind::ResourceTrack {
-                resource,
-                amount,
-                ..
+                resource, amount, ..
             } = &instr.kind
             {
                 let static_amount = try_resolve_constant(amount, mir);
@@ -156,11 +151,7 @@ mod tests {
     use la_arena::Arena;
     use smol_str::SmolStr;
 
-    fn make_test_mir(
-        budget_limit: f64,
-        op: ConstraintOp,
-        usage_amounts: &[f64],
-    ) -> MirFile {
+    fn make_test_mir(budget_limit: f64, op: ConstraintOp, usage_amounts: &[f64]) -> MirFile {
         let mut constants: Arena<Constant> = Arena::new();
 
         // Create constants for each usage amount

@@ -105,10 +105,18 @@ impl ParseError {
     pub fn expected_identifier(token: Token) -> Self {
         let hint = match token.kind {
             TokenKind::Integer(_) => Some("identifiers cannot start with numbers".to_string()),
-            TokenKind::String(_) => Some("string literals cannot be used as identifiers".to_string()),
-            _ => Some(format!("expected a variable or function name, found {:?}", token.kind)),
+            TokenKind::String(_) => {
+                Some("string literals cannot be used as identifiers".to_string())
+            }
+            _ => Some(format!(
+                "expected a variable or function name, found {:?}",
+                token.kind
+            )),
         };
-        Self::ExpectedIdentifier { span: token.span, hint }
+        Self::ExpectedIdentifier {
+            span: token.span,
+            hint,
+        }
     }
 
     /// Create a custom error.
@@ -121,7 +129,11 @@ impl ParseError {
     }
 
     /// Create a custom error with a hint.
-    pub fn custom_with_hint(span: Span, message: impl Into<String>, hint: impl Into<String>) -> Self {
+    pub fn custom_with_hint(
+        span: Span,
+        message: impl Into<String>,
+        hint: impl Into<String>,
+    ) -> Self {
         Self::Custom {
             span,
             message: message.into(),
@@ -198,24 +210,16 @@ fn generate_expected_token_hint(expected: &TokenKind, found: &TokenKind) -> Opti
         (_, TokenKind::Eof) => {
             Some("unexpected end of file — check for unclosed delimiters".to_string())
         }
-        (TokenKind::RParen, _) => {
-            Some("unclosed parenthesis — add a closing `)`".to_string())
-        }
-        (TokenKind::RBracket, _) => {
-            Some("unclosed bracket — add a closing `]`".to_string())
-        }
-        (TokenKind::RBrace, _) => {
-            Some("unclosed brace — add a closing `}`".to_string())
-        }
+        (TokenKind::RParen, _) => Some("unclosed parenthesis — add a closing `)`".to_string()),
+        (TokenKind::RBracket, _) => Some("unclosed bracket — add a closing `]`".to_string()),
+        (TokenKind::RBrace, _) => Some("unclosed brace — add a closing `}`".to_string()),
         (TokenKind::Semi, _) => {
             Some("consider adding a `;` at the end of this statement".to_string())
         }
         (TokenKind::Colon, TokenKind::Eq) => {
             Some("did you mean `: Type =` instead of `=`?".to_string())
         }
-        (TokenKind::Arrow, _) => {
-            Some("expected `->` for return type annotation".to_string())
-        }
+        (TokenKind::Arrow, _) => Some("expected `->` for return type annotation".to_string()),
         _ => None,
     }
 }

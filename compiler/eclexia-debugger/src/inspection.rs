@@ -62,12 +62,7 @@ impl Inspector {
             } else {
                 func.name.as_str()
             };
-            output.push_str(&format!(
-                "  [{}] fn {} @ ip={}\n",
-                i,
-                name,
-                frame.ip
-            ));
+            output.push_str(&format!("  [{}] fn {} @ ip={}\n", i, name, frame.ip));
         }
         output
     }
@@ -110,12 +105,7 @@ impl Inspector {
         } else {
             func.name.as_str()
         };
-        format!(
-            "fn {} @ {}: {:?}",
-            name,
-            frame.ip,
-            inst
-        )
+        format!("fn {} @ {}: {:?}", name, frame.ip, inst)
     }
 
     /// Get current position (function_idx, instruction_idx).

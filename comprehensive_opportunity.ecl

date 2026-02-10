@@ -1,0 +1,72 @@
+  // SPDX-License-Identifier: MIT
+  // Comprehensive feature/behavior test for Eclexia
+
+  import std::collections::{Vec, HashMap}
+  import std::math::{sqrt, pow}
+
+  @requires: energy < 200J, carbon < 5gCO2e
+  @optimize: minimize carbon
+  @defer_until: grid_carbon_intensity < 250gCO2e/kWh
+  adaptive def ledger_analytics(transactions: Vec<HashMap<String, Resource>>) -> Result<Float, String>
+  {
+      @solution "fast_path"
+          @provides: energy 50J, carbon 0.8gCO2e
+      {
+          let mut total = 0.0
+          for txn in transactions {
+              if txn.contains("amount") {
+                  let value = txn["amount"].get(Float).unwrap_or(0.0)
+                  total = total + value
+              }
+          }
+          Ok(sqrt(total))
+      }
+
+      @solution "green_path"
+          @provides: energy 80J, carbon 0.4gCO2e
+      {
+          println("Running green-trace solution")
+          let total = transactions
+              .iter()
+              .filter(|txn| txn.get("category").map_or(false, |v| v == "research"))
+              .map(|txn| txn["amount"].get(Float).unwrap_or(0.0))
+              .sum()
+          Ok(total / Float(transactions.len() as Int + 1))
+      }
+
+      @solution "realtime_path"
+          @provides: energy 100J, carbon 1.0gCO2e
+      {
+          let total = 0.0
+          let mut map = HashMap::<String, Int>::new()
+          for txn in transactions {
+              let kind = txn.get("type").and_then(|v| v.get(Str)).unwrap_or("unknown")
+              let counter = map.get_mut(kind).unwrap_or_default()
+              *counter = *counter + 1
+          }
+          println(format("Type counts: {}", map))
+          Err("Too expensive for production".to_string())
+      }
+  }
+
+  def main() -> Unit
+  {
+      let txns = Vec::new()
+      txns.push({
+          "amount": Resource::new(42.0, Float),
+          "category": Resource::new("research", String),
+          "type": Resource::new("batch", String)
+      })
+      txns.push({
+          "amount": Resource::new(58.0, Float),
+          "category": Resource::new("operations", String),
+          "type": Resource::new("realtime", String)
+      })
+
+      match ledger_analytics(txns) {
+          Ok(value) => println(format!("Computed insight: {:.3}", value)),
+          Err(e) => println(format!("adaptive error: {}", e)),
+      }
+
+      println("All systems go.")
+  }

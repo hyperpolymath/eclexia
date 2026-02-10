@@ -5,19 +5,48 @@
 //!
 //! Tests the full pipeline: Parse → Type Check → HIR → MIR → Codegen → Execute
 
+use std::path::PathBuf;
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn unique_temp_path() -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let filename = format!(
+        "eclexia_test_{}_{}_{}.ecl",
+        std::process::id(),
+        nanos,
+        counter
+    );
+    std::env::temp_dir().join(filename)
+}
 
 /// Helper to run an Eclexia program
 fn run_eclexia_program(code: &str) -> Result<String, String> {
     // Write code to temp file
-    let temp_file = format!("/tmp/eclexia_test_{}.ecl", std::process::id());
+    let temp_file = unique_temp_path();
     std::fs::write(&temp_file, code).map_err(|e| format!("Failed to write file: {}", e))?;
 
     // Run with eclexia
-    let output = Command::new("cargo")
-        .args(&["run", "--", "run", &temp_file])
-        .output()
-        .map_err(|e| format!("Failed to execute: {}", e))?;
+    let output = if let Ok(exe_path) = std::env::var("CARGO_BIN_EXE_eclexia") {
+        Command::new(exe_path)
+            .arg("run")
+            .arg(&temp_file)
+            .output()
+            .map_err(|e| format!("Failed to execute: {}", e))?
+    } else {
+        Command::new("cargo")
+            .args(["run", "--", "run"])
+            .arg(&temp_file)
+            .output()
+            .map_err(|e| format!("Failed to execute: {}", e))?
+    };
 
     // Clean up
     let _ = std::fs::remove_file(&temp_file);

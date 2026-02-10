@@ -18,7 +18,10 @@ use crate::{BudgetVerdict, ResourceAnalysis, ResourceBound};
 
 /// Analyze resource consumption for all functions in a MIR file.
 pub fn analyze_resources(mir: &MirFile) -> Vec<ResourceAnalysis> {
-    mir.functions.iter().map(|func| analyze_function(func, mir)).collect()
+    mir.functions
+        .iter()
+        .map(|func| analyze_function(func, mir))
+        .collect()
 }
 
 /// Analyze resource consumption for a single function.
@@ -73,9 +76,7 @@ pub fn verify_budgets(mir: &MirFile) -> Vec<(String, String, BudgetVerdict)> {
     let mut results = Vec::new();
 
     for func in &mir.functions {
-        let analysis = analyses
-            .iter()
-            .find(|a| a.function == func.name.as_str());
+        let analysis = analyses.iter().find(|a| a.function == func.name.as_str());
 
         for constraint in &func.resource_constraints {
             let resource_name = constraint.resource.to_string();

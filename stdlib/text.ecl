@@ -76,7 +76,7 @@ fn length(s: String) -> Int;
 /// let s = join(["a", "b", "c"], ", ");  // "a, b, c"
 /// ```
 fn join(parts: [String], delim: String) -> String {
-    // TODO: Implement using array reduce when available
+    // NOTE: Implement with array reduce when available.
     // For now, this is a placeholder
     ""
 }

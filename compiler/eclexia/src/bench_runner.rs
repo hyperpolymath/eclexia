@@ -5,9 +5,9 @@
 
 use eclexia_ast::{Attribute, Item, SourceFile};
 use eclexia_codegen::{Backend, BytecodeGenerator, VirtualMachine};
-use std::time::{Duration, Instant};
 use std::fs;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 /// A benchmark function with metadata.
 #[derive(Debug)]
@@ -446,10 +446,7 @@ mod tests {
 
     #[test]
     fn test_bench_stats_with_energy() {
-        let samples = vec![
-            Duration::from_millis(10),
-            Duration::from_millis(12),
-        ];
+        let samples = vec![Duration::from_millis(10), Duration::from_millis(12)];
 
         let energy = vec![EnergyMeasurement {
             joules: 0.5,

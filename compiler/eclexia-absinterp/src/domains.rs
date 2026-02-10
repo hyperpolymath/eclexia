@@ -113,9 +113,10 @@ impl Interval {
         match (self, other) {
             (Self::Bottom, _) | (_, Self::Bottom) => Self::Bottom,
             (Self::Top, _) | (_, Self::Top) => Self::Top,
-            (Self::Range { lo: a, hi: b }, Self::Range { lo: c, hi: d }) => {
-                Self::Range { lo: a + c, hi: b + d }
-            }
+            (Self::Range { lo: a, hi: b }, Self::Range { lo: c, hi: d }) => Self::Range {
+                lo: a + c,
+                hi: b + d,
+            },
         }
     }
 
@@ -124,9 +125,10 @@ impl Interval {
         match (self, other) {
             (Self::Bottom, _) | (_, Self::Bottom) => Self::Bottom,
             (Self::Top, _) | (_, Self::Top) => Self::Top,
-            (Self::Range { lo: a, hi: b }, Self::Range { lo: c, hi: d }) => {
-                Self::Range { lo: a - d, hi: b - c }
-            }
+            (Self::Range { lo: a, hi: b }, Self::Range { lo: c, hi: d }) => Self::Range {
+                lo: a - d,
+                hi: b - c,
+            },
         }
     }
 

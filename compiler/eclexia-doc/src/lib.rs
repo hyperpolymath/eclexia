@@ -128,7 +128,10 @@ impl DocGenerator {
 
         html.push_str("<!DOCTYPE html>\n");
         html.push_str("<html>\n<head>\n");
-        html.push_str(&format!("<title>{} - Eclexia Documentation</title>\n", module_name));
+        html.push_str(&format!(
+            "<title>{} - Eclexia Documentation</title>\n",
+            module_name
+        ));
         html.push_str("<style>\n");
         html.push_str(include_str!("style.css"));
         html.push_str("</style>\n");
@@ -150,7 +153,10 @@ impl DocGenerator {
         for item in &self.items {
             html.push_str(&format!("<div class=\"item\" id=\"{}\">\n", item.name));
             html.push_str(&format!("<h3>{}</h3>\n", item.name));
-            html.push_str(&format!("<pre class=\"signature\">{}</pre>\n", item.signature));
+            html.push_str(&format!(
+                "<pre class=\"signature\">{}</pre>\n",
+                item.signature
+            ));
 
             if !item.doc_comment.is_empty() {
                 html.push_str("<div class=\"doc-comment\">\n");

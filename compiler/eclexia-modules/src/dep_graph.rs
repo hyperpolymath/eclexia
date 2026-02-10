@@ -113,13 +113,11 @@ impl DependencyGraph {
     ///
     /// Returns `None` if there is a cycle.
     pub fn topological_order(&self) -> Option<Vec<&ModuleId>> {
-        algo::toposort(&self.graph, None)
-            .ok()
-            .map(|sorted| {
-                // toposort returns in dependency-first order,
-                // but we want leaves first for compilation
-                sorted.into_iter().rev().map(|n| &self.graph[n]).collect()
-            })
+        algo::toposort(&self.graph, None).ok().map(|sorted| {
+            // toposort returns in dependency-first order,
+            // but we want leaves first for compilation
+            sorted.into_iter().rev().map(|n| &self.graph[n]).collect()
+        })
     }
 
     /// Compute compilation levels for parallel compilation.

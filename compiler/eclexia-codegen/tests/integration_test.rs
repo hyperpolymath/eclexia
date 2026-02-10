@@ -4,11 +4,11 @@
 //! Integration tests for code generation and VM execution.
 
 use eclexia_ast::span::Span;
-use eclexia_ast::types::{Ty, PrimitiveTy};
+use eclexia_ast::types::{PrimitiveTy, Ty};
 use eclexia_codegen::{Backend, BytecodeGenerator, VirtualMachine, VmValue};
 use eclexia_mir::{
-    MirFile, Function, BasicBlock, Instruction, InstructionKind,
-    Terminator, Value, ConstantKind, Constant, Local, BinaryOp,
+    BasicBlock, BinaryOp, Constant, ConstantKind, Function, Instruction, InstructionKind, Local,
+    MirFile, Terminator, Value,
 };
 use la_arena::Arena;
 use smol_str::SmolStr;
@@ -33,12 +33,10 @@ fn test_simple_arithmetic() {
     let mut basic_blocks = Arena::new();
     let entry_block = basic_blocks.alloc(BasicBlock {
         label: SmolStr::new("entry"),
-        instructions: vec![
-            Instruction {
-                span: Span::default(),
-                kind: InstructionKind::Nop,
-            },
-        ],
+        instructions: vec![Instruction {
+            span: Span::default(),
+            kind: InstructionKind::Nop,
+        }],
         terminator: Terminator::Return(Some(Value::Binary {
             op: BinaryOp::Add,
             lhs: Box::new(Value::Constant(const_5)),

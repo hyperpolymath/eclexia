@@ -11,9 +11,8 @@
 use std::sync::Arc;
 
 use crate::{
-    AstWrapper, BytecodeWrapper, Diagnostic, DiagnosticPhase, DiagnosticSeverity, HirWrapper,
-    LintDiagnostic, LintSeverity, MirWrapper, ParseError, SourceFile, TypeCheckError,
-    next_generation,
+    next_generation, AstWrapper, BytecodeWrapper, Diagnostic, DiagnosticPhase, DiagnosticSeverity,
+    HirWrapper, LintDiagnostic, LintSeverity, MirWrapper, ParseError, SourceFile, TypeCheckError,
 };
 
 /// Parse a source file into an AST.

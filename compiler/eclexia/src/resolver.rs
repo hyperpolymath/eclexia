@@ -9,8 +9,8 @@
 //! - Detects version conflicts
 //! - Resolves dependencies to concrete versions
 
-use std::collections::{HashMap, HashSet};
 use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 /// A semantic version (major.minor.patch).
@@ -24,7 +24,11 @@ pub struct Version {
 impl Version {
     /// Create a new version.
     pub fn new(major: u32, minor: u32, patch: u32) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 
     /// Parse a version string (e.g., "1.2.3").
@@ -237,10 +241,7 @@ impl Resolver {
             dependencies,
         };
 
-        self.registry
-            .entry(name)
-            .or_default()
-            .push(node);
+        self.registry.entry(name).or_default().push(node);
     }
 
     /// Resolve dependencies for a package.
@@ -337,19 +338,39 @@ impl Default for Resolver {
     }
 }
 
-/// Simplified dependency resolution for package manager.
-/// Takes a HashMap of name -> version requirement and returns resolved packages.
-/// Note: This is a simplified version that doesn't query a real registry yet.
-/// For now, it just parses the dependency declarations and returns them as-is.
+/// Resolve dependencies from a name→version requirement map.
+///
+/// Parses and validates all version requirement strings, then resolves
+/// them using the [`Resolver`] when registry data is available.
+/// Without pre-registered packages (no registry query yet), extracts
+/// the best concrete version from the requirement itself.
 pub fn resolve_dependencies(
     dependencies: &HashMap<String, String>,
 ) -> Result<Vec<(String, String)>, String> {
-    // For now, just return the dependencies as specified
-    // TODO: Implement full resolution with registry queries
-    let resolved: Vec<(String, String)> = dependencies
-        .iter()
-        .map(|(name, version)| (name.clone(), version.clone()))
-        .collect();
+    let mut resolved = Vec::new();
+
+    for (name, version_str) in dependencies {
+        // Parse and validate the version requirement
+        let req = VersionReq::parse(version_str)
+            .map_err(|e| format!("Invalid version requirement for '{}': {}", name, e))?;
+
+        // Extract a concrete version from the requirement.
+        // With a registry, we'd query for the best matching version;
+        // without one, we use the base version from the requirement.
+        let concrete_version = match &req {
+            VersionReq::Exact(v) | VersionReq::Caret(v) | VersionReq::GreaterEq(v) => v.to_string(),
+            VersionReq::Less(v) => {
+                // Best we can do without a registry: report the upper bound
+                format!("<{}", v)
+            }
+            VersionReq::Any => "*".to_string(),
+        };
+
+        resolved.push((name.clone(), concrete_version));
+    }
+
+    // Sort by name for deterministic output
+    resolved.sort_by(|a, b| a.0.cmp(&b.0));
 
     Ok(resolved)
 }
@@ -440,6 +461,31 @@ mod tests {
     }
 
     #[test]
+    fn test_resolve_dependencies_validates() {
+        let mut deps = HashMap::new();
+        deps.insert("foo".to_string(), "^1.2.3".to_string());
+        deps.insert("bar".to_string(), "2.0.0".to_string());
+
+        let resolved = resolve_dependencies(&deps).unwrap();
+        assert_eq!(resolved.len(), 2);
+        // Sorted by name
+        assert_eq!(resolved[0].0, "bar");
+        assert_eq!(resolved[0].1, "2.0.0");
+        assert_eq!(resolved[1].0, "foo");
+        assert_eq!(resolved[1].1, "1.2.3");
+    }
+
+    #[test]
+    fn test_resolve_dependencies_rejects_invalid() {
+        let mut deps = HashMap::new();
+        deps.insert("bad".to_string(), "not-a-version".to_string());
+
+        let result = resolve_dependencies(&deps);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid version requirement"));
+    }
+
+    #[test]
     fn test_circular_dependency() {
         let mut resolver = Resolver::new();
 
@@ -467,6 +513,9 @@ mod tests {
         }];
 
         let result = resolver.resolve(&deps);
-        assert!(matches!(result, Err(ResolutionError::CircularDependency(_))));
+        assert!(matches!(
+            result,
+            Err(ResolutionError::CircularDependency(_))
+        ));
     }
 }

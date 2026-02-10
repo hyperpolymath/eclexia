@@ -7,7 +7,7 @@ use crate::env::Environment;
 use crate::error::{RuntimeError, RuntimeResult};
 use crate::value::{BuiltinFn, Value};
 use smol_str::SmolStr;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 
 /// Register all built-in functions in the environment.
 pub fn register(env: &Environment) {
@@ -770,7 +770,8 @@ fn builtin_len(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -780,7 +781,10 @@ fn builtin_len(args: &[Value]) -> RuntimeResult<Value> {
         Value::Tuple(t) => Ok(Value::Int(t.len() as i64)),
         Value::HashMap(map) => Ok(Value::Int(map.borrow().len() as i64)),
         Value::SortedMap(map) => Ok(Value::Int(map.borrow().len() as i64)),
-        other => Err(RuntimeError::type_error("string, array, tuple, HashMap, or SortedMap", other.type_name())),
+        other => Err(RuntimeError::type_error(
+            "string, array, tuple, HashMap, or SortedMap",
+            other.type_name(),
+        )),
     }
 }
 
@@ -788,7 +792,8 @@ fn builtin_to_string(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -799,7 +804,8 @@ fn builtin_abs(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -814,7 +820,8 @@ fn builtin_min(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 2 {
         return Err(RuntimeError::ArityMismatch {
             expected: 2,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -831,7 +838,8 @@ fn builtin_max(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 2 {
         return Err(RuntimeError::ArityMismatch {
             expected: 2,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -848,7 +856,8 @@ fn builtin_sqrt(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -863,7 +872,8 @@ fn builtin_floor(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -878,7 +888,8 @@ fn builtin_ceil(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -894,22 +905,26 @@ const MAX_RANGE_SIZE: i64 = 1_000_000;
 
 fn builtin_range(args: &[Value]) -> RuntimeResult<Value> {
     let (start, end) = match args.len() {
-        1 => (0, args[0].as_int().ok_or_else(|| {
-            RuntimeError::type_error("integer", args[0].type_name())
-        })?),
+        1 => (
+            0,
+            args[0]
+                .as_int()
+                .ok_or_else(|| RuntimeError::type_error("integer", args[0].type_name()))?,
+        ),
         2 => {
-            let s = args[0].as_int().ok_or_else(|| {
-                RuntimeError::type_error("integer", args[0].type_name())
-            })?;
-            let e = args[1].as_int().ok_or_else(|| {
-                RuntimeError::type_error("integer", args[1].type_name())
-            })?;
+            let s = args[0]
+                .as_int()
+                .ok_or_else(|| RuntimeError::type_error("integer", args[0].type_name()))?;
+            let e = args[1]
+                .as_int()
+                .ok_or_else(|| RuntimeError::type_error("integer", args[1].type_name()))?;
             (s, e)
         }
         _ => {
             return Err(RuntimeError::ArityMismatch {
                 expected: 2,
-                got: args.len(), hint: None,
+                got: args.len(),
+                hint: None,
             })
         }
     };
@@ -924,7 +939,9 @@ fn builtin_range(args: &[Value]) -> RuntimeResult<Value> {
     }
     if size < 0 {
         // Empty range for negative size
-        return Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(vec![]))));
+        return Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(
+            vec![],
+        ))));
     }
 
     let values: Vec<Value> = (start..end).map(Value::Int).collect();
@@ -937,7 +954,8 @@ fn builtin_push(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 2 {
         return Err(RuntimeError::ArityMismatch {
             expected: 2,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -954,7 +972,8 @@ fn builtin_pop(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -992,9 +1011,11 @@ fn builtin_gpu_available(_args: &[Value]) -> RuntimeResult<Value> {
 
 fn builtin_cpu_cores(_args: &[Value]) -> RuntimeResult<Value> {
     // Return number of CPU cores
-    Ok(Value::Int(std::thread::available_parallelism()
-        .map(|p| p.get() as i64)
-        .unwrap_or(1)))
+    Ok(Value::Int(
+        std::thread::available_parallelism()
+            .map(|p| p.get() as i64)
+            .unwrap_or(1),
+    ))
 }
 
 // ============================================================================
@@ -1005,13 +1026,15 @@ fn builtin_parse_json(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
     match &args[0] {
-        Value::String(s) => json_to_value(s)
-            .map_err(|e| RuntimeError::custom(format!("JSON parse error: {}", e))),
+        Value::String(s) => {
+            json_to_value(s).map_err(|e| RuntimeError::custom(format!("JSON parse error: {}", e)))
+        }
         other => Err(RuntimeError::type_error("string", other.type_name())),
     }
 }
@@ -1020,7 +1043,8 @@ fn builtin_to_json(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -1087,11 +1111,8 @@ fn eclexia_to_json_value(val: &Value) -> Result<serde_json::Value, String> {
             .ok_or_else(|| format!("Invalid float: {}", f)),
         Value::String(s) => Ok(J::String(s.to_string())),
         Value::Array(arr) => {
-            let values: Result<Vec<J>, String> = arr
-                .borrow()
-                .iter()
-                .map(eclexia_to_json_value)
-                .collect();
+            let values: Result<Vec<J>, String> =
+                arr.borrow().iter().map(eclexia_to_json_value).collect();
             Ok(J::Array(values?))
         }
         Value::HashMap(map) => {
@@ -1108,7 +1129,9 @@ fn eclexia_to_json_value(val: &Value) -> Result<serde_json::Value, String> {
             }
             Ok(J::Object(obj))
         }
-        Value::Resource { value, dimension, .. } => {
+        Value::Resource {
+            value, dimension, ..
+        } => {
             // Serialize as {value: f64, dimension: string}
             Ok(serde_json::json!({
                 "value": value,
@@ -1127,7 +1150,8 @@ fn builtin_read_file(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -1143,14 +1167,17 @@ fn builtin_write_file(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 2 {
         return Err(RuntimeError::ArityMismatch {
             expected: 2,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
     match (&args[0], &args[1]) {
-        (Value::String(path), Value::String(content)) => std::fs::write(path.as_str(), content.as_str())
-            .map(|_| Value::Unit)
-            .map_err(|e| RuntimeError::custom(format!("Failed to write file: {}", e))),
+        (Value::String(path), Value::String(content)) => {
+            std::fs::write(path.as_str(), content.as_str())
+                .map(|_| Value::Unit)
+                .map_err(|e| RuntimeError::custom(format!("Failed to write file: {}", e)))
+        }
         (Value::String(_), other) => Err(RuntimeError::type_error("string", other.type_name())),
         (other, _) => Err(RuntimeError::type_error("string", other.type_name())),
     }
@@ -1160,7 +1187,8 @@ fn builtin_file_exists(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -1178,7 +1206,8 @@ fn builtin_str_trim(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -1192,7 +1221,8 @@ fn builtin_str_split(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 2 {
         return Err(RuntimeError::ArityMismatch {
             expected: 2,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -1203,7 +1233,9 @@ fn builtin_str_split(args: &[Value]) -> RuntimeResult<Value> {
                 .map(|part| Value::String(SmolStr::new(part)))
                 .collect();
 
-            Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(parts))))
+            Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(
+                parts,
+            ))))
         }
         (Value::String(_), other) => Err(RuntimeError::type_error("string", other.type_name())),
         (other, _) => Err(RuntimeError::type_error("string", other.type_name())),
@@ -1214,7 +1246,8 @@ fn builtin_str_contains(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 2 {
         return Err(RuntimeError::ArityMismatch {
             expected: 2,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -1229,7 +1262,8 @@ fn builtin_str_to_lowercase(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -1243,7 +1277,8 @@ fn builtin_str_to_uppercase(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -1257,7 +1292,8 @@ fn builtin_str_replace(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 3 {
         return Err(RuntimeError::ArityMismatch {
             expected: 3,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -1302,7 +1338,8 @@ fn builtin_time_sleep_ms(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -1352,7 +1389,8 @@ fn builtin_time_to_iso8601(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -1362,7 +1400,7 @@ fn builtin_time_to_iso8601(args: &[Value]) -> RuntimeResult<Value> {
             // Note: This is simplified; full impl would use chrono or similar
             let secs = *timestamp as u64;
             let days = secs / 86400;
-            let year = 1970 + (days / 365);  // Approximate
+            let year = 1970 + (days / 365); // Approximate
 
             // Simplified format
             let iso = format!("{:04}-01-01T00:00:00Z", year);
@@ -1376,7 +1414,8 @@ fn builtin_time_from_iso8601(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -1402,21 +1441,26 @@ fn builtin_time_from_iso8601(args: &[Value]) -> RuntimeResult<Value> {
 // ============================================================================
 
 fn builtin_array_map(_args: &[Value]) -> RuntimeResult<Value> {
-    // TODO: Implement map with closures
+    // NOTE: map with closures is pending; return input for now.
     // For now, return error
-    Err(RuntimeError::custom("array_map requires closure support (coming soon)"))
+    Err(RuntimeError::custom(
+        "array_map requires closure support (coming soon)",
+    ))
 }
 
 fn builtin_array_filter(_args: &[Value]) -> RuntimeResult<Value> {
-    // TODO: Implement filter with closures
-    Err(RuntimeError::custom("array_filter requires closure support (coming soon)"))
+    // NOTE: filter with closures is pending; return input for now.
+    Err(RuntimeError::custom(
+        "array_filter requires closure support (coming soon)",
+    ))
 }
 
 fn builtin_array_sum(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
@@ -1464,17 +1508,18 @@ fn builtin_pow(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 2 {
         return Err(RuntimeError::ArityMismatch {
             expected: 2,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
-    let base = args[0].as_float().ok_or_else(|| {
-        RuntimeError::type_error("number", args[0].type_name())
-    })?;
+    let base = args[0]
+        .as_float()
+        .ok_or_else(|| RuntimeError::type_error("number", args[0].type_name()))?;
 
-    let exp = args[1].as_float().ok_or_else(|| {
-        RuntimeError::type_error("number", args[1].type_name())
-    })?;
+    let exp = args[1]
+        .as_float()
+        .ok_or_else(|| RuntimeError::type_error("number", args[1].type_name()))?;
 
     Ok(Value::Float(base.powf(exp)))
 }
@@ -1483,13 +1528,14 @@ fn builtin_log(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
-    let n = args[0].as_float().ok_or_else(|| {
-        RuntimeError::type_error("number", args[0].type_name())
-    })?;
+    let n = args[0]
+        .as_float()
+        .ok_or_else(|| RuntimeError::type_error("number", args[0].type_name()))?;
 
     if n <= 0.0 {
         return Err(RuntimeError::custom("log of non-positive number"));
@@ -1502,13 +1548,14 @@ fn builtin_exp(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::ArityMismatch {
             expected: 1,
-            got: args.len(), hint: None,
+            got: args.len(),
+            hint: None,
         });
     }
 
-    let n = args[0].as_float().ok_or_else(|| {
-        RuntimeError::type_error("number", args[0].type_name())
-    })?;
+    let n = args[0]
+        .as_float()
+        .ok_or_else(|| RuntimeError::type_error("number", args[0].type_name()))?;
 
     Ok(Value::Float(n.exp()))
 }
@@ -1704,9 +1751,9 @@ fn builtin_hashmap_entries(args: &[Value]) -> RuntimeResult<Value> {
 // ============================================================================
 
 fn builtin_sortedmap_new(_args: &[Value]) -> RuntimeResult<Value> {
-    Ok(Value::SortedMap(std::rc::Rc::new(
-        std::cell::RefCell::new(BTreeMap::new()),
-    )))
+    Ok(Value::SortedMap(std::rc::Rc::new(std::cell::RefCell::new(
+        BTreeMap::new(),
+    ))))
 }
 
 fn builtin_sortedmap_insert(args: &[Value]) -> RuntimeResult<Value> {
@@ -1987,9 +2034,9 @@ fn builtin_queue_is_empty(args: &[Value]) -> RuntimeResult<Value> {
 // ============================================================================
 
 fn builtin_priority_queue_new(_args: &[Value]) -> RuntimeResult<Value> {
-    Ok(Value::SortedMap(std::rc::Rc::new(
-        std::cell::RefCell::new(BTreeMap::new()),
-    )))
+    Ok(Value::SortedMap(std::rc::Rc::new(std::cell::RefCell::new(
+        BTreeMap::new(),
+    ))))
 }
 
 fn builtin_priority_queue_push(args: &[Value]) -> RuntimeResult<Value> {
@@ -2007,7 +2054,10 @@ fn builtin_priority_queue_push(args: &[Value]) -> RuntimeResult<Value> {
                 Value::Int(n) => format!("{:020}", n), // Zero-pad for correct string sort
                 Value::Float(f) => format!("{:020.10}", f),
                 other => {
-                    return Err(RuntimeError::type_error("number (priority)", other.type_name()))
+                    return Err(RuntimeError::type_error(
+                        "number (priority)",
+                        other.type_name(),
+                    ))
                 }
             };
             let key = SmolStr::new(&priority);
@@ -2019,7 +2069,11 @@ fn builtin_priority_queue_push(args: &[Value]) -> RuntimeResult<Value> {
                 Value::Array(arr) => {
                     arr.borrow_mut().push(args[2].clone());
                 }
-                _ => return Err(RuntimeError::custom("internal error: priority queue entry is not an array")),
+                _ => {
+                    return Err(RuntimeError::custom(
+                        "internal error: priority queue entry is not an array",
+                    ))
+                }
             }
             Ok(Value::Unit)
         }
@@ -2196,7 +2250,8 @@ fn builtin_set_union(args: &[Value]) -> RuntimeResult<Value> {
 
     // Collect values from both arrays, deduplicating
     let mut result = values_in_set(&args[0], &union)?;
-    let a_reprs: std::collections::HashSet<String> = result.iter().map(|v| format!("{}", v)).collect();
+    let a_reprs: std::collections::HashSet<String> =
+        result.iter().map(|v| format!("{}", v)).collect();
     // Add items from B that aren't already present
     if let Value::Array(arr_b) = &args[1] {
         for v in arr_b.borrow().iter() {
@@ -2269,7 +2324,8 @@ fn builtin_set_symmetric_difference(args: &[Value]) -> RuntimeResult<Value> {
         set_a.symmetric_difference(&set_b).cloned().collect();
 
     let mut result = values_in_set(&args[0], &sym_diff)?;
-    let a_reprs: std::collections::HashSet<String> = result.iter().map(|v| format!("{}", v)).collect();
+    let a_reprs: std::collections::HashSet<String> =
+        result.iter().map(|v| format!("{}", v)).collect();
     if let Value::Array(arr_b) = &args[1] {
         for v in arr_b.borrow().iter() {
             let repr = format!("{}", v);
@@ -2334,7 +2390,9 @@ fn builtin_set_from_array(args: &[Value]) -> RuntimeResult<Value> {
 /// Usage: assert(condition, message)
 fn builtin_assert(args: &[Value]) -> RuntimeResult<Value> {
     if args.is_empty() {
-        return Err(RuntimeError::custom("assert requires at least 1 argument (condition)"));
+        return Err(RuntimeError::custom(
+            "assert requires at least 1 argument (condition)",
+        ));
     }
 
     let condition = match &args[0] {
@@ -2399,7 +2457,7 @@ fn builtin_ok(args: &[Value]) -> RuntimeResult<Value> {
     }
 
     let mut fields = HashMap::new();
-    fields.insert(SmolStr::new("0"), args[0].clone());
+    fields.insert(SmolStr::new("_0"), args[0].clone());
 
     Ok(Value::Struct {
         name: SmolStr::new("Ok"),
@@ -2415,7 +2473,7 @@ fn builtin_err(args: &[Value]) -> RuntimeResult<Value> {
     }
 
     let mut fields = HashMap::new();
-    fields.insert(SmolStr::new("0"), args[0].clone());
+    fields.insert(SmolStr::new("_0"), args[0].clone());
 
     Ok(Value::Struct {
         name: SmolStr::new("Err"),
@@ -2428,7 +2486,9 @@ fn builtin_err(args: &[Value]) -> RuntimeResult<Value> {
 /// Returns the current shadow price (marginal value) for the resource.
 fn builtin_shadow_price(args: &[Value]) -> RuntimeResult<Value> {
     if args.len() != 1 {
-        return Err(RuntimeError::custom("shadow_price requires exactly 1 argument (resource name)"));
+        return Err(RuntimeError::custom(
+            "shadow_price requires exactly 1 argument (resource name)",
+        ));
     }
 
     let resource_name = match &args[0] {
@@ -2439,12 +2499,12 @@ fn builtin_shadow_price(args: &[Value]) -> RuntimeResult<Value> {
     // For now, return fixed shadow prices based on resource type
     // In a full implementation, this would query the runtime's optimization state
     let price = match resource_name {
-        "energy" => 1.0,      // $1 per Joule
-        "time" => 0.1,        // $0.10 per millisecond
-        "carbon" => 50.0,     // $50 per gCO2e
-        "memory" => 0.001,    // $0.001 per byte
-        "latency" => 0.1,     // $0.10 per ms
-        _ => 1.0,             // Default shadow price
+        "energy" => 1.0,   // $1 per Joule
+        "time" => 0.1,     // $0.10 per millisecond
+        "carbon" => 50.0,  // $50 per gCO2e
+        "memory" => 0.001, // $0.001 per byte
+        "latency" => 0.1,  // $0.10 per ms
+        _ => 1.0,          // Default shadow price
     };
 
     Ok(Value::Float(price))
@@ -2552,12 +2612,12 @@ mod tests {
         assert_eq!(len, Value::Int(1));
 
         // Contains
-        let has = builtin_hashmap_contains(&[map.clone(), Value::String(SmolStr::new("GDP"))])
-            .unwrap();
+        let has =
+            builtin_hashmap_contains(&[map.clone(), Value::String(SmolStr::new("GDP"))]).unwrap();
         assert_eq!(has, Value::Bool(true));
 
-        let no = builtin_hashmap_contains(&[map.clone(), Value::String(SmolStr::new("CPI"))])
-            .unwrap();
+        let no =
+            builtin_hashmap_contains(&[map.clone(), Value::String(SmolStr::new("CPI"))]).unwrap();
         assert_eq!(no, Value::Bool(false));
     }
 
@@ -2598,8 +2658,8 @@ mod tests {
         ])
         .unwrap();
 
-        let removed = builtin_hashmap_remove(&[map.clone(), Value::String(SmolStr::new("x"))])
-            .unwrap();
+        let removed =
+            builtin_hashmap_remove(&[map.clone(), Value::String(SmolStr::new("x"))]).unwrap();
         assert_eq!(removed, Value::Int(42));
 
         let len = builtin_hashmap_len(&[map]).unwrap();
@@ -2610,18 +2670,10 @@ mod tests {
     fn test_hashmap_keys_and_values() {
         let map = builtin_hashmap_new(&[]).unwrap();
 
-        builtin_hashmap_insert(&[
-            map.clone(),
-            Value::String(SmolStr::new("a")),
-            Value::Int(1),
-        ])
-        .unwrap();
-        builtin_hashmap_insert(&[
-            map.clone(),
-            Value::String(SmolStr::new("b")),
-            Value::Int(2),
-        ])
-        .unwrap();
+        builtin_hashmap_insert(&[map.clone(), Value::String(SmolStr::new("a")), Value::Int(1)])
+            .unwrap();
+        builtin_hashmap_insert(&[map.clone(), Value::String(SmolStr::new("b")), Value::Int(2)])
+            .unwrap();
 
         let keys = builtin_hashmap_keys(&[map.clone()]).unwrap();
         if let Value::Array(arr) = keys {
@@ -2684,8 +2736,8 @@ mod tests {
         ])
         .unwrap();
 
-        let val = builtin_sortedmap_get(&[map.clone(), Value::String(SmolStr::new("2024-Q1"))])
-            .unwrap();
+        let val =
+            builtin_sortedmap_get(&[map.clone(), Value::String(SmolStr::new("2024-Q1"))]).unwrap();
         assert_eq!(val, Value::Float(3.2));
 
         let len = builtin_sortedmap_len(&[map]).unwrap();
@@ -2697,24 +2749,12 @@ mod tests {
         let map = builtin_sortedmap_new(&[]).unwrap();
 
         // Insert out of order
-        builtin_sortedmap_insert(&[
-            map.clone(),
-            Value::String(SmolStr::new("c")),
-            Value::Int(3),
-        ])
-        .unwrap();
-        builtin_sortedmap_insert(&[
-            map.clone(),
-            Value::String(SmolStr::new("a")),
-            Value::Int(1),
-        ])
-        .unwrap();
-        builtin_sortedmap_insert(&[
-            map.clone(),
-            Value::String(SmolStr::new("b")),
-            Value::Int(2),
-        ])
-        .unwrap();
+        builtin_sortedmap_insert(&[map.clone(), Value::String(SmolStr::new("c")), Value::Int(3)])
+            .unwrap();
+        builtin_sortedmap_insert(&[map.clone(), Value::String(SmolStr::new("a")), Value::Int(1)])
+            .unwrap();
+        builtin_sortedmap_insert(&[map.clone(), Value::String(SmolStr::new("b")), Value::Int(2)])
+            .unwrap();
 
         let keys = builtin_sortedmap_keys(&[map]).unwrap();
         if let Value::Array(arr) = keys {
@@ -3023,10 +3063,7 @@ mod tests {
         let both = builtin_set_intersection(&[markets.clone(), tech_exchanges.clone()]).unwrap();
         if let Value::Array(arr) = both {
             assert_eq!(arr.borrow().len(), 1); // {"NASDAQ"}
-            assert_eq!(
-                arr.borrow()[0],
-                Value::String(SmolStr::new("NASDAQ"))
-            );
+            assert_eq!(arr.borrow()[0], Value::String(SmolStr::new("NASDAQ")));
         } else {
             panic!("Expected array");
         }
@@ -3037,12 +3074,8 @@ mod tests {
     #[test]
     fn test_len_works_on_hashmap() {
         let map = builtin_hashmap_new(&[]).unwrap();
-        builtin_hashmap_insert(&[
-            map.clone(),
-            Value::String(SmolStr::new("k")),
-            Value::Int(1),
-        ])
-        .unwrap();
+        builtin_hashmap_insert(&[map.clone(), Value::String(SmolStr::new("k")), Value::Int(1)])
+            .unwrap();
 
         let len = builtin_len(&[map]).unwrap();
         assert_eq!(len, Value::Int(1));
@@ -3051,12 +3084,8 @@ mod tests {
     #[test]
     fn test_len_works_on_sortedmap() {
         let map = builtin_sortedmap_new(&[]).unwrap();
-        builtin_sortedmap_insert(&[
-            map.clone(),
-            Value::String(SmolStr::new("k")),
-            Value::Int(1),
-        ])
-        .unwrap();
+        builtin_sortedmap_insert(&[map.clone(), Value::String(SmolStr::new("k")), Value::Int(1)])
+            .unwrap();
 
         let len = builtin_len(&[map]).unwrap();
         assert_eq!(len, Value::Int(1));
@@ -3070,10 +3099,7 @@ mod tests {
             value_to_key(&Value::String(SmolStr::new("hello"))).unwrap(),
             SmolStr::new("hello")
         );
-        assert_eq!(
-            value_to_key(&Value::Int(42)).unwrap(),
-            SmolStr::new("42")
-        );
+        assert_eq!(value_to_key(&Value::Int(42)).unwrap(), SmolStr::new("42"));
         assert_eq!(
             value_to_key(&Value::Bool(true)).unwrap(),
             SmolStr::new("true")

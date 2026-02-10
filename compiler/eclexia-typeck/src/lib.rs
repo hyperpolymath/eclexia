@@ -9,19 +9,22 @@
 //! - Constraint solving for resource bounds
 //! - Effect tracking
 
-mod infer;
-mod unify;
 mod env;
 mod error;
+mod infer;
+mod unify;
 
-use eclexia_ast::types::{Ty, TypeVar, PrimitiveTy};
 use eclexia_ast::dimension::Dimension;
-use eclexia_ast::{SourceFile, Item, Function, AdaptiveFunction, ExprId, StmtId, ExprKind, StmtKind, BinaryOp, UnaryOp, Literal, Block, Constraint, ConstraintKind, Pattern};
+use eclexia_ast::types::{PrimitiveTy, Ty, TypeVar};
+use eclexia_ast::{
+    AdaptiveFunction, BinaryOp, Block, Constraint, ConstraintKind, ExprId, ExprKind, Function,
+    Item, Literal, Pattern, SourceFile, StmtId, StmtKind, UnaryOp,
+};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
-pub use error::{TypeError, TypeResult};
 pub use env::TypeEnv;
+pub use error::{TypeError, TypeResult};
 
 /// Type checker state.
 pub struct TypeChecker<'a> {
@@ -46,307 +49,594 @@ impl<'a> TypeChecker<'a> {
 
         // Register built-in functions
         // Note: println and print are variadic - handled specially in infer_expr
-        env.insert_mono(SmolStr::new("println"), Ty::Function {
-            params: vec![],  // Variadic - handled specially
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
-        });
-        env.insert_mono(SmolStr::new("print"), Ty::Function {
-            params: vec![],  // Variadic - handled specially
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
-        });
-        env.insert_mono(SmolStr::new("len"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
-        });
-        env.insert_mono(SmolStr::new("to_string"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
-        });
-        env.insert_mono(SmolStr::new("range"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::Int), Ty::Primitive(PrimitiveTy::Int)],
-            ret: Box::new(Ty::Array { elem: Box::new(Ty::Primitive(PrimitiveTy::Int)), size: None }),
-        });
+        env.insert_mono(
+            SmolStr::new("println"),
+            Ty::Function {
+                params: vec![], // Variadic - handled specially
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("print"),
+            Ty::Function {
+                params: vec![], // Variadic - handled specially
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("len"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("to_string"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("range"),
+            Ty::Function {
+                params: vec![
+                    Ty::Primitive(PrimitiveTy::Int),
+                    Ty::Primitive(PrimitiveTy::Int),
+                ],
+                ret: Box::new(Ty::Array {
+                    elem: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+                    size: None,
+                }),
+            },
+        );
 
         // Core builtins: assert, panic
-        env.insert_mono(SmolStr::new("assert"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::Bool)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
-        });
-        env.insert_mono(SmolStr::new("panic"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::String)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
-        });
+        env.insert_mono(
+            SmolStr::new("assert"),
+            Ty::Function {
+                params: vec![Ty::Primitive(PrimitiveTy::Bool)],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("panic"),
+            Ty::Function {
+                params: vec![Ty::Primitive(PrimitiveTy::String)],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+            },
+        );
 
         // Resource intrinsics
-        env.insert_mono(SmolStr::new("shadow_price"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Float)),
-        });
+        env.insert_mono(
+            SmolStr::new("shadow_price"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Float)),
+            },
+        );
 
         // Option constructors
-        env.insert_mono(SmolStr::new("Some"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Named { name: SmolStr::new("Option"), args: vec![Ty::Var(TypeVar::new(0))] }),
-        });
-        env.insert_mono(SmolStr::new("None"), Ty::Named {
-            name: SmolStr::new("Option"),
-            args: vec![Ty::Var(TypeVar::new(0))],
-        });
+        env.insert_mono(
+            SmolStr::new("Some"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Named {
+                    name: SmolStr::new("Option"),
+                    args: vec![Ty::Var(TypeVar::new(0))],
+                }),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("None"),
+            Ty::Named {
+                name: SmolStr::new("Option"),
+                args: vec![Ty::Var(TypeVar::new(0))],
+            },
+        );
 
         // Result constructors
-        env.insert_mono(SmolStr::new("Ok"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Named { name: SmolStr::new("Result"), args: vec![Ty::Var(TypeVar::new(0)), Ty::Var(TypeVar::new(1))] }),
-        });
-        env.insert_mono(SmolStr::new("Err"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Named { name: SmolStr::new("Result"), args: vec![Ty::Var(TypeVar::new(0)), Ty::Var(TypeVar::new(1))] }),
-        });
+        env.insert_mono(
+            SmolStr::new("Ok"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Named {
+                    name: SmolStr::new("Result"),
+                    args: vec![Ty::Var(TypeVar::new(0)), Ty::Var(TypeVar::new(1))],
+                }),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("Err"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Named {
+                    name: SmolStr::new("Result"),
+                    args: vec![Ty::Var(TypeVar::new(0)), Ty::Var(TypeVar::new(1))],
+                }),
+            },
+        );
 
         // Collection builtins: HashMap
-        let hashmap_ty = Ty::Named { name: SmolStr::new("HashMap"), args: vec![] };
-        env.insert_mono(SmolStr::new("hashmap_new"), Ty::Function {
-            params: vec![],
-            ret: Box::new(hashmap_ty.clone()),
-        });
-        env.insert_mono(SmolStr::new("hashmap_insert"), Ty::Function {
-            params: vec![], // Variadic-like: (map, key, value)
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
-        });
-        env.insert_mono(SmolStr::new("hashmap_get"), Ty::Function {
-            params: vec![], // (map, key)
-            ret: Box::new(Ty::Var(TypeVar::new(0))),
-        });
-        env.insert_mono(SmolStr::new("hashmap_remove"), Ty::Function {
-            params: vec![], // (map, key)
-            ret: Box::new(Ty::Var(TypeVar::new(0))),
-        });
-        env.insert_mono(SmolStr::new("hashmap_contains"), Ty::Function {
-            params: vec![], // (map, key)
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
-        });
-        env.insert_mono(SmolStr::new("hashmap_len"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
-        });
-        env.insert_mono(SmolStr::new("hashmap_keys"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Array { elem: Box::new(Ty::Primitive(PrimitiveTy::String)), size: None }),
-        });
-        env.insert_mono(SmolStr::new("hashmap_values"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
-        });
-        env.insert_mono(SmolStr::new("hashmap_entries"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
-        });
+        let hashmap_ty = Ty::Named {
+            name: SmolStr::new("HashMap"),
+            args: vec![],
+        };
+        env.insert_mono(
+            SmolStr::new("hashmap_new"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(hashmap_ty.clone()),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("hashmap_insert"),
+            Ty::Function {
+                params: vec![], // Variadic-like: (map, key, value)
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("hashmap_get"),
+            Ty::Function {
+                params: vec![], // (map, key)
+                ret: Box::new(Ty::Var(TypeVar::new(0))),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("hashmap_remove"),
+            Ty::Function {
+                params: vec![], // (map, key)
+                ret: Box::new(Ty::Var(TypeVar::new(0))),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("hashmap_contains"),
+            Ty::Function {
+                params: vec![], // (map, key)
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("hashmap_len"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("hashmap_keys"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Array {
+                    elem: Box::new(Ty::Primitive(PrimitiveTy::String)),
+                    size: None,
+                }),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("hashmap_values"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Array {
+                    elem: Box::new(Ty::Var(TypeVar::new(0))),
+                    size: None,
+                }),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("hashmap_entries"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Array {
+                    elem: Box::new(Ty::Var(TypeVar::new(0))),
+                    size: None,
+                }),
+            },
+        );
 
         // Collection builtins: SortedMap
-        let sortedmap_ty = Ty::Named { name: SmolStr::new("SortedMap"), args: vec![] };
-        env.insert_mono(SmolStr::new("sortedmap_new"), Ty::Function {
-            params: vec![],
-            ret: Box::new(sortedmap_ty.clone()),
-        });
-        env.insert_mono(SmolStr::new("sortedmap_insert"), Ty::Function {
-            params: vec![],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
-        });
-        env.insert_mono(SmolStr::new("sortedmap_get"), Ty::Function {
-            params: vec![],
-            ret: Box::new(Ty::Var(TypeVar::new(0))),
-        });
-        env.insert_mono(SmolStr::new("sortedmap_remove"), Ty::Function {
-            params: vec![],
-            ret: Box::new(Ty::Var(TypeVar::new(0))),
-        });
-        env.insert_mono(SmolStr::new("sortedmap_len"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
-        });
-        env.insert_mono(SmolStr::new("sortedmap_keys"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Array { elem: Box::new(Ty::Primitive(PrimitiveTy::String)), size: None }),
-        });
-        env.insert_mono(SmolStr::new("sortedmap_min_key"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Var(TypeVar::new(0))),
-        });
-        env.insert_mono(SmolStr::new("sortedmap_max_key"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Var(TypeVar::new(0))),
-        });
-        env.insert_mono(SmolStr::new("sortedmap_range"), Ty::Function {
-            params: vec![],
-            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
-        });
+        let sortedmap_ty = Ty::Named {
+            name: SmolStr::new("SortedMap"),
+            args: vec![],
+        };
+        env.insert_mono(
+            SmolStr::new("sortedmap_new"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(sortedmap_ty.clone()),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("sortedmap_insert"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("sortedmap_get"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(Ty::Var(TypeVar::new(0))),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("sortedmap_remove"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(Ty::Var(TypeVar::new(0))),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("sortedmap_len"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("sortedmap_keys"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Array {
+                    elem: Box::new(Ty::Primitive(PrimitiveTy::String)),
+                    size: None,
+                }),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("sortedmap_min_key"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Var(TypeVar::new(0))),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("sortedmap_max_key"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Var(TypeVar::new(0))),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("sortedmap_range"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(Ty::Array {
+                    elem: Box::new(Ty::Var(TypeVar::new(0))),
+                    size: None,
+                }),
+            },
+        );
 
         // Collection builtins: Queue
-        env.insert_mono(SmolStr::new("queue_new"), Ty::Function {
-            params: vec![],
-            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
-        });
-        env.insert_mono(SmolStr::new("queue_enqueue"), Ty::Function {
-            params: vec![],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
-        });
-        env.insert_mono(SmolStr::new("queue_dequeue"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Var(TypeVar::new(0))),
-        });
-        env.insert_mono(SmolStr::new("queue_peek"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Var(TypeVar::new(0))),
-        });
-        env.insert_mono(SmolStr::new("queue_len"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
-        });
-        env.insert_mono(SmolStr::new("queue_is_empty"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
-        });
+        env.insert_mono(
+            SmolStr::new("queue_new"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(Ty::Array {
+                    elem: Box::new(Ty::Var(TypeVar::new(0))),
+                    size: None,
+                }),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("queue_enqueue"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("queue_dequeue"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Var(TypeVar::new(0))),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("queue_peek"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Var(TypeVar::new(0))),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("queue_len"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("queue_is_empty"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
+            },
+        );
 
         // Collection builtins: PriorityQueue
-        let pq_ty = Ty::Named { name: SmolStr::new("PriorityQueue"), args: vec![] };
-        env.insert_mono(SmolStr::new("priority_queue_new"), Ty::Function {
-            params: vec![],
-            ret: Box::new(pq_ty),
-        });
-        env.insert_mono(SmolStr::new("priority_queue_push"), Ty::Function {
-            params: vec![],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
-        });
-        env.insert_mono(SmolStr::new("priority_queue_pop"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Var(TypeVar::new(0))),
-        });
-        env.insert_mono(SmolStr::new("priority_queue_peek"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Var(TypeVar::new(0))),
-        });
-        env.insert_mono(SmolStr::new("priority_queue_len"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
-        });
+        let pq_ty = Ty::Named {
+            name: SmolStr::new("PriorityQueue"),
+            args: vec![],
+        };
+        env.insert_mono(
+            SmolStr::new("priority_queue_new"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(pq_ty),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("priority_queue_push"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("priority_queue_pop"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Var(TypeVar::new(0))),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("priority_queue_peek"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Var(TypeVar::new(0))),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("priority_queue_len"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+            },
+        );
 
         // Math builtins
-        env.insert_mono(SmolStr::new("abs"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Var(TypeVar::new(0))),
-        });
-        env.insert_mono(SmolStr::new("min"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0)), Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Var(TypeVar::new(0))),
-        });
-        env.insert_mono(SmolStr::new("max"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0)), Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Var(TypeVar::new(0))),
-        });
-        env.insert_mono(SmolStr::new("sqrt"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::Float)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Float)),
-        });
-        env.insert_mono(SmolStr::new("floor"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::Float)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
-        });
-        env.insert_mono(SmolStr::new("ceil"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::Float)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
-        });
-        env.insert_mono(SmolStr::new("round"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::Float)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
-        });
+        env.insert_mono(
+            SmolStr::new("abs"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Var(TypeVar::new(0))),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("min"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0)), Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Var(TypeVar::new(0))),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("max"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0)), Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Var(TypeVar::new(0))),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("sqrt"),
+            Ty::Function {
+                params: vec![Ty::Primitive(PrimitiveTy::Float)],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Float)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("floor"),
+            Ty::Function {
+                params: vec![Ty::Primitive(PrimitiveTy::Float)],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("ceil"),
+            Ty::Function {
+                params: vec![Ty::Primitive(PrimitiveTy::Float)],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("round"),
+            Ty::Function {
+                params: vec![Ty::Primitive(PrimitiveTy::Float)],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Int)),
+            },
+        );
 
         // I/O builtins
-        env.insert_mono(SmolStr::new("read_file"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::String)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
-        });
-        env.insert_mono(SmolStr::new("write_file"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::String)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
-        });
-        env.insert_mono(SmolStr::new("file_exists"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::String)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
-        });
+        env.insert_mono(
+            SmolStr::new("read_file"),
+            Ty::Function {
+                params: vec![Ty::Primitive(PrimitiveTy::String)],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("write_file"),
+            Ty::Function {
+                params: vec![
+                    Ty::Primitive(PrimitiveTy::String),
+                    Ty::Primitive(PrimitiveTy::String),
+                ],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("file_exists"),
+            Ty::Function {
+                params: vec![Ty::Primitive(PrimitiveTy::String)],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
+            },
+        );
 
         // String builtins
-        env.insert_mono(SmolStr::new("str_trim"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::String)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
-        });
-        env.insert_mono(SmolStr::new("str_split"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::String)],
-            ret: Box::new(Ty::Array { elem: Box::new(Ty::Primitive(PrimitiveTy::String)), size: None }),
-        });
-        env.insert_mono(SmolStr::new("str_contains"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::String)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
-        });
-        env.insert_mono(SmolStr::new("uppercase"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::String)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
-        });
-        env.insert_mono(SmolStr::new("lowercase"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::String)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
-        });
-        env.insert_mono(SmolStr::new("starts_with"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::String)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
-        });
-        env.insert_mono(SmolStr::new("ends_with"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::String)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
-        });
-        env.insert_mono(SmolStr::new("replace"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::String)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
-        });
-        env.insert_mono(SmolStr::new("substring"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::String), Ty::Primitive(PrimitiveTy::Int), Ty::Primitive(PrimitiveTy::Int)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
-        });
+        env.insert_mono(
+            SmolStr::new("str_trim"),
+            Ty::Function {
+                params: vec![Ty::Primitive(PrimitiveTy::String)],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("str_split"),
+            Ty::Function {
+                params: vec![
+                    Ty::Primitive(PrimitiveTy::String),
+                    Ty::Primitive(PrimitiveTy::String),
+                ],
+                ret: Box::new(Ty::Array {
+                    elem: Box::new(Ty::Primitive(PrimitiveTy::String)),
+                    size: None,
+                }),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("str_contains"),
+            Ty::Function {
+                params: vec![
+                    Ty::Primitive(PrimitiveTy::String),
+                    Ty::Primitive(PrimitiveTy::String),
+                ],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("uppercase"),
+            Ty::Function {
+                params: vec![Ty::Primitive(PrimitiveTy::String)],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("lowercase"),
+            Ty::Function {
+                params: vec![Ty::Primitive(PrimitiveTy::String)],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("starts_with"),
+            Ty::Function {
+                params: vec![
+                    Ty::Primitive(PrimitiveTy::String),
+                    Ty::Primitive(PrimitiveTy::String),
+                ],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("ends_with"),
+            Ty::Function {
+                params: vec![
+                    Ty::Primitive(PrimitiveTy::String),
+                    Ty::Primitive(PrimitiveTy::String),
+                ],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("replace"),
+            Ty::Function {
+                params: vec![
+                    Ty::Primitive(PrimitiveTy::String),
+                    Ty::Primitive(PrimitiveTy::String),
+                    Ty::Primitive(PrimitiveTy::String),
+                ],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("substring"),
+            Ty::Function {
+                params: vec![
+                    Ty::Primitive(PrimitiveTy::String),
+                    Ty::Primitive(PrimitiveTy::Int),
+                    Ty::Primitive(PrimitiveTy::Int),
+                ],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::String)),
+            },
+        );
 
         // Time builtins
-        env.insert_mono(SmolStr::new("time_now"), Ty::Function {
-            params: vec![],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Float)),
-        });
-        env.insert_mono(SmolStr::new("sleep"), Ty::Function {
-            params: vec![Ty::Primitive(PrimitiveTy::Int)],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
-        });
+        env.insert_mono(
+            SmolStr::new("time_now"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Float)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("sleep"),
+            Ty::Function {
+                params: vec![Ty::Primitive(PrimitiveTy::Int)],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Unit)),
+            },
+        );
 
         // Collection builtins: Set operations
-        env.insert_mono(SmolStr::new("set_union"), Ty::Function {
-            params: vec![],
-            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
-        });
-        env.insert_mono(SmolStr::new("set_intersection"), Ty::Function {
-            params: vec![],
-            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
-        });
-        env.insert_mono(SmolStr::new("set_difference"), Ty::Function {
-            params: vec![],
-            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
-        });
-        env.insert_mono(SmolStr::new("set_symmetric_difference"), Ty::Function {
-            params: vec![],
-            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
-        });
-        env.insert_mono(SmolStr::new("set_is_subset"), Ty::Function {
-            params: vec![],
-            ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
-        });
-        env.insert_mono(SmolStr::new("set_from_array"), Ty::Function {
-            params: vec![Ty::Var(TypeVar::new(0))],
-            ret: Box::new(Ty::Array { elem: Box::new(Ty::Var(TypeVar::new(0))), size: None }),
-        });
+        env.insert_mono(
+            SmolStr::new("set_union"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(Ty::Array {
+                    elem: Box::new(Ty::Var(TypeVar::new(0))),
+                    size: None,
+                }),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("set_intersection"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(Ty::Array {
+                    elem: Box::new(Ty::Var(TypeVar::new(0))),
+                    size: None,
+                }),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("set_difference"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(Ty::Array {
+                    elem: Box::new(Ty::Var(TypeVar::new(0))),
+                    size: None,
+                }),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("set_symmetric_difference"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(Ty::Array {
+                    elem: Box::new(Ty::Var(TypeVar::new(0))),
+                    size: None,
+                }),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("set_is_subset"),
+            Ty::Function {
+                params: vec![],
+                ret: Box::new(Ty::Primitive(PrimitiveTy::Bool)),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("set_from_array"),
+            Ty::Function {
+                params: vec![Ty::Var(TypeVar::new(0))],
+                ret: Box::new(Ty::Array {
+                    elem: Box::new(Ty::Var(TypeVar::new(0))),
+                    size: None,
+                }),
+            },
+        );
 
         Self {
             file,
@@ -457,15 +747,25 @@ impl<'a> TypeChecker<'a> {
                 // Register each variant as a constructor function
                 for v in variants {
                     if let Some(fields) = &v.fields {
-                        let param_tys: Vec<Ty> = fields.iter().map(|&f| self.resolve_ast_type(f)).collect();
+                        let param_tys: Vec<Ty> =
+                            fields.iter().map(|&f| self.resolve_ast_type(f)).collect();
                         let constructor_ty = Ty::Function {
                             params: param_tys,
-                            ret: Box::new(Ty::Named { name: td.name.clone(), args: vec![] }),
+                            ret: Box::new(Ty::Named {
+                                name: td.name.clone(),
+                                args: vec![],
+                            }),
                         };
                         self.env.insert_mono(v.name.clone(), constructor_ty);
                     } else {
                         // Unit variant: just a value of the enum type
-                        self.env.insert_mono(v.name.clone(), Ty::Named { name: td.name.clone(), args: vec![] });
+                        self.env.insert_mono(
+                            v.name.clone(),
+                            Ty::Named {
+                                name: td.name.clone(),
+                                args: vec![],
+                            },
+                        );
                     }
                 }
             }
@@ -510,13 +810,17 @@ impl<'a> TypeChecker<'a> {
 
     /// Get function type from a FunctionSig.
     fn function_sig_type(&mut self, sig: &eclexia_ast::FunctionSig) -> Ty {
-        let params: Vec<Ty> = sig.params.iter().map(|p| {
-            if let Some(ty_id) = p.ty {
-                self.resolve_ast_type(ty_id)
-            } else {
-                self.fresh_var()
-            }
-        }).collect();
+        let params: Vec<Ty> = sig
+            .params
+            .iter()
+            .map(|p| {
+                if let Some(ty_id) = p.ty {
+                    self.resolve_ast_type(ty_id)
+                } else {
+                    self.fresh_var()
+                }
+            })
+            .collect();
 
         let ret = if let Some(ty_id) = sig.return_type {
             self.resolve_ast_type(ty_id)
@@ -539,13 +843,17 @@ impl<'a> TypeChecker<'a> {
             self.type_param_scope.insert(tp.clone(), var);
         }
 
-        let params: Vec<Ty> = func.params.iter().map(|p| {
-            if let Some(ty_id) = p.ty {
-                self.resolve_ast_type(ty_id)
-            } else {
-                self.fresh_var()
-            }
-        }).collect();
+        let params: Vec<Ty> = func
+            .params
+            .iter()
+            .map(|p| {
+                if let Some(ty_id) = p.ty {
+                    self.resolve_ast_type(ty_id)
+                } else {
+                    self.fresh_var()
+                }
+            })
+            .collect();
 
         let ret = if let Some(ty_id) = func.return_type {
             self.resolve_ast_type(ty_id)
@@ -567,13 +875,17 @@ impl<'a> TypeChecker<'a> {
         // Adaptive functions may also have type params (clear scope)
         self.type_param_scope.clear();
 
-        let params: Vec<Ty> = func.params.iter().map(|p| {
-            if let Some(ty_id) = p.ty {
-                self.resolve_ast_type(ty_id)
-            } else {
-                self.fresh_var()
-            }
-        }).collect();
+        let params: Vec<Ty> = func
+            .params
+            .iter()
+            .map(|p| {
+                if let Some(ty_id) = p.ty {
+                    self.resolve_ast_type(ty_id)
+                } else {
+                    self.fresh_var()
+                }
+            })
+            .collect();
 
         let ret = if let Some(ty_id) = func.return_type {
             self.resolve_ast_type(ty_id)
@@ -620,35 +932,53 @@ impl<'a> TypeChecker<'a> {
                         "U64" | "u64" => Ty::Primitive(PrimitiveTy::U64),
                         "F32" | "f32" => Ty::Primitive(PrimitiveTy::F32),
                         "F64" | "f64" => Ty::Primitive(PrimitiveTy::F64),
-                        _ => Ty::Named { name: name.clone(), args: vec![] },
+                        _ => Ty::Named {
+                            name: name.clone(),
+                            args: vec![],
+                        },
                     }
                 } else {
                     // Handle Resource<Dimension> types specially
                     if name.as_str() == "Resource" && args.len() == 1 {
                         let dim_ty = &self.file.types[args[0]];
-                        if let eclexia_ast::TypeKind::Named { name: dim_name, args: dim_args } = &dim_ty.kind {
+                        if let eclexia_ast::TypeKind::Named {
+                            name: dim_name,
+                            args: dim_args,
+                        } = &dim_ty.kind
+                        {
                             if dim_args.is_empty() {
                                 let dimension = match dim_name.as_str() {
                                     "Energy" | "energy" => Some(Dimension::energy()),
-                                    "Time" | "time" | "Latency" | "latency" => Some(Dimension::time()),
+                                    "Time" | "time" | "Latency" | "latency" => {
+                                        Some(Dimension::time())
+                                    }
                                     "Memory" | "memory" => Some(Dimension::memory()),
                                     "Carbon" | "carbon" => Some(Dimension::carbon()),
                                     "Power" | "power" => Some(Dimension::power()),
                                     _ => None,
                                 };
                                 if let Some(dim) = dimension {
-                                    return Ty::Resource { base: PrimitiveTy::Float, dimension: dim };
+                                    return Ty::Resource {
+                                        base: PrimitiveTy::Float,
+                                        dimension: dim,
+                                    };
                                 }
                             }
                         }
                     }
                     let arg_tys: Vec<Ty> = args.iter().map(|a| self.resolve_ast_type(*a)).collect();
-                    Ty::Named { name: name.clone(), args: arg_tys }
+                    Ty::Named {
+                        name: name.clone(),
+                        args: arg_tys,
+                    }
                 }
             }
             eclexia_ast::TypeKind::Array { elem, size } => {
                 let elem_ty = self.resolve_ast_type(*elem);
-                Ty::Array { elem: Box::new(elem_ty), size: *size }
+                Ty::Array {
+                    elem: Box::new(elem_ty),
+                    size: *size,
+                }
             }
             eclexia_ast::TypeKind::Tuple(elems) => {
                 let elem_tys: Vec<Ty> = elems.iter().map(|e| self.resolve_ast_type(*e)).collect();
@@ -657,7 +987,10 @@ impl<'a> TypeChecker<'a> {
             eclexia_ast::TypeKind::Function { params, ret } => {
                 let param_tys: Vec<Ty> = params.iter().map(|p| self.resolve_ast_type(*p)).collect();
                 let ret_ty = self.resolve_ast_type(*ret);
-                Ty::Function { params: param_tys, ret: Box::new(ret_ty) }
+                Ty::Function {
+                    params: param_tys,
+                    ret: Box::new(ret_ty),
+                }
             }
             eclexia_ast::TypeKind::Resource { base, dimension } => {
                 let base_ty = match base.as_str() {
@@ -665,12 +998,19 @@ impl<'a> TypeChecker<'a> {
                     "Int" | "I64" => PrimitiveTy::Int,
                     _ => PrimitiveTy::Float,
                 };
-                Ty::Resource { base: base_ty, dimension: *dimension }
+                Ty::Resource {
+                    base: base_ty,
+                    dimension: *dimension,
+                }
             }
             eclexia_ast::TypeKind::Reference { ty, mutable } => {
                 let inner_ty = self.resolve_ast_type(*ty);
                 Ty::Named {
-                    name: if *mutable { SmolStr::new("&mut") } else { SmolStr::new("&") },
+                    name: if *mutable {
+                        SmolStr::new("&mut")
+                    } else {
+                        SmolStr::new("&")
+                    },
                     args: vec![inner_ty],
                 }
             }
@@ -734,10 +1074,8 @@ impl<'a> TypeChecker<'a> {
                     self.errors.push(e);
                 }
             }
-            Item::TraitDecl(_)
-            | Item::EffectDecl(_)
-            | Item::ExternBlock(_)
-            | Item::MacroDef(_) => {}
+            Item::TraitDecl(_) | Item::EffectDecl(_) | Item::ExternBlock(_) | Item::MacroDef(_) => {
+            }
             Item::Error(_) => {}
         }
     }
@@ -761,11 +1099,19 @@ impl<'a> TypeChecker<'a> {
 
             // Inject resource names from @requires constraints into scope
             for constraint in &func.constraints {
-                if let ConstraintKind::Resource { resource, amount: _, .. } = &constraint.kind {
+                if let ConstraintKind::Resource {
+                    resource,
+                    amount: _,
+                    ..
+                } = &constraint.kind
+                {
                     if let Some(dim) = Self::resource_name_to_dimension(resource.as_str()) {
                         body_env.insert_mono(
                             resource.clone(),
-                            Ty::Resource { base: PrimitiveTy::Float, dimension: dim },
+                            Ty::Resource {
+                                base: PrimitiveTy::Float,
+                                dimension: dim,
+                            },
                         );
                     }
                 }
@@ -781,7 +1127,10 @@ impl<'a> TypeChecker<'a> {
                         if let Some(dim) = Self::resource_name_to_dimension(resource.as_str()) {
                             body_env.insert_mono(
                                 resource.clone(),
-                                Ty::Resource { base: PrimitiveTy::Float, dimension: dim },
+                                Ty::Resource {
+                                    base: PrimitiveTy::Float,
+                                    dimension: dim,
+                                },
                             );
                         }
                         i += 2; // Skip the amount arg
@@ -857,7 +1206,12 @@ impl<'a> TypeChecker<'a> {
         let stmt = &self.file.stmts[stmt_id];
 
         match &stmt.kind {
-            StmtKind::Let { pattern, mutable: _, ty, value } => {
+            StmtKind::Let {
+                pattern,
+                mutable: _,
+                ty,
+                value,
+            } => {
                 let inferred = self.infer_expr(*value);
                 let binding_ty = if let Some(ty_id) = ty {
                     let declared = self.resolve_ast_type(*ty_id);
@@ -882,12 +1236,20 @@ impl<'a> TypeChecker<'a> {
             }
             StmtKind::While { condition, body } => {
                 let cond_ty = self.infer_expr(*condition);
-                if let Err(e) = self.unify(&Ty::Primitive(PrimitiveTy::Bool), &cond_ty, self.file.exprs[*condition].span) {
+                if let Err(e) = self.unify(
+                    &Ty::Primitive(PrimitiveTy::Bool),
+                    &cond_ty,
+                    self.file.exprs[*condition].span,
+                ) {
                     self.errors.push(e);
                 }
                 self.check_block(body);
             }
-            StmtKind::For { pattern, iter, body } => {
+            StmtKind::For {
+                pattern,
+                iter,
+                body,
+            } => {
                 let iter_ty = self.infer_expr(*iter);
 
                 let elem_ty = match &iter_ty {
@@ -927,7 +1289,10 @@ impl<'a> TypeChecker<'a> {
                             self.errors.push(TypeError::Custom {
                                 span: stmt.span,
                                 message: format!("undefined variable: {}", name),
-                                hint: Some("variables must be declared with 'let' before assignment".to_string()),
+                                hint: Some(
+                                    "variables must be declared with 'let' before assignment"
+                                        .to_string(),
+                                ),
                             });
                         }
                     }
@@ -997,8 +1362,12 @@ impl<'a> TypeChecker<'a> {
                             if params.len() != arg_tys.len() {
                                 self.errors.push(TypeError::Custom {
                                     span: expr.span,
-                                    message: format!("expected {} arguments, found {}", params.len(), arg_tys.len()),
-                            hint: None,
+                                    message: format!(
+                                        "expected {} arguments, found {}",
+                                        params.len(),
+                                        arg_tys.len()
+                                    ),
+                                    hint: None,
                                 });
                             } else {
                                 for (param, arg) in params.iter().zip(arg_tys.iter()) {
@@ -1025,9 +1394,17 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
-            ExprKind::If { condition, then_branch, else_branch } => {
+            ExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 let cond_ty = self.infer_expr(*condition);
-                if let Err(e) = self.unify(&Ty::Primitive(PrimitiveTy::Bool), &cond_ty, self.file.exprs[*condition].span) {
+                if let Err(e) = self.unify(
+                    &Ty::Primitive(PrimitiveTy::Bool),
+                    &cond_ty,
+                    self.file.exprs[*condition].span,
+                ) {
                     self.errors.push(e);
                 }
 
@@ -1053,16 +1430,23 @@ impl<'a> TypeChecker<'a> {
 
             ExprKind::Array(elems) => {
                 if elems.is_empty() {
-                    Ty::Array { elem: Box::new(self.fresh_var()), size: Some(0) }
+                    Ty::Array {
+                        elem: Box::new(self.fresh_var()),
+                        size: Some(0),
+                    }
                 } else {
                     let first_ty = self.infer_expr(elems[0]);
                     for elem in elems.iter().skip(1) {
                         let elem_ty = self.infer_expr(*elem);
-                        if let Err(e) = self.unify(&first_ty, &elem_ty, self.file.exprs[*elem].span) {
+                        if let Err(e) = self.unify(&first_ty, &elem_ty, self.file.exprs[*elem].span)
+                        {
                             self.errors.push(e);
                         }
                     }
-                    Ty::Array { elem: Box::new(first_ty), size: Some(elems.len()) }
+                    Ty::Array {
+                        elem: Box::new(first_ty),
+                        size: Some(elems.len()),
+                    }
                 }
             }
 
@@ -1070,7 +1454,11 @@ impl<'a> TypeChecker<'a> {
                 let arr_ty = self.infer_expr(*arr);
                 let idx_ty = self.infer_expr(*index);
 
-                if let Err(e) = self.unify(&Ty::Primitive(PrimitiveTy::Int), &idx_ty, self.file.exprs[*index].span) {
+                if let Err(e) = self.unify(
+                    &Ty::Primitive(PrimitiveTy::Int),
+                    &idx_ty,
+                    self.file.exprs[*index].span,
+                ) {
                     self.errors.push(e);
                 }
 
@@ -1099,7 +1487,8 @@ impl<'a> TypeChecker<'a> {
                 match &obj_ty {
                     Ty::Named { name, .. } => {
                         // Look up field type from struct definition
-                        if let Some(field_ty) = self.env.lookup_field(name.as_str(), field.as_str()) {
+                        if let Some(field_ty) = self.env.lookup_field(name.as_str(), field.as_str())
+                        {
                             field_ty
                         } else {
                             self.fresh_var()
@@ -1113,7 +1502,11 @@ impl<'a> TypeChecker<'a> {
                             } else {
                                 self.errors.push(TypeError::Custom {
                                     span: expr.span,
-                                    message: format!("tuple index {} out of bounds (tuple has {} elements)", idx, elems.len()),
+                                    message: format!(
+                                        "tuple index {} out of bounds (tuple has {} elements)",
+                                        idx,
+                                        elems.len()
+                                    ),
                                     hint: None,
                                 });
                                 Ty::Error
@@ -1122,7 +1515,9 @@ impl<'a> TypeChecker<'a> {
                             self.errors.push(TypeError::Custom {
                                 span: expr.span,
                                 message: format!("cannot access field '{}' on tuple type", field),
-                                hint: Some("use numeric indices for tuples (e.g., .0, .1)".to_string()),
+                                hint: Some(
+                                    "use numeric indices for tuples (e.g., .0, .1)".to_string(),
+                                ),
                             });
                             Ty::Error
                         }
@@ -1139,15 +1534,21 @@ impl<'a> TypeChecker<'a> {
             }
 
             ExprKind::Lambda { params, body: _ } => {
-                let param_tys: Vec<Ty> = params.iter().map(|p| {
-                    if let Some(ty_id) = p.ty {
-                        self.resolve_ast_type(ty_id)
-                    } else {
-                        self.fresh_var()
-                    }
-                }).collect();
+                let param_tys: Vec<Ty> = params
+                    .iter()
+                    .map(|p| {
+                        if let Some(ty_id) = p.ty {
+                            self.resolve_ast_type(ty_id)
+                        } else {
+                            self.fresh_var()
+                        }
+                    })
+                    .collect();
                 let ret_ty = self.fresh_var();
-                Ty::Function { params: param_tys, ret: Box::new(ret_ty) }
+                Ty::Function {
+                    params: param_tys,
+                    ret: Box::new(ret_ty),
+                }
             }
 
             ExprKind::Match { scrutinee, arms } => {
@@ -1166,7 +1567,9 @@ impl<'a> TypeChecker<'a> {
                     // Check guard if present
                     if let Some(guard) = arm.guard {
                         let guard_ty = self.infer_expr(guard);
-                        if let Err(e) = self.unify(&Ty::Primitive(PrimitiveTy::Bool), &guard_ty, expr.span) {
+                        if let Err(e) =
+                            self.unify(&Ty::Primitive(PrimitiveTy::Bool), &guard_ty, expr.span)
+                        {
                             self.errors.push(e);
                         }
                     }
@@ -1191,7 +1594,11 @@ impl<'a> TypeChecker<'a> {
                 result_ty.unwrap_or(Ty::Primitive(PrimitiveTy::Unit))
             }
 
-            ExprKind::MethodCall { receiver, method, args } => {
+            ExprKind::MethodCall {
+                receiver,
+                method,
+                args,
+            } => {
                 let recv_ty = self.infer_expr(*receiver);
                 let arg_tys: Vec<Ty> = args.iter().map(|a| self.infer_expr(*a)).collect();
 
@@ -1204,11 +1611,19 @@ impl<'a> TypeChecker<'a> {
                     if let Some(method_ty) = self.env.lookup_method(tn.as_str(), method.as_str()) {
                         if let Ty::Function { params, ret } = &method_ty {
                             // Check arg count (minus self param)
-                            let expected = if params.is_empty() { 0 } else { params.len().saturating_sub(1) };
+                            let expected = if params.is_empty() {
+                                0
+                            } else {
+                                params.len().saturating_sub(1)
+                            };
                             if !params.is_empty() && arg_tys.len() != expected {
                                 self.errors.push(TypeError::Custom {
                                     span: expr.span,
-                                    message: format!("expected {} arguments, found {}", expected, arg_tys.len()),
+                                    message: format!(
+                                        "expected {} arguments, found {}",
+                                        expected,
+                                        arg_tys.len()
+                                    ),
                                     hint: None,
                                 });
                             }
@@ -1243,7 +1658,7 @@ impl<'a> TypeChecker<'a> {
                     ("contains", Ty::Array { .. }) => Ty::Primitive(PrimitiveTy::Bool),
                     ("is_empty", Ty::Array { .. }) => Ty::Primitive(PrimitiveTy::Bool),
                     ("clone", _) => recv_ty.clone(),
-                    _ => self.fresh_var()
+                    _ => self.fresh_var(),
                 }
             }
 
@@ -1251,13 +1666,19 @@ impl<'a> TypeChecker<'a> {
                 for (_, field_expr) in fields {
                     self.infer_expr(*field_expr);
                 }
-                Ty::Named { name: name.clone(), args: vec![] }
+                Ty::Named {
+                    name: name.clone(),
+                    args: vec![],
+                }
             }
 
             ExprKind::Resource(amount) => {
                 if let Some(ref unit_name) = amount.unit {
                     if let Some(unit) = eclexia_ast::dimension::parse_unit(unit_name.as_str()) {
-                        Ty::Resource { base: PrimitiveTy::Float, dimension: unit.dimension }
+                        Ty::Resource {
+                            base: PrimitiveTy::Float,
+                            dimension: unit.dimension,
+                        }
                     } else {
                         Ty::Primitive(PrimitiveTy::Float)
                     }
@@ -1266,7 +1687,10 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
-            ExprKind::Cast { expr: inner, target_ty } => {
+            ExprKind::Cast {
+                expr: inner,
+                target_ty,
+            } => {
                 let source_ty = self.infer_expr(*inner);
                 let target = self.resolve_ast_type(*target_ty);
 
@@ -1279,9 +1703,8 @@ impl<'a> TypeChecker<'a> {
                             || (*s == PrimitiveTy::Char && t.is_integer())
                     }
                     // Allow numeric ↔ Resource casts (dimension tagging/untagging)
-                    (Ty::Primitive(p), Ty::Resource { .. }) | (Ty::Resource { .. }, Ty::Primitive(p)) => {
-                        p.is_numeric()
-                    }
+                    (Ty::Primitive(p), Ty::Resource { .. })
+                    | (Ty::Resource { .. }, Ty::Primitive(p)) => p.is_numeric(),
                     // Allow Resource ↔ Resource casts (dimension conversion)
                     (Ty::Resource { .. }, Ty::Resource { .. }) => true,
                     (Ty::Error, _) | (_, Ty::Error) => true,
@@ -1305,22 +1728,36 @@ impl<'a> TypeChecker<'a> {
                 if let Err(e) = self.unify(&Ty::Primitive(PrimitiveTy::Int), &count_ty, expr.span) {
                     self.errors.push(e);
                 }
-                Ty::Array { elem: Box::new(elem_ty), size: None }
+                Ty::Array {
+                    elem: Box::new(elem_ty),
+                    size: None,
+                }
             }
             ExprKind::Try(inner) => {
                 let inner_ty = self.infer_expr(*inner);
                 // Try operator unwraps Optional<T> → T or Result<T,E> → T
                 match &inner_ty {
-                    Ty::Named { name, args } if name.as_str() == "Option" || name.as_str() == "Result" => {
-                        args.first().cloned().unwrap_or(Ty::Primitive(PrimitiveTy::Unit))
+                    Ty::Named { name, args }
+                        if name.as_str() == "Option" || name.as_str() == "Result" =>
+                    {
+                        args.first()
+                            .cloned()
+                            .unwrap_or(Ty::Primitive(PrimitiveTy::Unit))
                     }
                     _ => inner_ty, // Pass through for now
                 }
             }
-            ExprKind::Borrow { expr: inner, mutable } => {
+            ExprKind::Borrow {
+                expr: inner,
+                mutable,
+            } => {
                 let inner_ty = self.infer_expr(*inner);
                 Ty::Named {
-                    name: if *mutable { SmolStr::new("&mut") } else { SmolStr::new("&") },
+                    name: if *mutable {
+                        SmolStr::new("&mut")
+                    } else {
+                        SmolStr::new("&")
+                    },
                     args: vec![inner_ty],
                 }
             }
@@ -1328,7 +1765,10 @@ impl<'a> TypeChecker<'a> {
                 let inner_ty = self.infer_expr(*inner);
                 // Dereference &T → T
                 match &inner_ty {
-                    Ty::Named { name, args } if (name.as_str() == "&" || name.as_str() == "&mut") && !args.is_empty() => {
+                    Ty::Named { name, args }
+                        if (name.as_str() == "&" || name.as_str() == "&mut")
+                            && !args.is_empty() =>
+                    {
                         args[0].clone()
                     }
                     _ => inner_ty,
@@ -1342,7 +1782,10 @@ impl<'a> TypeChecker<'a> {
                 // Not yet implemented: should unwrap Future<T> to T
                 self.infer_expr(*inner)
             }
-            ExprKind::Handle { expr: inner, handlers: _ } => {
+            ExprKind::Handle {
+                expr: inner,
+                handlers: _,
+            } => {
                 // Not yet implemented: effect handling
                 self.infer_expr(*inner)
             }
@@ -1359,9 +1802,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 Ty::Primitive(PrimitiveTy::Unit)
             }
-            ExprKind::ContinueExpr { label: _ } => {
-                Ty::Primitive(PrimitiveTy::Unit)
-            }
+            ExprKind::ContinueExpr { label: _ } => Ty::Primitive(PrimitiveTy::Unit),
             ExprKind::PathExpr(segments) => {
                 // Not yet implemented: path resolution
                 // Try looking up the last segment as a variable
@@ -1415,9 +1856,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 Ty::Primitive(PrimitiveTy::Unit)
             }
-            ExprKind::MacroCall { .. } => {
-                self.fresh_var()
-            }
+            ExprKind::MacroCall { .. } => self.fresh_var(),
         }
     }
 
@@ -1459,14 +1898,20 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
             }
-            Pattern::Binding { name, pattern: inner } => {
+            Pattern::Binding {
+                name,
+                pattern: inner,
+            } => {
                 self.env.insert_mono(name.clone(), ty.clone());
                 self.bind_pattern(inner, ty, span);
             }
             Pattern::Reference { pattern: inner, .. } => {
                 // &pat → bind inner with the referenced type
                 let inner_ty = match ty {
-                    Ty::Named { name, args } if (name.as_str() == "&" || name.as_str() == "&mut") && !args.is_empty() => {
+                    Ty::Named { name, args }
+                        if (name.as_str() == "&" || name.as_str() == "&mut")
+                            && !args.is_empty() =>
+                    {
                         args[0].clone()
                     }
                     _ => ty.clone(),
@@ -1482,10 +1927,7 @@ impl<'a> TypeChecker<'a> {
             Pattern::Slice(pats) => {
                 let elem_ty = match ty {
                     Ty::Array { elem, .. } => (**elem).clone(),
-                    _ => {
-                        
-                        self.fresh_var()
-                    }
+                    _ => self.fresh_var(),
                 };
                 for pat in pats {
                     self.bind_pattern(pat, &elem_ty, span);
@@ -1496,7 +1938,12 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Check that a pattern is consistent with a scrutinee type.
-    fn check_pattern_type(&mut self, pattern: &Pattern, scrut_ty: &Ty, span: eclexia_ast::span::Span) {
+    fn check_pattern_type(
+        &mut self,
+        pattern: &Pattern,
+        scrut_ty: &Ty,
+        span: eclexia_ast::span::Span,
+    ) {
         match pattern {
             Pattern::Literal(lit) => {
                 let lit_ty = self.literal_type(lit);
@@ -1520,7 +1967,11 @@ impl<'a> TypeChecker<'a> {
                     if pats.len() != elem_tys.len() {
                         self.errors.push(TypeError::Custom {
                             span,
-                            message: format!("expected tuple of {} elements, found pattern with {}", elem_tys.len(), pats.len()),
+                            message: format!(
+                                "expected tuple of {} elements, found pattern with {}",
+                                elem_tys.len(),
+                                pats.len()
+                            ),
                             hint: None,
                         });
                     }
@@ -1551,13 +2002,34 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Get the result type of a binary operation.
-    fn binary_op_type(&mut self, op: BinaryOp, lhs: &Ty, rhs: &Ty, span: eclexia_ast::span::Span) -> Ty {
+    fn binary_op_type(
+        &mut self,
+        op: BinaryOp,
+        lhs: &Ty,
+        rhs: &Ty,
+        span: eclexia_ast::span::Span,
+    ) -> Ty {
         match op {
-            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem | BinaryOp::Pow => {
+            BinaryOp::Add
+            | BinaryOp::Sub
+            | BinaryOp::Mul
+            | BinaryOp::Div
+            | BinaryOp::Rem
+            | BinaryOp::Pow => {
                 // Handle dimensional type checking for Resource types
                 match (lhs, rhs, op) {
                     // Resource + Resource (must have same dimension)
-                    (Ty::Resource { base: b1, dimension: d1 }, Ty::Resource { base: b2, dimension: d2 }, BinaryOp::Add | BinaryOp::Sub) => {
+                    (
+                        Ty::Resource {
+                            base: b1,
+                            dimension: d1,
+                        },
+                        Ty::Resource {
+                            base: b2,
+                            dimension: d2,
+                        },
+                        BinaryOp::Add | BinaryOp::Sub,
+                    ) => {
                         if d1 != d2 {
                             self.errors.push(TypeError::DimensionMismatch {
                                 span,
@@ -1571,16 +2043,33 @@ impl<'a> TypeChecker<'a> {
                         if b1 != b2 {
                             self.errors.push(TypeError::Custom {
                                 span,
-                                message: format!("cannot add {} and {} (incompatible base types)", b1.name(), b2.name()),
-                            hint: None,
+                                message: format!(
+                                    "cannot add {} and {} (incompatible base types)",
+                                    b1.name(),
+                                    b2.name()
+                                ),
+                                hint: None,
                             });
                             return Ty::Error;
                         }
-                        Ty::Resource { base: *b1, dimension: *d1 }
+                        Ty::Resource {
+                            base: *b1,
+                            dimension: *d1,
+                        }
                     }
 
                     // Resource * Resource (dimensions multiply)
-                    (Ty::Resource { base: b1, dimension: d1 }, Ty::Resource { base: b2, dimension: d2 }, BinaryOp::Mul) => {
+                    (
+                        Ty::Resource {
+                            base: b1,
+                            dimension: d1,
+                        },
+                        Ty::Resource {
+                            base: b2,
+                            dimension: d2,
+                        },
+                        BinaryOp::Mul,
+                    ) => {
                         let result_dim = d1.multiply(d2);
                         // Upgrade base type if necessary (Int * Float = Float)
                         let result_base = if b1.is_float() || b2.is_float() {
@@ -1588,33 +2077,61 @@ impl<'a> TypeChecker<'a> {
                         } else {
                             *b1
                         };
-                        Ty::Resource { base: result_base, dimension: result_dim }
+                        Ty::Resource {
+                            base: result_base,
+                            dimension: result_dim,
+                        }
                     }
 
                     // Resource / Resource (dimensions divide)
-                    (Ty::Resource { base: _b1, dimension: d1 }, Ty::Resource { base: _b2, dimension: d2 }, BinaryOp::Div) => {
+                    (
+                        Ty::Resource {
+                            base: _b1,
+                            dimension: d1,
+                        },
+                        Ty::Resource {
+                            base: _b2,
+                            dimension: d2,
+                        },
+                        BinaryOp::Div,
+                    ) => {
                         let result_dim = d1.divide(d2);
-                        Ty::Resource { base: PrimitiveTy::Float, dimension: result_dim }
+                        Ty::Resource {
+                            base: PrimitiveTy::Float,
+                            dimension: result_dim,
+                        }
                     }
 
                     // Resource * Scalar (scalar multiplication)
-                    (Ty::Resource { base, dimension }, Ty::Primitive(p), BinaryOp::Mul) |
-                    (Ty::Primitive(p), Ty::Resource { base, dimension }, BinaryOp::Mul) if p.is_numeric() => {
-                        Ty::Resource { base: *base, dimension: *dimension }
+                    (Ty::Resource { base, dimension }, Ty::Primitive(p), BinaryOp::Mul)
+                    | (Ty::Primitive(p), Ty::Resource { base, dimension }, BinaryOp::Mul)
+                        if p.is_numeric() =>
+                    {
+                        Ty::Resource {
+                            base: *base,
+                            dimension: *dimension,
+                        }
                     }
 
                     // Resource / Scalar (scalar division)
-                    (Ty::Resource { base, dimension }, Ty::Primitive(p), BinaryOp::Div) if p.is_numeric() => {
-                        Ty::Resource { base: *base, dimension: *dimension }
+                    (Ty::Resource { base, dimension }, Ty::Primitive(p), BinaryOp::Div)
+                        if p.is_numeric() =>
+                    {
+                        Ty::Resource {
+                            base: *base,
+                            dimension: *dimension,
+                        }
                     }
 
                     // Resource ^ Int (dimension exponentiation)
-                    (Ty::Resource { base, dimension }, Ty::Primitive(p), BinaryOp::Pow) if p.is_integer() => {
+                    (Ty::Resource { base, dimension }, Ty::Primitive(p), BinaryOp::Pow)
+                        if p.is_integer() =>
+                    {
                         // For now, we can't compute the exponent at compile-time
                         // In a more advanced implementation, we'd need constant evaluation
                         self.errors.push(TypeError::Custom {
                             span,
-                            message: "resource exponentiation requires constant integer exponent (not yet implemented)".to_string(),
+                            message: "resource exponentiation requires a constant integer exponent (implementation pending)".to_string(),
                             hint: None,
                         });
                         Ty::Error
@@ -1627,7 +2144,9 @@ impl<'a> TypeChecker<'a> {
                         }
                         if self.is_numeric(lhs) {
                             lhs.clone()
-                        } else if matches!(lhs, Ty::Primitive(PrimitiveTy::String)) && op == BinaryOp::Add {
+                        } else if matches!(lhs, Ty::Primitive(PrimitiveTy::String))
+                            && op == BinaryOp::Add
+                        {
                             Ty::Primitive(PrimitiveTy::String)
                         } else if matches!(lhs, Ty::Var(_)) || matches!(rhs, Ty::Var(_)) {
                             // Type variable (e.g. from macro expansion) — defer to runtime
@@ -1639,16 +2158,23 @@ impl<'a> TypeChecker<'a> {
                             self.errors.push(TypeError::Custom {
                                 span,
                                 message: format!("cannot apply {:?} to {} and {}", op, lhs, rhs),
-                            hint: None,
+                                hint: None,
                             });
                             Ty::Error
                         }
                     }
                 }
             }
-            BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+            BinaryOp::Eq
+            | BinaryOp::Ne
+            | BinaryOp::Lt
+            | BinaryOp::Le
+            | BinaryOp::Gt
+            | BinaryOp::Ge => {
                 // Resource<D> comparisons: dimensions must match
-                if let (Ty::Resource { dimension: d1, .. }, Ty::Resource { dimension: d2, .. }) = (lhs, rhs) {
+                if let (Ty::Resource { dimension: d1, .. }, Ty::Resource { dimension: d2, .. }) =
+                    (lhs, rhs)
+                {
                     if d1 != d2 {
                         self.errors.push(TypeError::Custom {
                             span,
@@ -1656,7 +2182,9 @@ impl<'a> TypeChecker<'a> {
                                 "cannot compare resources with different dimensions: {:?} vs {:?}",
                                 d1, d2
                             ),
-                            hint: Some("comparison requires matching resource dimensions".to_string()),
+                            hint: Some(
+                                "comparison requires matching resource dimensions".to_string(),
+                            ),
                         });
                         return Ty::Error;
                     }
@@ -1672,7 +2200,11 @@ impl<'a> TypeChecker<'a> {
                 }
                 Ty::Primitive(PrimitiveTy::Bool)
             }
-            BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor | BinaryOp::Shl | BinaryOp::Shr => {
+            BinaryOp::BitAnd
+            | BinaryOp::BitOr
+            | BinaryOp::BitXor
+            | BinaryOp::Shl
+            | BinaryOp::Shr => {
                 if let Err(e) = self.unify(lhs, rhs, span) {
                     self.errors.push(e);
                 }
@@ -1682,7 +2214,7 @@ impl<'a> TypeChecker<'a> {
                     self.errors.push(TypeError::Custom {
                         span,
                         message: format!("bitwise operations require integers, found {}", lhs),
-                            hint: None,
+                        hint: None,
                     });
                     Ty::Error
                 }
@@ -1699,7 +2231,10 @@ impl<'a> TypeChecker<'a> {
                     return Ty::Error;
                 }
                 // Return Array<Int> so ranges work in for loops
-                Ty::Array { elem: Box::new(lhs.clone()), size: None }
+                Ty::Array {
+                    elem: Box::new(lhs.clone()),
+                    size: None,
+                }
             }
         }
     }
@@ -1714,7 +2249,7 @@ impl<'a> TypeChecker<'a> {
                     self.errors.push(TypeError::Custom {
                         span,
                         message: format!("cannot negate {}", operand),
-                            hint: None,
+                        hint: None,
                     });
                     Ty::Error
                 }
@@ -1727,7 +2262,7 @@ impl<'a> TypeChecker<'a> {
                     self.errors.push(TypeError::Custom {
                         span,
                         message: format!("bitwise not requires integer, found {}", operand),
-                            hint: None,
+                        hint: None,
                     });
                     Ty::Error
                 }
@@ -1761,7 +2296,11 @@ impl<'a> TypeChecker<'a> {
     fn check_constraints(&mut self, constraints: &[Constraint]) {
         for constraint in constraints {
             match &constraint.kind {
-                ConstraintKind::Resource { resource, op: _, amount } => {
+                ConstraintKind::Resource {
+                    resource,
+                    op: _,
+                    amount,
+                } => {
                     // Validate that the resource name is known
                     let dimension = match resource.as_str() {
                         "energy" => Dimension::energy(),
@@ -1787,7 +2326,10 @@ impl<'a> TypeChecker<'a> {
                                     span: constraint.span,
                                     dim1: dimension.to_string(),
                                     dim2: unit.dimension.to_string(),
-                                    hint: Some(format!("expected {} dimension, found {}", dimension, unit.dimension)),
+                                    hint: Some(format!(
+                                        "expected {} dimension, found {}",
+                                        dimension, unit.dimension
+                                    )),
                                 });
                             }
                         } else {
@@ -1802,7 +2344,9 @@ impl<'a> TypeChecker<'a> {
                 ConstraintKind::Predicate(expr_id) => {
                     // Type check the predicate expression
                     let pred_ty = self.infer_expr(*expr_id);
-                    if let Err(e) = self.unify(&Ty::Primitive(PrimitiveTy::Bool), &pred_ty, constraint.span) {
+                    if let Err(e) =
+                        self.unify(&Ty::Primitive(PrimitiveTy::Bool), &pred_ty, constraint.span)
+                    {
                         self.errors.push(e);
                     }
                 }
@@ -1838,7 +2382,10 @@ impl<'a> TypeChecker<'a> {
                             span: provision.span,
                             dim1: dimension.to_string(),
                             dim2: unit.dimension.to_string(),
-                            hint: Some(format!("expected {} dimension, found {}", dimension, unit.dimension)),
+                            hint: Some(format!(
+                                "expected {} dimension, found {}",
+                                dimension, unit.dimension
+                            )),
                         });
                     }
                 } else {

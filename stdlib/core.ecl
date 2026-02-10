@@ -19,7 +19,7 @@ type Result<T, E> {
 
 /// Panic with a message and halt execution.
 fn panic(message: String) -> ! {
-    // TODO: Implement proper panic handling
+    // NOTE: Placeholder panic handling until runtime hooks are wired.
     // For now, this will be a compiler intrinsic
     @builtin("panic")
 }

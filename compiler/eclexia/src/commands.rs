@@ -3,12 +3,19 @@
 
 //! Command implementations for the Eclexia CLI.
 
-use std::path::Path;
+use eclexia_runtime::{HealthServer, PowerMetrics, Runtime};
 use miette::{Context, IntoDiagnostic};
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// Build an Eclexia program.
-pub fn build(input: &Path, _output: Option<&Path>, _target: &str, analyze: bool) -> miette::Result<()> {
+pub fn build(
+    input: &Path,
+    _output: Option<&Path>,
+    _target: &str,
+    analyze: bool,
+) -> miette::Result<()> {
     let source = std::fs::read_to_string(input)
         .into_diagnostic()
         .wrap_err_with(|| format!("Failed to read {}", input.display()))?;
@@ -21,7 +28,10 @@ pub fn build(input: &Path, _output: Option<&Path>, _target: &str, analyze: bool)
         for err in &parse_errors {
             eprintln!("  {}", err.format_with_source(&source));
         }
-        return Err(miette::miette!("Parsing failed with {} errors", parse_errors.len()));
+        return Err(miette::miette!(
+            "Parsing failed with {} errors",
+            parse_errors.len()
+        ));
     }
 
     // Type check
@@ -32,7 +42,10 @@ pub fn build(input: &Path, _output: Option<&Path>, _target: &str, analyze: bool)
         for err in &type_errors {
             eprintln!("  {}", err.format_with_source(&source));
         }
-        return Err(miette::miette!("Type checking failed with {} errors", type_errors.len()));
+        return Err(miette::miette!(
+            "Type checking failed with {} errors",
+            type_errors.len()
+        ));
     }
 
     // Lower to HIR
@@ -53,7 +66,8 @@ pub fn build(input: &Path, _output: Option<&Path>, _target: &str, analyze: bool)
         "wasm" => {
             // WASM backend: generate real .wasm binary
             let mut wasm_backend = eclexia_wasm::WasmBackend::new();
-            let wasm_module = wasm_backend.generate(&mir_file)
+            let wasm_module = wasm_backend
+                .generate(&mir_file)
                 .map_err(|e| miette::miette!("WASM code generation failed: {}", e))?;
 
             println!("✓ Build successful (target: wasm)");
@@ -74,43 +88,67 @@ pub fn build(input: &Path, _output: Option<&Path>, _target: &str, analyze: bool)
         "cranelift" => {
             // Cranelift native backend
             let mut cl_backend = eclexia_cranelift::CraneliftBackend::host();
-            let native_module = cl_backend.generate(&mir_file)
+            let native_module = cl_backend
+                .generate(&mir_file)
                 .map_err(|e| miette::miette!("Cranelift code generation failed: {}", e))?;
 
-            let real_count = native_module.functions.iter().filter(|f| f.is_real_codegen).count();
+            let real_count = native_module
+                .functions
+                .iter()
+                .filter(|f| f.is_real_codegen)
+                .count();
             let est_count = native_module.functions.len() - real_count;
 
-            println!("✓ Build successful (target: cranelift, {})", native_module.target);
+            println!(
+                "✓ Build successful (target: cranelift, {})",
+                native_module.target
+            );
             println!("  {} items parsed", file.items.len());
-            println!("  {} functions compiled ({} real native, {} estimated)",
-                native_module.functions.len(), real_count, est_count);
+            println!(
+                "  {} functions compiled ({} real native, {} estimated)",
+                native_module.functions.len(),
+                real_count,
+                est_count
+            );
             println!("  {} bytes total code size", native_module.total_code_size);
 
             for func in &native_module.functions {
-                let tag = if func.is_real_codegen { "native" } else { "est" };
+                let tag = if func.is_real_codegen {
+                    "native"
+                } else {
+                    "est"
+                };
                 println!("    {} ({}, {} bytes)", func.name, tag, func.code_size);
             }
         }
         "llvm" => {
-            // LLVM backend (stub — reports estimated sizes)
+            // LLVM backend (estimation-only — reports estimated sizes)
             let mut llvm_backend = eclexia_llvm::LlvmBackend::new();
-            let llvm_module = llvm_backend.generate(&mir_file)
+            let llvm_module = llvm_backend
+                .generate(&mir_file)
                 .map_err(|e| miette::miette!("LLVM code generation failed: {}", e))?;
 
-            println!("✓ Build analysis (target: llvm — stub, no real codegen yet)");
+            println!("✓ Build analysis (target: llvm — estimation-only, no real codegen yet)");
             println!("  {} items parsed", file.items.len());
             println!("  {} functions analyzed", llvm_module.functions.len());
             println!("  Optimization: {}", llvm_module.opt_level);
-            println!("  Estimated code size: {} bytes", llvm_module.estimated_code_size);
+            println!(
+                "  Estimated code size: {} bytes",
+                llvm_module.estimated_code_size
+            );
 
             for func in &llvm_module.functions {
-                println!("    {} (~{} bytes estimated)", func.name, func.estimated_size);
+                println!(
+                    "    {} (~{} bytes estimated)",
+                    func.name, func.estimated_size
+                );
             }
         }
         _ => {
             // Default: bytecode backend ("native" or anything else)
             let mut codegen = eclexia_codegen::BytecodeGenerator::new();
-            let module = codegen.generate(&mir_file)
+            let module = codegen
+                .generate(&mir_file)
                 .map_err(|e| miette::miette!("Code generation failed: {}", e))?;
 
             println!("✓ Build successful");
@@ -120,7 +158,8 @@ pub fn build(input: &Path, _output: Option<&Path>, _target: &str, analyze: bool)
             if let Some(output) = _output {
                 if eclexia_codegen::bytecode::BytecodeModule::is_eclb_path(output) {
                     // Binary .eclb format
-                    module.write_eclb(output)
+                    module
+                        .write_eclb(output)
                         .map_err(|e| miette::miette!("{}", e))?;
                     println!("  Bytecode written to {} (.eclb binary)", output.display());
                 } else {
@@ -129,7 +168,9 @@ pub fn build(input: &Path, _output: Option<&Path>, _target: &str, analyze: bool)
                         .map_err(|e| miette::miette!("Failed to serialize bytecode: {}", e))?;
                     std::fs::write(output, &json)
                         .into_diagnostic()
-                        .wrap_err_with(|| format!("Failed to write bytecode to {}", output.display()))?;
+                        .wrap_err_with(|| {
+                            format!("Failed to write bytecode to {}", output.display())
+                        })?;
                     println!("  Bytecode written to {} (JSON)", output.display());
                 }
             }
@@ -153,18 +194,28 @@ fn run_mir_analysis(mir: &eclexia_mir::MirFile, ast: &eclexia_ast::SourceFile) {
         println!("  Compile-time resource verification:");
         for verdict in &comptime_verdicts {
             match verdict {
-                eclexia_comptime::ResourceVerification::Proved { function, resource, .. } => {
+                eclexia_comptime::ResourceVerification::Proved {
+                    function, resource, ..
+                } => {
                     println!("    ✓ {}.{} provably within budget", function, resource);
                 }
                 eclexia_comptime::ResourceVerification::Violated {
-                    function, resource, estimated_usage, budget, ..
+                    function,
+                    resource,
+                    estimated_usage,
+                    budget,
+                    ..
                 } => {
                     println!(
                         "    ✗ {}.{} VIOLATED: estimated {:.2} > budget {:.2}",
                         function, resource, estimated_usage, budget
                     );
                 }
-                eclexia_comptime::ResourceVerification::Inconclusive { function, resource, reason } => {
+                eclexia_comptime::ResourceVerification::Inconclusive {
+                    function,
+                    resource,
+                    reason,
+                } => {
                     println!("    ? {}.{} inconclusive: {}", function, resource, reason);
                 }
             }
@@ -173,7 +224,9 @@ fn run_mir_analysis(mir: &eclexia_mir::MirFile, ast: &eclexia_ast::SourceFile) {
 
     // Abstract interpretation resource bounds
     let resource_analyses = eclexia_absinterp::resource::analyze_resources(mir);
-    let has_resources = resource_analyses.iter().any(|a| !a.resource_bounds.is_empty());
+    let has_resources = resource_analyses
+        .iter()
+        .any(|a| !a.resource_bounds.is_empty());
     if has_resources {
         println!("  Resource bounds (abstract interpretation):");
         for analysis in &resource_analyses {
@@ -230,7 +283,10 @@ fn run_mir_analysis(mir: &eclexia_mir::MirFile, ast: &eclexia_ast::SourceFile) {
         }
     }
     if total_adaptive > 0 {
-        println!("  Binding-time analysis: {}/{} adaptive function(s) specializable", specializable, total_adaptive);
+        println!(
+            "  Binding-time analysis: {}/{} adaptive function(s) specializable",
+            specializable, total_adaptive
+        );
     }
 
     // Effect signature analysis
@@ -242,7 +298,10 @@ fn run_mir_analysis(mir: &eclexia_mir::MirFile, ast: &eclexia_ast::SourceFile) {
         }
     }
     if !effect_registry.is_empty() {
-        println!("  Effect signatures: {} effect(s) registered", effect_registry.len());
+        println!(
+            "  Effect signatures: {} effect(s) registered",
+            effect_registry.len()
+        );
     }
 
     // Module import analysis
@@ -260,15 +319,22 @@ fn run_mir_analysis(mir: &eclexia_mir::MirFile, ast: &eclexia_ast::SourceFile) {
 
         // Estimate hotness: functions with more instructions or recursion are hotter
         for func in &mir.functions {
-            let instr_count: usize = func.basic_blocks.iter()
+            let instr_count: usize = func
+                .basic_blocks
+                .iter()
                 .map(|(_, bb)| bb.instructions.len())
                 .sum();
 
             // Heuristic: more instructions → more likely hot
-            let estimated_calls = if func.is_adaptive { 200 }
-                else if instr_count > 50 { 1500 }
-                else if instr_count > 20 { 150 }
-                else { 5 };
+            let estimated_calls = if func.is_adaptive {
+                200
+            } else if instr_count > 50 {
+                1500
+            } else if instr_count > 20 {
+                150
+            } else {
+                5
+            };
 
             for _ in 0..estimated_calls {
                 tier_mgr.record_call(&func.name);
@@ -300,20 +366,28 @@ fn run_mir_analysis(mir: &eclexia_mir::MirFile, ast: &eclexia_ast::SourceFile) {
         let source_text = format!("{:?}", ast); // Use AST debug repr as proxy
         let source = eclexia_db::SourceFile::new(&db, source_text);
         let all_diags = eclexia_db::queries::all_diagnostics(&db, source);
-        let errors: Vec<_> = all_diags.iter()
+        let errors: Vec<_> = all_diags
+            .iter()
             .filter(|d| d.severity == eclexia_db::DiagnosticSeverity::Error)
             .collect();
-        let warnings: Vec<_> = all_diags.iter()
+        let warnings: Vec<_> = all_diags
+            .iter()
             .filter(|d| d.severity == eclexia_db::DiagnosticSeverity::Warning)
             .collect();
         if !all_diags.is_empty() {
-            println!("  Incremental compilation (salsa): {} error(s), {} warning(s)",
-                errors.len(), warnings.len());
+            println!(
+                "  Incremental compilation (salsa): {} error(s), {} warning(s)",
+                errors.len(),
+                warnings.len()
+            );
         }
     }
 
-    if comptime_verdicts.is_empty() && !has_resources && budget_verdicts.is_empty()
-        && total_adaptive == 0 && effect_registry.is_empty()
+    if comptime_verdicts.is_empty()
+        && !has_resources
+        && budget_verdicts.is_empty()
+        && total_adaptive == 0
+        && effect_registry.is_empty()
         && imports.is_empty()
     {
         println!("  No resource constraints to analyze");
@@ -341,7 +415,10 @@ pub fn run(input: &Path, observe_shadow: bool, carbon_report: bool) -> miette::R
         for err in &parse_errors {
             eprintln!("  {}", err.format_with_source(&source));
         }
-        return Err(miette::miette!("Parsing failed with {} errors", parse_errors.len()));
+        return Err(miette::miette!(
+            "Parsing failed with {} errors",
+            parse_errors.len()
+        ));
     }
 
     // Type check
@@ -352,15 +429,30 @@ pub fn run(input: &Path, observe_shadow: bool, carbon_report: bool) -> miette::R
         for err in &type_errors {
             eprintln!("  {}", err.format_with_source(&source));
         }
-        return Err(miette::miette!("Type checking failed with {} errors", type_errors.len()));
+        return Err(miette::miette!(
+            "Type checking failed with {} errors",
+            type_errors.len()
+        ));
     }
 
     if observe_shadow {
         let registry = eclexia_runtime::ShadowPriceRegistry::new();
-        let energy = registry.get_price(&smol_str::SmolStr::new("energy"), eclexia_ast::dimension::Dimension::energy());
-        let time = registry.get_price(&smol_str::SmolStr::new("time"), eclexia_ast::dimension::Dimension::time());
-        let carbon = registry.get_price(&smol_str::SmolStr::new("carbon"), eclexia_ast::dimension::Dimension::carbon());
-        println!("Shadow price observation: λ_energy={:.6}, λ_time={:.6}, λ_carbon={:.6}", energy, time, carbon);
+        let energy = registry.get_price(
+            &smol_str::SmolStr::new("energy"),
+            eclexia_ast::dimension::Dimension::energy(),
+        );
+        let time = registry.get_price(
+            &smol_str::SmolStr::new("time"),
+            eclexia_ast::dimension::Dimension::time(),
+        );
+        let carbon = registry.get_price(
+            &smol_str::SmolStr::new("carbon"),
+            eclexia_ast::dimension::Dimension::carbon(),
+        );
+        println!(
+            "Shadow price observation: λ_energy={:.6}, λ_time={:.6}, λ_carbon={:.6}",
+            energy, time, carbon
+        );
     }
 
     // Execute using the interpreter
@@ -371,7 +463,7 @@ pub fn run(input: &Path, observe_shadow: bool, carbon_report: bool) -> miette::R
             println!("\nResult: {:?}", result);
 
             if carbon_report {
-                // TODO: Extract actual resource usage from interpreter
+                // NOTE: Interpreter resource usage not yet wired into this report.
                 println!("\n--- Carbon Report ---");
                 println!("  Energy used:  (tracked)");
                 println!("  Carbon used:  (tracked)");
@@ -379,9 +471,7 @@ pub fn run(input: &Path, observe_shadow: bool, carbon_report: bool) -> miette::R
 
             Ok(())
         }
-        Err(e) => {
-            Err(miette::miette!("Runtime error: {}", e))
-        }
+        Err(e) => Err(miette::miette!("Runtime error: {}", e)),
     }
 }
 
@@ -391,18 +481,15 @@ fn run_bytecode(input: &Path, observe_shadow: bool, carbon_report: bool) -> miet
 
     println!("Loading bytecode from {}...", input.display());
 
-    let module = BytecodeModule::read_eclb(input)
-        .map_err(|e| miette::miette!("{}", e))?;
+    let module = BytecodeModule::read_eclb(input).map_err(|e| miette::miette!("{}", e))?;
 
-    println!("  {} function(s), {} string(s)", module.functions.len(), module.strings.len());
+    println!(
+        "  {} function(s), {} string(s)",
+        module.functions.len(),
+        module.strings.len()
+    );
 
-    if observe_shadow {
-        let registry = eclexia_runtime::ShadowPriceRegistry::new();
-        let energy = registry.get_price(&smol_str::SmolStr::new("energy"), eclexia_ast::dimension::Dimension::energy());
-        let time = registry.get_price(&smol_str::SmolStr::new("time"), eclexia_ast::dimension::Dimension::time());
-        let carbon = registry.get_price(&smol_str::SmolStr::new("carbon"), eclexia_ast::dimension::Dimension::carbon());
-        println!("Shadow price observation: λ_energy={:.6}, λ_time={:.6}, λ_carbon={:.6}", energy, time, carbon);
-    }
+    let mut runtime = Runtime::new();
 
     // Execute through the VM
     let mut vm = eclexia_codegen::VirtualMachine::new(module);
@@ -410,58 +497,60 @@ fn run_bytecode(input: &Path, observe_shadow: bool, carbon_report: bool) -> miet
         Ok(result) => {
             println!("\nResult: {:?}", result);
 
-            if carbon_report || observe_shadow {
-                let resources = vm.get_resource_usage();
+            // Feed resource totals into the runtime tracker
+            runtime.ingest_usage(
+                vm.get_resources()
+                    .iter()
+                    .map(|entry| (entry.resource.clone(), entry.dimension, entry.amount)),
+            );
 
-                if carbon_report {
-                    println!("\n--- Carbon Report ---");
-                    if resources.is_empty() {
-                        println!("  No resource usage tracked");
-                    } else {
-                        for (name, amount) in &resources {
-                            println!("  {}: {:.4}", name, amount);
-                        }
-                    }
-                }
-
-                // Compute dynamic shadow prices from actual resource usage
-                if observe_shadow && !resources.is_empty() {
-                    use eclexia_ast::dimension::Dimension;
-                    let mut engine = eclexia_runtime::ShadowPriceEngine::new();
-                    // Default budgets (from RuntimeConfig defaults)
-                    let budgets = [
-                        ("energy", Dimension::energy(), 1000.0),
-                        ("time", Dimension::time(), 1.0),
-                        ("memory", Dimension::memory(), 1024.0),
-                        ("carbon", Dimension::carbon(), 100.0),
-                    ];
-                    for (name, dim, budget) in &budgets {
-                        let usage = resources.get(*name).copied().unwrap_or(0.0);
-                        if usage > 0.0 {
-                            engine.add_constraint(eclexia_runtime::ResourceConstraint {
-                                name: smol_str::SmolStr::new(*name),
-                                dimension: *dim,
-                                budget: *budget,
-                                usage,
-                            });
-                        }
-                    }
-                    if engine.constraint_count() > 0 {
-                        let result = engine.compute();
-                        println!("\n--- Dynamic Shadow Prices (from resource usage) ---");
-                        for (name, price) in &result.prices {
-                            println!("  λ_{} = {:.6}{}", name, price,
-                                if result.converged { "" } else { " (not converged)" });
-                        }
+            if carbon_report {
+                let totals = vm.get_resource_usage();
+                println!("\n--- Carbon Report ---");
+                if totals.is_empty() {
+                    println!("  No resource usage tracked");
+                } else {
+                    for (name, amount) in &totals {
+                        println!("  {}: {:.4}", name, amount);
                     }
                 }
             }
 
+            if observe_shadow {
+                let computed_prices = runtime.refresh_shadow_prices_from_usage();
+                if computed_prices.is_empty() {
+                    use eclexia_ast::dimension::Dimension;
+                    let energy = runtime
+                        .get_shadow_price(&smol_str::SmolStr::new("energy"), Dimension::energy());
+                    let time = runtime
+                        .get_shadow_price(&smol_str::SmolStr::new("time"), Dimension::time());
+                    let carbon = runtime
+                        .get_shadow_price(&smol_str::SmolStr::new("carbon"), Dimension::carbon());
+                    println!(
+                        "Shadow price observation: λ_energy={:.6}, λ_time={:.6}, λ_carbon={:.6}",
+                        energy, time, carbon
+                    );
+                } else {
+                    println!("\n--- Dynamic Shadow Prices (from runtime metrics) ---");
+                    for (name, dimension, price) in &computed_prices {
+                        println!("  {} ({:?}) = {:.6}", name, dimension, price);
+                    }
+                }
+            }
+
+            if let Some(sample) = runtime.capture_system_metrics() {
+                println!("\n--- System Power Sample ---");
+                println!("  Energy: {:.4} J", sample.energy_joules);
+                println!("  Duration: {:.4} s", sample.duration_secs);
+                println!("  Carbon: {:.4} gCO2e", sample.carbon_gco2e);
+            } else if !PowerMetrics::is_available() {
+                println!("\n--- System Power Sample ---");
+                println!("  RAPL energy counter not available on this host");
+            }
+
             Ok(())
         }
-        Err(e) => {
-            Err(miette::miette!("VM error: {}", e))
-        }
+        Err(e) => Err(miette::miette!("VM error: {}", e)),
     }
 }
 
@@ -553,6 +642,15 @@ pub fn fmt(inputs: &[std::path::PathBuf], check: bool) -> miette::Result<()> {
     }
 }
 
+/// Serve the runtime health endpoints for Kubernetes probes.
+pub fn serve_health(bind: &str) -> miette::Result<()> {
+    let runtime = Arc::new(Mutex::new(Runtime::new()));
+    let server = HealthServer::new(bind, runtime);
+    server
+        .run()
+        .map_err(|err| miette::miette!("health server failed: {}", err))
+}
+
 /// Sanitize a project name to prevent path traversal attacks.
 fn sanitize_project_name(name: &str) -> miette::Result<&str> {
     // Reject empty names
@@ -567,12 +665,16 @@ fn sanitize_project_name(name: &str) -> miette::Result<&str> {
 
     // Reject path traversal sequences
     if name.contains("..") {
-        return Err(miette::miette!("Project name cannot contain '..' (path traversal)"));
+        return Err(miette::miette!(
+            "Project name cannot contain '..' (path traversal)"
+        ));
     }
 
     // Reject path separators (require simple names)
     if name.contains('/') || name.contains('\\') {
-        return Err(miette::miette!("Project name cannot contain path separators"));
+        return Err(miette::miette!(
+            "Project name cannot contain path separators"
+        ));
     }
 
     // Reject null bytes
@@ -595,7 +697,8 @@ pub fn init(name: Option<&str>) -> miette::Result<()> {
     std::fs::create_dir_all(format!("{}/src", project_name)).into_diagnostic()?;
 
     // Create eclexia.toml
-    let config = format!(r#"# SPDX-License-Identifier: MIT
+    let config = format!(
+        r#"# SPDX-License-Identifier: MIT
 # Eclexia project configuration
 
 [package]
@@ -609,7 +712,9 @@ edition = "2025"
 [resources]
 default-energy-budget = "1000J"
 default-carbon-budget = "100gCO2e"
-"#, project_name);
+"#,
+        project_name
+    );
 
     std::fs::write(format!("{}/eclexia.toml", project_name), config).into_diagnostic()?;
 
@@ -652,8 +757,16 @@ pub fn new_project(name: &str, template: &str) -> miette::Result<()> {
     let name = sanitize_project_name(name)?;
 
     let templates = [
-        "bin", "lib", "web", "cli", "mcp", "ssg", "lsp",
-        "tool", "framework", "db-connector",
+        "bin",
+        "lib",
+        "web",
+        "cli",
+        "mcp",
+        "ssg",
+        "lsp",
+        "tool",
+        "framework",
+        "db-connector",
     ];
 
     if !templates.contains(&template) {
@@ -730,7 +843,8 @@ fn mint_common_files(name: &str, template: &str) -> miette::Result<()> {
     std::fs::write(format!("{}/.gitignore", name), gitignore).into_diagnostic()?;
 
     // README
-    let readme = format!("# {}\n\n\
+    let readme = format!(
+        "# {}\n\n\
         An Eclexia {} project.\n\n\
         ## Getting Started\n\n\
         ```bash\n\
@@ -738,7 +852,8 @@ fn mint_common_files(name: &str, template: &str) -> miette::Result<()> {
         ```\n\n\
         ## License\n\n\
         PMPL-1.0-or-later\n",
-        name, template);
+        name, template
+    );
     std::fs::write(format!("{}/README.md", name), readme).into_diagnostic()?;
 
     // eclexia.toml (template-aware)
@@ -763,7 +878,9 @@ fn mint_common_files(name: &str, template: &str) -> miette::Result<()> {
         [resources]\n\
         default-energy-budget = \"1000J\"\n\
         default-carbon-budget = \"100gCO2e\"\n",
-        name = name, template = template, output_type = output_type
+        name = name,
+        template = template,
+        output_type = output_type
     );
     std::fs::write(format!("{}/eclexia.toml", name), config).into_diagnostic()?;
 
@@ -1345,7 +1462,8 @@ fn mint_db_connector(name: &str) -> miette::Result<()> {
         ||| Proof that port is in valid range.\n\
         export\n\
         validPort : (n : Nat) -> Dec (LTE 1 n, LTE n 65535)\n",
-        name = name, capitalized = capitalize(name)
+        name = name,
+        capitalized = capitalize(name)
     );
     std::fs::write(format!("{}/src/abi/Types.idr", name), abi).into_diagnostic()?;
 
@@ -1369,7 +1487,7 @@ fn mint_db_connector(name: &str) -> miette::Result<()> {
         \x20   user: [*:0]const u8,\n\
         \x20   password: [*:0]const u8,\n\
         ) ?*ConnHandle {{\n\
-        \x20   // TODO: Link against database client library\n\
+        \x20   // NOTE: Link against database client library\n\
         \x20   _ = .{{ host, port, database, user, password }};\n\
         \x20   return null;\n\
         }}\n\n\
@@ -1383,7 +1501,8 @@ fn mint_db_connector(name: &str) -> miette::Result<()> {
         \x20   _ = .{{ handle, sql }};\n\
         \x20   return .ok;\n\
         }}\n",
-        name = name, name_under = name.replace('-', "_")
+        name = name,
+        name_under = name.replace('-', "_")
     );
     std::fs::write(format!("{}/ffi/zig/src/main.zig", name), ffi).into_diagnostic()?;
 
@@ -1626,7 +1745,8 @@ pub fn bench(filter: Option<&str>, energy_enabled: bool) -> miette::Result<()> {
             continue;
         }
 
-        let summary = bench_runner::run_all_benchmarks(&file, filter, ITERATIONS, true, energy_enabled);
+        let summary =
+            bench_runner::run_all_benchmarks(&file, filter, ITERATIONS, true, energy_enabled);
         total_summary.benchmarks_run += summary.benchmarks_run;
         total_summary.benchmarks_failed += summary.benchmarks_failed;
         total_summary.benchmarks_ignored += summary.benchmarks_ignored;
@@ -1634,7 +1754,10 @@ pub fn bench(filter: Option<&str>, energy_enabled: bool) -> miette::Result<()> {
 
     // Exit with error code if benchmarks failed
     if total_summary.benchmarks_failed > 0 {
-        return Err(miette::miette!("{} benchmarks failed", total_summary.benchmarks_failed));
+        return Err(miette::miette!(
+            "{} benchmarks failed",
+            total_summary.benchmarks_failed
+        ));
     }
 
     if total_summary.benchmarks_run == 0 {
@@ -1669,8 +1792,7 @@ pub fn install() -> miette::Result<()> {
         .wrap_err("Failed to parse package.toml")?;
 
     // Initialize package manager and install
-    let mut pm = PackageManager::new()
-        .map_err(|e| miette::miette!("{}", e))?;
+    let mut pm = PackageManager::new().map_err(|e| miette::miette!("{}", e))?;
 
     pm.install(&manifest)
         .map_err(|e| miette::miette!("{}", e))?;
@@ -1755,7 +1877,8 @@ pub fn debug(input: &std::path::Path) -> miette::Result<()> {
     // Generate bytecode
     use eclexia_codegen::Backend;
     let mut codegen = eclexia_codegen::BytecodeGenerator::new();
-    let module = codegen.generate(&mir_file)
+    let module = codegen
+        .generate(&mir_file)
         .map_err(|e| miette::miette!("Code generation failed: {}", e))?;
 
     // Create VM and debug session
@@ -1784,7 +1907,9 @@ pub fn debug(input: &std::path::Path) -> miette::Result<()> {
             "help" | "h" => {
                 println!("Commands:");
                 println!("  help, h           - Show this help");
-                println!("  break, b <f> <i>  - Set breakpoint at function index <f>, instruction <i>");
+                println!(
+                    "  break, b <f> <i>  - Set breakpoint at function index <f>, instruction <i>"
+                );
                 println!("  delete, d <f> <i> - Remove breakpoint");
                 println!("  list, l           - List breakpoints");
                 println!("  clear, c          - Clear all breakpoints");
@@ -1841,32 +1966,28 @@ pub fn debug(input: &std::path::Path) -> miette::Result<()> {
                 session.clear_breakpoints();
                 println!("All breakpoints cleared");
             }
-            "step" | "s" => {
-                match session.step() {
-                    Ok(()) => println!("{}", session.get_current_instruction()),
-                    Err(e) => println!("Error: {}", e),
-                }
-            }
-            "continue" | "r" => {
-                match session.continue_execution() {
-                    Ok(result) => {
-                        use eclexia_debugger::ContinueResult;
-                        match result {
-                            ContinueResult::Breakpoint(f, i) => {
-                                println!("Hit breakpoint at {}:{}", f, i);
-                                println!("{}", session.get_current_instruction());
-                            }
-                            ContinueResult::Finished(val) => {
-                                println!("Program finished: {}", val);
-                            }
-                            ContinueResult::Error(e) => {
-                                println!("Error: {}", e);
-                            }
+            "step" | "s" => match session.step() {
+                Ok(()) => println!("{}", session.get_current_instruction()),
+                Err(e) => println!("Error: {}", e),
+            },
+            "continue" | "r" => match session.continue_execution() {
+                Ok(result) => {
+                    use eclexia_debugger::ContinueResult;
+                    match result {
+                        ContinueResult::Breakpoint(f, i) => {
+                            println!("Hit breakpoint at {}:{}", f, i);
+                            println!("{}", session.get_current_instruction());
+                        }
+                        ContinueResult::Finished(val) => {
+                            println!("Program finished: {}", val);
+                        }
+                        ContinueResult::Error(e) => {
+                            println!("Error: {}", e);
                         }
                     }
-                    Err(e) => println!("Error: {}", e),
                 }
-            }
+                Err(e) => println!("Error: {}", e),
+            },
             "stack" => {
                 println!("{}", session.inspect_stack());
             }
@@ -1901,7 +2022,11 @@ pub fn debug(input: &std::path::Path) -> miette::Result<()> {
 }
 
 /// Generate documentation for Eclexia source files
-pub fn doc(inputs: &[std::path::PathBuf], output_dir: &std::path::Path, format: &str) -> miette::Result<()> {
+pub fn doc(
+    inputs: &[std::path::PathBuf],
+    output_dir: &std::path::Path,
+    format: &str,
+) -> miette::Result<()> {
     use eclexia_doc::DocGenerator;
 
     std::fs::create_dir_all(output_dir)
@@ -1917,7 +2042,10 @@ pub fn doc(inputs: &[std::path::PathBuf], output_dir: &std::path::Path, format: 
         let (file, parse_errors) = eclexia_parser::parse(&source);
 
         if !parse_errors.is_empty() {
-            eprintln!("Warning: {} has parse errors, documentation may be incomplete", input.display());
+            eprintln!(
+                "Warning: {} has parse errors, documentation may be incomplete",
+                input.display()
+            );
         }
 
         // Generate documentation
@@ -1933,7 +2061,10 @@ pub fn doc(inputs: &[std::path::PathBuf], output_dir: &std::path::Path, format: 
             "html" => generator.generate_html(module_name),
             "markdown" | "md" => generator.generate_markdown(module_name),
             _ => {
-                return Err(miette::miette!("Unknown format: {}. Use 'html' or 'markdown'", format));
+                return Err(miette::miette!(
+                    "Unknown format: {}. Use 'html' or 'markdown'",
+                    format
+                ));
             }
         };
 
@@ -1970,10 +2101,18 @@ pub fn watch(path: &Path, debounce_ms: u64) -> miette::Result<()> {
         .collect();
 
     if ecl_files.is_empty() {
-        return Err(miette::miette!("No .ecl files found in {}", watch_path.display()));
+        return Err(miette::miette!(
+            "No .ecl files found in {}",
+            watch_path.display()
+        ));
     }
 
-    println!("Watching {} file(s) in {} (debounce: {}ms)", ecl_files.len(), watch_path.display(), debounce_ms);
+    println!(
+        "Watching {} file(s) in {} (debounce: {}ms)",
+        ecl_files.len(),
+        watch_path.display(),
+        debounce_ms
+    );
     println!("Press Ctrl+C to stop.\n");
 
     // Initial compilation
@@ -1990,25 +2129,33 @@ pub fn watch(path: &Path, debounce_ms: u64) -> miette::Result<()> {
     use std::sync::mpsc;
     let (tx, rx) = mpsc::channel::<notify::Event>();
 
-    let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-        if let Ok(event) = res {
-            if matches!(event.kind,
-                notify::EventKind::Modify(_) | notify::EventKind::Create(_) | notify::EventKind::Remove(_)
-            ) {
-                let _ = tx.send(event);
+    let mut watcher =
+        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+            if let Ok(event) = res {
+                if matches!(
+                    event.kind,
+                    notify::EventKind::Modify(_)
+                        | notify::EventKind::Create(_)
+                        | notify::EventKind::Remove(_)
+                ) {
+                    let _ = tx.send(event);
+                }
             }
-        }
-    }).into_diagnostic().wrap_err("Failed to create file watcher")?;
+        })
+        .into_diagnostic()
+        .wrap_err("Failed to create file watcher")?;
 
     use notify::Watcher;
-    watcher.watch(&watch_path, notify::RecursiveMode::Recursive)
+    watcher
+        .watch(&watch_path, notify::RecursiveMode::Recursive)
         .into_diagnostic()
         .wrap_err_with(|| format!("Failed to watch {}", watch_path.display()))?;
 
     // Event loop with debouncing
     loop {
         let first_event = rx.recv().into_diagnostic()?;
-        let mut changed: std::collections::HashSet<std::path::PathBuf> = std::collections::HashSet::new();
+        let mut changed: std::collections::HashSet<std::path::PathBuf> =
+            std::collections::HashSet::new();
         for p in &first_event.paths {
             if p.extension().and_then(|e| e.to_str()) == Some("ecl") {
                 changed.insert(p.clone());
@@ -2052,23 +2199,32 @@ pub fn watch(path: &Path, debounce_ms: u64) -> miette::Result<()> {
 
 /// Check a single file (parse + type check). Returns Ok or error message.
 fn check_file(file_path: &Path) -> Result<(), String> {
-    let source = std::fs::read_to_string(file_path)
-        .map_err(|e| format!("read error: {}", e))?;
+    let source = std::fs::read_to_string(file_path).map_err(|e| format!("read error: {}", e))?;
 
     let (file, parse_errors) = eclexia_parser::parse(&source);
     if !parse_errors.is_empty() {
-        let msgs: Vec<String> = parse_errors.iter()
+        let msgs: Vec<String> = parse_errors
+            .iter()
             .map(|e| e.format_with_source(&source))
             .collect();
-        return Err(format!("{} parse error(s):\n    {}", parse_errors.len(), msgs.join("\n    ")));
+        return Err(format!(
+            "{} parse error(s):\n    {}",
+            parse_errors.len(),
+            msgs.join("\n    ")
+        ));
     }
 
     let type_errors = eclexia_typeck::check(&file);
     if !type_errors.is_empty() {
-        let msgs: Vec<String> = type_errors.iter()
+        let msgs: Vec<String> = type_errors
+            .iter()
             .map(|e| e.format_with_source(&source))
             .collect();
-        return Err(format!("{} type error(s):\n    {}", type_errors.len(), msgs.join("\n    ")));
+        return Err(format!(
+            "{} type error(s):\n    {}",
+            type_errors.len(),
+            msgs.join("\n    ")
+        ));
     }
 
     Ok(())
@@ -2100,7 +2256,10 @@ pub fn disasm(input: &Path) -> miette::Result<()> {
         for err in &parse_errors {
             eprintln!("  {}", err.format_with_source(&source));
         }
-        return Err(miette::miette!("Parsing failed with {} errors", parse_errors.len()));
+        return Err(miette::miette!(
+            "Parsing failed with {} errors",
+            parse_errors.len()
+        ));
     }
 
     // Type check
@@ -2110,7 +2269,10 @@ pub fn disasm(input: &Path) -> miette::Result<()> {
         for err in &type_errors {
             eprintln!("  {}", err.format_with_source(&source));
         }
-        return Err(miette::miette!("Type checking failed with {} errors", type_errors.len()));
+        return Err(miette::miette!(
+            "Type checking failed with {} errors",
+            type_errors.len()
+        ));
     }
 
     // Lower to HIR -> MIR -> Bytecode
@@ -2119,14 +2281,19 @@ pub fn disasm(input: &Path) -> miette::Result<()> {
 
     use eclexia_codegen::Backend;
     let mut codegen = eclexia_codegen::BytecodeGenerator::new();
-    let module = codegen.generate(&mir_file)
+    let module = codegen
+        .generate(&mir_file)
         .map_err(|e| miette::miette!("Code generation failed: {}", e))?;
 
     // Display disassembly
     println!("; Eclexia bytecode disassembly: {}", input.display());
-    println!("; {} function(s), {} string(s), {} integer(s), {} float(s)",
-        module.functions.len(), module.strings.len(),
-        module.integers.len(), module.floats.len());
+    println!(
+        "; {} function(s), {} string(s), {} integer(s), {} float(s)",
+        module.functions.len(),
+        module.strings.len(),
+        module.integers.len(),
+        module.floats.len()
+    );
 
     if let Some(entry) = module.entry_point {
         println!("; entry point: function #{}", entry);
@@ -2163,8 +2330,10 @@ pub fn disasm(input: &Path) -> miette::Result<()> {
     // Functions
     for (func_idx, func) in module.functions.iter().enumerate() {
         println!("; === Function #{}: {} ===", func_idx, func.name);
-        println!(";   params: {}, locals: {}, return: {:?}",
-            func.param_count, func.local_count, func.return_ty);
+        println!(
+            ";   params: {}, locals: {}, return: {:?}",
+            func.param_count, func.local_count, func.return_ty
+        );
 
         if func.is_adaptive {
             println!(";   [adaptive]");
@@ -2187,12 +2356,19 @@ pub fn disasm(input: &Path) -> miette::Result<()> {
         println!();
 
         for (offset, instr) in func.instructions.iter().enumerate() {
-            let label_marker = func.labels.iter()
+            let label_marker = func
+                .labels
+                .iter()
                 .find(|(_, &off)| off == offset)
                 .map(|(name, _)| format!(" <{}>", name))
                 .unwrap_or_default();
 
-            println!("  {:04}{:16} {}", offset, label_marker, format_instruction(instr, &module));
+            println!(
+                "  {:04}{:16} {}",
+                offset,
+                label_marker,
+                format_instruction(instr, &module)
+            );
         }
 
         println!();
@@ -2202,7 +2378,10 @@ pub fn disasm(input: &Path) -> miette::Result<()> {
 }
 
 /// Format a single bytecode instruction for display.
-fn format_instruction(instr: &eclexia_codegen::bytecode::Instruction, module: &eclexia_codegen::bytecode::BytecodeModule) -> String {
+fn format_instruction(
+    instr: &eclexia_codegen::bytecode::Instruction,
+    module: &eclexia_codegen::bytecode::BytecodeModule,
+) -> String {
     use eclexia_codegen::bytecode::Instruction;
 
     match instr {
@@ -2211,7 +2390,11 @@ fn format_instruction(instr: &eclexia_codegen::bytecode::Instruction, module: &e
         Instruction::PushFloat(f) => format!("push_float     {}", f),
         Instruction::PushBool(b) => format!("push_bool      {}", b),
         Instruction::PushString(idx) => {
-            let s = module.strings.get(*idx).map(|s| s.as_str()).unwrap_or("???");
+            let s = module
+                .strings
+                .get(*idx)
+                .map(|s| s.as_str())
+                .unwrap_or("???");
             format!("push_string    [{}] {:?}", idx, s)
         }
         Instruction::PushUnit => "push_unit".to_string(),
@@ -2278,13 +2461,21 @@ fn format_instruction(instr: &eclexia_codegen::bytecode::Instruction, module: &e
 
         // Field/index
         Instruction::FieldAccess(name) => format!("field_access   .{}", name),
+        Instruction::SetField(name) => format!("set_field      .{}", name),
         Instruction::IndexAccess => "index_access".to_string(),
+        Instruction::SetIndex => "set_index".to_string(),
 
         // Resources
-        Instruction::TrackResource { resource, dimension } => {
+        Instruction::TrackResource {
+            resource,
+            dimension,
+        } => {
             format!("track_resource {} ({:?})", resource, dimension)
         }
-        Instruction::ShadowPriceHook { resource, dimension } => {
+        Instruction::ShadowPriceHook {
+            resource,
+            dimension,
+        } => {
             format!("shadow_hook    {} ({:?})", resource, dimension)
         }
 

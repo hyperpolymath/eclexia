@@ -439,11 +439,7 @@ pub enum ImplItem {
         attributes: Vec<Attribute>,
     },
     /// Associated type definition
-    AssocType {
-        span: Span,
-        name: Ident,
-        ty: TypeId,
-    },
+    AssocType { span: Span, name: Ident, ty: TypeId },
     /// Associated constant definition
     AssocConst {
         span: Span,
@@ -758,10 +754,7 @@ pub enum StmtKind {
         value: ExprId,
     },
     /// Assignment statement (target can be field/index expr)
-    Assign {
-        target: ExprId,
-        value: ExprId,
-    },
+    Assign { target: ExprId, value: ExprId },
     /// Expression statement
     Expr(ExprId),
     /// Return statement
@@ -775,19 +768,14 @@ pub enum StmtKind {
         body: Block,
     },
     /// Infinite loop
-    Loop {
-        label: Option<Ident>,
-        body: Block,
-    },
+    Loop { label: Option<Ident>, body: Block },
     /// Break statement
     Break {
         label: Option<Ident>,
         value: Option<ExprId>,
     },
     /// Continue statement
-    Continue {
-        label: Option<Ident>,
-    },
+    Continue { label: Option<Ident> },
     /// Error placeholder for resilient parsing
     Error,
 }
@@ -859,10 +847,7 @@ pub enum ExprKind {
     /// Resource literal (e.g., 100J, 5ms, 10gCO2e)
     Resource(ResourceAmount),
     /// Type cast (e.g., x as T)
-    Cast {
-        expr: ExprId,
-        target_ty: TypeId,
-    },
+    Cast { expr: ExprId, target_ty: TypeId },
     /// Try operator (expr?)
     Try(ExprId),
     /// Borrow (&expr or &mut expr)
@@ -876,7 +861,10 @@ pub enum ExprKind {
     /// Spawn expression (spawn { ... } or spawn expr)
     Spawn(ExprId),
     /// Channel creation (chan<T>() or chan<T>(capacity))
-    Channel { elem_ty: Option<TypeId>, capacity: Option<ExprId> },
+    Channel {
+        elem_ty: Option<TypeId>,
+        capacity: Option<ExprId>,
+    },
     /// Send on channel (send(ch, value))
     Send { channel: ExprId, value: ExprId },
     /// Receive from channel (recv(ch))
@@ -898,9 +886,7 @@ pub enum ExprKind {
         value: Option<ExprId>,
     },
     /// Continue as expression
-    ContinueExpr {
-        label: Option<Ident>,
-    },
+    ContinueExpr { label: Option<Ident> },
     /// Path expression (e.g., Foo::bar)
     PathExpr(Vec<Ident>),
     /// Macro invocation (name!(args))
@@ -975,10 +961,7 @@ pub enum Pattern {
     /// Rest pattern (..)
     Rest,
     /// Binding pattern (name @ pattern)
-    Binding {
-        name: Ident,
-        pattern: Box<Pattern>,
-    },
+    Binding { name: Ident, pattern: Box<Pattern> },
     /// Reference pattern (&pat or &mut pat)
     Reference {
         pattern: Box<Pattern>,
@@ -1104,7 +1087,10 @@ pub enum TypeKind {
     /// Array type with optional size
     Array { elem: TypeId, size: Option<usize> },
     /// Resource type with dimension
-    Resource { base: Ident, dimension: dimension::Dimension },
+    Resource {
+        base: Ident,
+        dimension: dimension::Dimension,
+    },
     /// Reference type (&T or &mut T)
     Reference { ty: TypeId, mutable: bool },
     /// Optional type (T?)

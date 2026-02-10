@@ -34,8 +34,8 @@
 //! - Reverse dependency lookup for incremental recompilation
 //! - Cycle detection
 
-pub mod interface;
 pub mod dep_graph;
+pub mod interface;
 pub mod parallel;
 
 use std::path::{Path, PathBuf};
@@ -199,11 +199,15 @@ impl ModuleResolver {
                         continue;
                     }
                 }
-                let Some(fname) = path.file_name() else { continue };
+                let Some(fname) = path.file_name() else {
+                    continue;
+                };
                 let new_prefix = relative_prefix.join(fname);
                 self.discover_recursive(&path, &new_prefix, modules)?;
             } else if path.extension().and_then(|e| e.to_str()) == Some("ecl") {
-                let Some(fname) = path.file_name() else { continue };
+                let Some(fname) = path.file_name() else {
+                    continue;
+                };
                 let relative = relative_prefix.join(fname);
                 if let Some(module_id) = ModuleId::from_file_path(&relative) {
                     self.resolved
@@ -256,7 +260,10 @@ mod tests {
     #[test]
     fn test_module_id_to_file_path() {
         let id = ModuleId::new("std.collections.hashmap");
-        assert_eq!(id.to_file_path(), PathBuf::from("std/collections/hashmap.ecl"));
+        assert_eq!(
+            id.to_file_path(),
+            PathBuf::from("std/collections/hashmap.ecl")
+        );
     }
 
     #[test]

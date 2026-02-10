@@ -61,11 +61,7 @@ fn has_ignore_attribute(attributes: &[Attribute]) -> bool {
 }
 
 /// Run a single test function.
-pub fn run_test(
-    file: &SourceFile,
-    test: &TestFunction,
-    verbose: bool,
-) -> TestResult {
+pub fn run_test(file: &SourceFile, test: &TestFunction, verbose: bool) -> TestResult {
     if has_ignore_attribute(&test.attributes) {
         if verbose {
             println!("test {} ... ignored", test.name);
@@ -123,7 +119,9 @@ pub fn run_test(
             if verbose {
                 println!("test {} ... ok ({:.2}ms)", test.name, duration);
             }
-            TestResult::Passed { duration_ms: duration }
+            TestResult::Passed {
+                duration_ms: duration,
+            }
         }
         Ok(VmValue::Bool(false)) => {
             let duration = start.elapsed().as_secs_f64() * 1000.0;
@@ -159,11 +157,7 @@ pub fn run_test(
 }
 
 /// Run all tests and return summary.
-pub fn run_all_tests(
-    file: &SourceFile,
-    filter: Option<&str>,
-    verbose: bool,
-) -> TestSummary {
+pub fn run_all_tests(file: &SourceFile, filter: Option<&str>, verbose: bool) -> TestSummary {
     let tests = collect_tests(file);
 
     let filtered_tests: Vec<_> = if let Some(pattern) = filter {
@@ -203,7 +197,8 @@ pub fn run_all_tests(
     }
 
     // Print summary
-    println!("\ntest result: {}. {} passed; {} failed; {} ignored; finished in {:.2}s\n",
+    println!(
+        "\ntest result: {}. {} passed; {} failed; {} ignored; finished in {:.2}s\n",
         if summary.failed == 0 { "ok" } else { "FAILED" },
         summary.passed,
         summary.failed,

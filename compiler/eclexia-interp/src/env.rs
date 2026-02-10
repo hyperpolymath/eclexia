@@ -66,7 +66,10 @@ impl Environment {
             let inner = self.inner.borrow();
             if inner.bindings.contains_key(name) {
                 drop(inner);
-                self.inner.borrow_mut().bindings.insert(SmolStr::new(name), value);
+                self.inner
+                    .borrow_mut()
+                    .bindings
+                    .insert(SmolStr::new(name), value);
                 return true;
             }
         }

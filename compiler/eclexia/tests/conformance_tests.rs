@@ -22,7 +22,14 @@ const KNOWN_RUNTIME_GAPS: &[(&str, &str)] = &[
 /// Run a valid test file (should succeed)
 fn run_valid_test(path: &Path) -> Result<(), String> {
     let output = Command::new("cargo")
-        .args(&["run", "--bin", "eclexia", "--", "run", path.to_str().unwrap()])
+        .args(&[
+            "run",
+            "--bin",
+            "eclexia",
+            "--",
+            "run",
+            path.to_str().unwrap(),
+        ])
         .output()
         .map_err(|e| format!("Failed to execute: {}", e))?;
 
@@ -39,7 +46,14 @@ fn run_valid_test(path: &Path) -> Result<(), String> {
 /// Run an invalid test file (should fail with error)
 fn run_invalid_test(path: &Path) -> Result<(), String> {
     let output = Command::new("cargo")
-        .args(&["run", "--bin", "eclexia", "--", "run", path.to_str().unwrap()])
+        .args(&[
+            "run",
+            "--bin",
+            "eclexia",
+            "--",
+            "run",
+            path.to_str().unwrap(),
+        ])
         .output()
         .map_err(|e| format!("Failed to execute: {}", e))?;
 
@@ -52,14 +66,23 @@ fn run_invalid_test(path: &Path) -> Result<(), String> {
     // parse errors, runtime errors, or other expected failures.
     let stderr = String::from_utf8_lossy(&output.stderr);
     let recognised_keywords = [
-        "resource", "constraint", "violation",       // resource system
-        "type", "mismatch", "Type",                  // type checker
-        "error", "Error",                            // general errors
-        "parse", "Parse",                            // parser errors
-        "overflow", "recursion",                     // runtime limits
-        "dimension", "Dimension",                    // dimensional analysis
-        "uninitialized", "undefined",                // semantic analysis
-        "division by zero",                          // arithmetic errors
+        "resource",
+        "constraint",
+        "violation", // resource system
+        "type",
+        "mismatch",
+        "Type", // type checker
+        "error",
+        "Error", // general errors
+        "parse",
+        "Parse", // parser errors
+        "overflow",
+        "recursion", // runtime limits
+        "dimension",
+        "Dimension", // dimensional analysis
+        "uninitialized",
+        "undefined",        // semantic analysis
+        "division by zero", // arithmetic errors
     ];
     if !recognised_keywords.iter().any(|kw| stderr.contains(kw)) {
         return Err(format!(

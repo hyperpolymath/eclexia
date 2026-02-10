@@ -73,7 +73,7 @@ impl Profiler {
         Self {
             active: Vec::new(),
             aggregates: HashMap::new(),
-            power_model_watts: 65.0, // typical laptop TDP
+            power_model_watts: 65.0,               // typical laptop TDP
             carbon_intensity_gco2e_per_kwh: 400.0, // global average
             enabled: true,
         }
@@ -173,7 +173,11 @@ impl Profiler {
                 call_count: agg.call_count,
             })
             .collect();
-        spans.sort_by(|a, b| b.wall_time_s.partial_cmp(&a.wall_time_s).unwrap_or(std::cmp::Ordering::Equal));
+        spans.sort_by(|a, b| {
+            b.wall_time_s
+                .partial_cmp(&a.wall_time_s)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         spans
     }
 

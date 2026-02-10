@@ -6,9 +6,11 @@
 use crate::builtins;
 use crate::env::Environment;
 use crate::error::{RuntimeError, RuntimeResult};
-use crate::value::{AdaptiveFunction, Function, FunctionBody, ResourceProvides, ResourceRequires, Solution, Value};
-use eclexia_ast::*;
+use crate::value::{
+    AdaptiveFunction, Function, FunctionBody, ResourceProvides, ResourceRequires, Solution, Value,
+};
 use eclexia_ast::TypeKind;
+use eclexia_ast::*;
 use smol_str::SmolStr;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -51,8 +53,8 @@ impl Interpreter {
             global,
             energy_used: 0.0,
             carbon_used: 0.0,
-            energy_budget: 1000.0,  // Default 1000J
-            carbon_budget: 100.0,   // Default 100gCO2e
+            energy_budget: 1000.0, // Default 1000J
+            carbon_budget: 100.0,  // Default 100gCO2e
             shadow_energy: 1.0,
             shadow_carbon: 1.0,
             shadow_latency: 1.0,
@@ -107,7 +109,12 @@ impl Interpreter {
 
                 // Source 1: constraint syntax (@requires: energy < 50J)
                 for constraint in &func.constraints {
-                    if let ConstraintKind::Resource { resource, op, amount } = &constraint.kind {
+                    if let ConstraintKind::Resource {
+                        resource,
+                        op,
+                        amount,
+                    } = &constraint.kind
+                    {
                         if matches!(op, CompareOp::Lt | CompareOp::Le) {
                             match resource.as_str() {
                                 "energy" => requires.energy = Some(amount.value),
@@ -125,7 +132,8 @@ impl Interpreter {
                     if attr.name.as_str() == "requires" {
                         for chunk in attr.args.chunks(2) {
                             if chunk.len() == 2 {
-                                let num_str: String = chunk[1].chars()
+                                let num_str: String = chunk[1]
+                                    .chars()
                                     .take_while(|c| c.is_ascii_digit() || *c == '.')
                                     .collect();
                                 if let Ok(val) = num_str.parse::<f64>() {
@@ -235,10 +243,7 @@ impl Interpreter {
                 let type_name = self.resolve_type_name(impl_block.self_ty, file);
                 for item in &impl_block.items {
                     match item {
-                        eclexia_ast::ImplItem::Method {
-                            sig,
-                            ..
-                        } => {
+                        eclexia_ast::ImplItem::Method { sig, .. } => {
                             let param_names: Vec<SmolStr> =
                                 sig.params.iter().map(|p| p.name.clone()).collect();
                             let func = Value::Function(Rc::new(Function {
@@ -259,9 +264,7 @@ impl Interpreter {
                             let qualified = SmolStr::new(format!("{}::{}", type_name, sig.name));
                             self.global.define(qualified, func.clone());
                         }
-                        eclexia_ast::ImplItem::AssocConst {
-                            name, value, ..
-                        } => {
+                        eclexia_ast::ImplItem::AssocConst { name, value, .. } => {
                             let val = self.eval_expr(*value, file, &self.global.clone())?;
                             let qualified = SmolStr::new(format!("{}::{}", type_name, name));
                             self.global.define(qualified, val);
@@ -322,7 +325,8 @@ impl Interpreter {
             }
             Item::MacroDef(m) => {
                 // Register macro as a named value in the environment
-                self.global.define(m.name.clone(), Value::Macro(Rc::new(m.clone())));
+                self.global
+                    .define(m.name.clone(), Value::Macro(Rc::new(m.clone())));
             }
             Item::Error(_) => {
                 // Parse error placeholder: silently skip
@@ -413,7 +417,12 @@ impl Interpreter {
                         if i < arr.len() {
                             Ok(arr[i].clone())
                         } else {
-                            Err(RuntimeError::IndexOutOfBounds { index: i, len: arr.len(), span: None, hint: None })
+                            Err(RuntimeError::IndexOutOfBounds {
+                                index: i,
+                                len: arr.len(),
+                                span: None,
+                                hint: None,
+                            })
                         }
                     }
                     (Value::Tuple(t), Some(i)) => {
@@ -421,7 +430,12 @@ impl Interpreter {
                         if i < t.len() {
                             Ok(t[i].clone())
                         } else {
-                            Err(RuntimeError::IndexOutOfBounds { index: i, len: t.len(), span: None, hint: None })
+                            Err(RuntimeError::IndexOutOfBounds {
+                                index: i,
+                                len: t.len(),
+                                span: None,
+                                hint: None,
+                            })
                         }
                     }
                     _ => Err(RuntimeError::type_error("array or tuple", arr.type_name())),
@@ -431,14 +445,17 @@ impl Interpreter {
             ExprKind::Field { expr, field } => {
                 let val = self.eval_expr(*expr, file, env)?;
                 match val {
-                    Value::Struct { name, fields } => fields
-                        .get(field)
-                        .cloned()
-                        .ok_or_else(|| RuntimeError::NoSuchField {
-                            struct_name: name.to_string(),
-                            field: field.to_string(),
-                            span: None, hint: None,
-                        }),
+                    Value::Struct { name, fields } => {
+                        fields
+                            .get(field)
+                            .cloned()
+                            .ok_or_else(|| RuntimeError::NoSuchField {
+                                struct_name: name.to_string(),
+                                field: field.to_string(),
+                                span: None,
+                                hint: None,
+                            })
+                    }
                     _ => Err(RuntimeError::type_error("struct", val.type_name())),
                 }
             }
@@ -454,9 +471,7 @@ impl Interpreter {
                 Ok(Value::Function(Rc::new(Function {
                     name: SmolStr::new("<lambda>"),
                     params: param_names,
-                    body: FunctionBody::Lambda {
-                        expr_id: *body,
-                    },
+                    body: FunctionBody::Lambda { expr_id: *body },
                     closure: env.clone(),
                 })))
             }
@@ -482,7 +497,11 @@ impl Interpreter {
                 Err(RuntimeError::custom("no matching pattern"))
             }
 
-            ExprKind::MethodCall { receiver, method, args } => {
+            ExprKind::MethodCall {
+                receiver,
+                method,
+                args,
+            } => {
                 let recv = self.eval_expr(*receiver, file, env)?;
                 let mut arg_values = vec![recv.clone()];
                 for arg in args {
@@ -538,28 +557,28 @@ impl Interpreter {
                             Value::Float(f) => Ok(Value::Int(*f as i64)),
                             Value::Bool(b) => Ok(Value::Int(if *b { 1 } else { 0 })),
                             Value::Char(c) => Ok(Value::Int(*c as i64)),
-                            Value::String(s) => s
-                                .parse::<i64>()
-                                .map(Value::Int)
-                                .map_err(|_| RuntimeError::custom(format!("cannot cast '{}' to Int", s))),
+                            Value::String(s) => s.parse::<i64>().map(Value::Int).map_err(|_| {
+                                RuntimeError::custom(format!("cannot cast '{}' to Int", s))
+                            }),
                             _ => Err(RuntimeError::type_error("numeric", val.type_name())),
                         },
                         "Float" | "f64" | "f32" => match &val {
                             Value::Float(_) => Ok(val),
                             Value::Int(n) => Ok(Value::Float(*n as f64)),
                             Value::Bool(b) => Ok(Value::Float(if *b { 1.0 } else { 0.0 })),
-                            Value::String(s) => s
-                                .parse::<f64>()
-                                .map(Value::Float)
-                                .map_err(|_| RuntimeError::custom(format!("cannot cast '{}' to Float", s))),
+                            Value::String(s) => s.parse::<f64>().map(Value::Float).map_err(|_| {
+                                RuntimeError::custom(format!("cannot cast '{}' to Float", s))
+                            }),
                             _ => Err(RuntimeError::type_error("numeric", val.type_name())),
                         },
                         "String" => Ok(Value::String(SmolStr::new(format!("{}", val)))),
                         "Bool" => Ok(Value::Bool(val.is_truthy())),
                         "Char" => match &val {
-                            Value::Int(n) => char::from_u32(*n as u32)
-                                .map(Value::Char)
-                                .ok_or_else(|| RuntimeError::custom(format!("invalid char code: {}", n))),
+                            Value::Int(n) => {
+                                char::from_u32(*n as u32).map(Value::Char).ok_or_else(|| {
+                                    RuntimeError::custom(format!("invalid char code: {}", n))
+                                })
+                            }
                             Value::Char(_) => Ok(val),
                             _ => Err(RuntimeError::type_error("Int or Char", val.type_name())),
                         },
@@ -575,7 +594,9 @@ impl Interpreter {
                 match cnt.as_int() {
                     Some(n) => {
                         let values = vec![val; n as usize];
-                        Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(values))))
+                        Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(
+                            values,
+                        ))))
                     }
                     None => Err(RuntimeError::type_error("integer", cnt.type_name())),
                 }
@@ -587,18 +608,21 @@ impl Interpreter {
                     Value::Some(v) => Ok(*v.clone()),
                     Value::None => Err(RuntimeError::custom("try operator (?) on None value")),
                     // Handle Result types: Ok(value) unwraps, Err(e) propagates
-                    Value::Struct { name, fields } if name.as_str() == "Ok" => {
-                        fields
-                            .get("0")
-                            .cloned()
-                            .ok_or_else(|| RuntimeError::custom("malformed Ok value"))
-                    }
+                    Value::Struct { name, fields } if name.as_str() == "Ok" => fields
+                        .get("_0")
+                        .or_else(|| fields.get("0"))
+                        .cloned()
+                        .ok_or_else(|| RuntimeError::custom("malformed Ok value")),
                     Value::Struct { name, fields } if name.as_str() == "Err" => {
                         let err_val = fields
-                            .get("0")
+                            .get("_0")
+                            .or_else(|| fields.get("0"))
                             .cloned()
                             .unwrap_or(Value::Unit);
-                        Err(RuntimeError::custom(format!("try operator (?) on Err: {}", err_val)))
+                        Err(RuntimeError::custom(format!(
+                            "try operator (?) on Err: {}",
+                            err_val
+                        )))
                     }
                     // For non-Option/Result types, pass through
                     _ => Ok(val),
@@ -621,12 +645,12 @@ impl Interpreter {
             }
 
             ExprKind::Await(expr) => {
-                // Await not yet implemented; evaluate inner expression
+                // Await is not modeled in the interpreter; evaluate inner expression.
                 self.eval_expr(*expr, file, env)
             }
 
             ExprKind::Handle { expr, .. } => {
-                // Effect handlers not yet implemented; evaluate inner expression
+                // Effect handlers are parsed but not executed; evaluate inner expression.
                 self.eval_expr(*expr, file, env)
             }
 
@@ -663,33 +687,52 @@ impl Interpreter {
             ExprKind::Error => Err(RuntimeError::custom("error expression")),
 
             // Concurrency expressions — not yet supported in interpreter
-            ExprKind::Spawn(_) => Err(RuntimeError::custom("spawn not yet supported in interpreter")),
-            ExprKind::Channel { .. } => Err(RuntimeError::custom("channels not yet supported in interpreter")),
-            ExprKind::Send { .. } => Err(RuntimeError::custom("send not yet supported in interpreter")),
-            ExprKind::Recv(_) => Err(RuntimeError::custom("recv not yet supported in interpreter")),
-            ExprKind::Select { .. } => Err(RuntimeError::custom("select not yet supported in interpreter")),
-            ExprKind::YieldExpr(_) => Err(RuntimeError::custom("yield not yet supported in interpreter")),
+            ExprKind::Spawn(_) => Err(RuntimeError::custom(
+                "spawn not yet supported in interpreter",
+            )),
+            ExprKind::Channel { .. } => Err(RuntimeError::custom(
+                "channels not yet supported in interpreter",
+            )),
+            ExprKind::Send { .. } => Err(RuntimeError::custom(
+                "send not yet supported in interpreter",
+            )),
+            ExprKind::Recv(_) => Err(RuntimeError::custom(
+                "recv not yet supported in interpreter",
+            )),
+            ExprKind::Select { .. } => Err(RuntimeError::custom(
+                "select not yet supported in interpreter",
+            )),
+            ExprKind::YieldExpr(_) => Err(RuntimeError::custom(
+                "yield not yet supported in interpreter",
+            )),
             ExprKind::MacroCall { name, args } => {
                 // Look up the macro definition
-                let macro_val = env.get(name)
+                let macro_val = env
+                    .get(name)
                     .or_else(|| self.global.get(name))
                     .ok_or_else(|| RuntimeError::undefined(name.to_string()))?;
 
                 if let Value::Macro(macro_def) = macro_val {
                     // Evaluate arguments
-                    let arg_values: Vec<Value> = args.iter()
+                    let arg_values: Vec<Value> = args
+                        .iter()
                         .map(|a| self.eval_expr(*a, file, env))
                         .collect::<RuntimeResult<Vec<_>>>()?;
 
                     if macro_def.rules.is_empty() {
-                        return Err(RuntimeError::custom(format!("macro '{}' has no rules", name)));
+                        return Err(RuntimeError::custom(format!(
+                            "macro '{}' has no rules",
+                            name
+                        )));
                     }
 
                     // Use the first rule (v0.1: single-rule macros)
                     let rule = &macro_def.rules[0];
 
                     // Collect metavariable names from the pattern
-                    let meta_names: Vec<SmolStr> = rule.pattern.iter()
+                    let meta_names: Vec<SmolStr> = rule
+                        .pattern
+                        .iter()
                         .filter_map(|t| match t {
                             MacroToken::MetaVar { name, .. } => Some(name.clone()),
                             _ => None,
@@ -699,7 +742,9 @@ impl Interpreter {
                     if meta_names.len() != arg_values.len() {
                         return Err(RuntimeError::custom(format!(
                             "macro '{}' expects {} arguments, got {}",
-                            name, meta_names.len(), arg_values.len()
+                            name,
+                            meta_names.len(),
+                            arg_values.len()
                         )));
                     }
 
@@ -717,7 +762,8 @@ impl Interpreter {
                     if !errors.is_empty() {
                         return Err(RuntimeError::custom(format!(
                             "macro '{}' expansion error: {}",
-                            name, errors[0].format_with_source(&source)
+                            name,
+                            errors[0].format_with_source(&source)
                         )));
                     }
 
@@ -738,10 +784,14 @@ impl Interpreter {
                             }
                         }
                     }
-                    Err(RuntimeError::custom(format!("macro '{}' expansion failed", name)))
+                    Err(RuntimeError::custom(format!(
+                        "macro '{}' expansion failed",
+                        name
+                    )))
                 } else {
                     // Not a macro - treat as function call
-                    let arg_values: Vec<Value> = args.iter()
+                    let arg_values: Vec<Value> = args
+                        .iter()
                         .map(|a| self.eval_expr(*a, file, env))
                         .collect::<RuntimeResult<Vec<_>>>()?;
                     self.call_value(&macro_val, &arg_values, file)
@@ -751,7 +801,11 @@ impl Interpreter {
     }
 
     /// Expand a macro template by substituting metavariable values.
-    fn expand_macro_template(&self, tokens: &[MacroToken], subst: &HashMap<SmolStr, Value>) -> String {
+    fn expand_macro_template(
+        &self,
+        tokens: &[MacroToken],
+        subst: &HashMap<SmolStr, Value>,
+    ) -> String {
         let mut result = String::new();
         for token in tokens {
             match token {
@@ -767,7 +821,11 @@ impl Interpreter {
                     }
                     result.push(' ');
                 }
-                MacroToken::Repetition { tokens: inner, separator: _, kind: _ } => {
+                MacroToken::Repetition {
+                    tokens: inner,
+                    separator: _,
+                    kind: _,
+                } => {
                     // For v0.1, just expand inner tokens once
                     let inner_expanded = self.expand_macro_template(inner, subst);
                     result.push_str(&inner_expanded);
@@ -800,7 +858,10 @@ impl Interpreter {
                 (Value::String(a), Value::String(b)) => {
                     Ok(Value::String(SmolStr::new(format!("{}{}", a, b))))
                 }
-                _ => Err(RuntimeError::type_error("numeric or string", lhs.type_name())),
+                _ => Err(RuntimeError::type_error(
+                    "numeric or string",
+                    lhs.type_name(),
+                )),
             },
             BinaryOp::Sub => match (&lhs, &rhs) {
                 (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
@@ -817,8 +878,14 @@ impl Interpreter {
                 _ => Err(RuntimeError::type_error("numeric", lhs.type_name())),
             },
             BinaryOp::Div => match (&lhs, &rhs) {
-                (_, Value::Int(0)) => Err(RuntimeError::DivisionByZero { span: None, hint: None }),
-                (_, Value::Float(f)) if *f == 0.0 => Err(RuntimeError::DivisionByZero { span: None, hint: None }),
+                (_, Value::Int(0)) => Err(RuntimeError::DivisionByZero {
+                    span: None,
+                    hint: None,
+                }),
+                (_, Value::Float(f)) if *f == 0.0 => Err(RuntimeError::DivisionByZero {
+                    span: None,
+                    hint: None,
+                }),
                 (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a / b)),
                 (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
                 (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 / b)),
@@ -899,14 +966,18 @@ impl Interpreter {
             BinaryOp::Range => match (&lhs, &rhs) {
                 (Value::Int(start), Value::Int(end)) => {
                     let values: Vec<Value> = (*start..*end).map(Value::Int).collect();
-                    Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(values))))
+                    Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(
+                        values,
+                    ))))
                 }
                 _ => Err(RuntimeError::type_error("integer", lhs.type_name())),
             },
             BinaryOp::RangeInclusive => match (&lhs, &rhs) {
                 (Value::Int(start), Value::Int(end)) => {
                     let values: Vec<Value> = (*start..=*end).map(Value::Int).collect();
-                    Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(values))))
+                    Ok(Value::Array(std::rc::Rc::new(std::cell::RefCell::new(
+                        values,
+                    ))))
                 }
                 _ => Err(RuntimeError::type_error("integer", lhs.type_name())),
             },
@@ -1005,7 +1076,11 @@ impl Interpreter {
                 }
                 Ok(())
             }
-            StmtKind::For { pattern, iter, body } => {
+            StmtKind::For {
+                pattern,
+                iter,
+                body,
+            } => {
                 let iterable = self.eval_expr(*iter, file, env)?;
                 match iterable {
                     Value::Array(arr) => {
@@ -1046,7 +1121,10 @@ impl Interpreter {
                         if env.assign(name.as_str(), val) {
                             Ok(())
                         } else {
-                            Err(RuntimeError::custom(format!("undefined variable: {}", name)))
+                            Err(RuntimeError::custom(format!(
+                                "undefined variable: {}",
+                                name
+                            )))
                         }
                     }
                     ExprKind::Field { expr, field } => {
@@ -1076,15 +1154,20 @@ impl Interpreter {
                                     arr[i] = val;
                                     Ok(())
                                 } else {
-                                    Err(RuntimeError::IndexOutOfBounds { index: i, len: arr.len(), span: None, hint: None })
+                                    Err(RuntimeError::IndexOutOfBounds {
+                                        index: i,
+                                        len: arr.len(),
+                                        span: None,
+                                        hint: None,
+                                    })
                                 }
                             }
                             _ => Err(RuntimeError::type_error("array", base.type_name())),
                         }
                     }
-                    _ => {
-                        Err(RuntimeError::custom("unsupported assignment target".to_string()))
-                    }
+                    _ => Err(RuntimeError::custom(
+                        "unsupported assignment target".to_string(),
+                    )),
                 }
             }
             StmtKind::Loop { body, .. } => {
@@ -1106,12 +1189,8 @@ impl Interpreter {
                 }
                 Ok(())
             }
-            StmtKind::Break { .. } => {
-                Err(RuntimeError::Break)
-            }
-            StmtKind::Continue { .. } => {
-                Err(RuntimeError::Continue)
-            }
+            StmtKind::Break { .. } => Err(RuntimeError::Break),
+            StmtKind::Continue { .. } => Err(RuntimeError::Continue),
             StmtKind::Error => {
                 // Parse error placeholder: evaluate to unit (no-op)
                 Ok(())
@@ -1151,7 +1230,8 @@ impl Interpreter {
                 if args.len() != func.params.len() {
                     return Err(RuntimeError::ArityMismatch {
                         expected: func.params.len(),
-                        got: args.len(), hint: None,
+                        got: args.len(),
+                        hint: None,
                     });
                 }
 
@@ -1180,7 +1260,10 @@ impl Interpreter {
                                             // Args are [resource, amount, resource, amount, ...]
                                             for chunk in attr.args.chunks(2) {
                                                 if let Some(resource_name) = chunk.first() {
-                                                    call_env.define(resource_name.clone(), Value::String(resource_name.clone()));
+                                                    call_env.define(
+                                                        resource_name.clone(),
+                                                        Value::String(resource_name.clone()),
+                                                    );
                                                 }
                                             }
                                         }
@@ -1193,10 +1276,20 @@ impl Interpreter {
 
                                     // Source 1: constraint syntax
                                     for constraint in &f.constraints {
-                                        if let ConstraintKind::Resource { resource, op, amount } = &constraint.kind {
-                                            call_env.define(resource.clone(), Value::String(resource.clone()));
+                                        if let ConstraintKind::Resource {
+                                            resource,
+                                            op,
+                                            amount,
+                                        } = &constraint.kind
+                                        {
+                                            call_env.define(
+                                                resource.clone(),
+                                                Value::String(resource.clone()),
+                                            );
                                             if matches!(op, CompareOp::Lt | CompareOp::Le) {
-                                                if resource.as_str() == "energy" { fn_energy_limit = Some(amount.value) }
+                                                if resource.as_str() == "energy" {
+                                                    fn_energy_limit = Some(amount.value)
+                                                }
                                             }
                                         }
                                     }
@@ -1208,11 +1301,17 @@ impl Interpreter {
                                                 if chunk.len() == 2 {
                                                     let resource_name = &chunk[0];
                                                     let amount_str = &chunk[1];
-                                                    call_env.define(resource_name.clone(), Value::String(resource_name.clone()));
+                                                    call_env.define(
+                                                        resource_name.clone(),
+                                                        Value::String(resource_name.clone()),
+                                                    );
                                                     if resource_name.as_str() == "energy" {
                                                         // Parse amount: "0J", "15J", "25J" etc.
-                                                        let num_str: String = amount_str.chars()
-                                                            .take_while(|c| c.is_ascii_digit() || *c == '.')
+                                                        let num_str: String = amount_str
+                                                            .chars()
+                                                            .take_while(|c| {
+                                                                c.is_ascii_digit() || *c == '.'
+                                                            })
                                                             .collect();
                                                         if let Ok(val) = num_str.parse::<f64>() {
                                                             fn_energy_limit = Some(val);
@@ -1281,7 +1380,8 @@ impl Interpreter {
                 if args.len() != func.params.len() {
                     return Err(RuntimeError::ArityMismatch {
                         expected: func.params.len(),
-                        got: args.len(), hint: None,
+                        got: args.len(),
+                        hint: None,
                     });
                 }
 
@@ -1296,7 +1396,8 @@ impl Interpreter {
 
                 if has_when {
                     // Use standard selection when @when clauses exist
-                    let solution_idx = self.select_solution(&func.solutions, &func.requires, file, &call_env)?;
+                    let solution_idx =
+                        self.select_solution(&func.solutions, &func.requires, file, &call_env)?;
                     let solution = &func.solutions[solution_idx];
 
                     eprintln!(
@@ -1408,7 +1509,8 @@ impl Interpreter {
 
             _ => Err(RuntimeError::NotCallable {
                 ty: callee.type_name().to_string(),
-                span: None, hint: None,
+                span: None,
+                hint: None,
             }),
         }
     }
@@ -1440,7 +1542,7 @@ impl Interpreter {
             if let Some(when_expr) = solution.when_expr {
                 match self.eval_expr(when_expr, file, env) {
                     Ok(Value::Bool(false)) => continue, // Skip this solution
-                    Ok(Value::Bool(true)) => {}        // Proceed to check this solution
+                    Ok(Value::Bool(true)) => {}         // Proceed to check this solution
                     Ok(v) => {
                         return Err(RuntimeError::custom(format!(
                             "@when clause must evaluate to Bool, got {}",
@@ -1497,7 +1599,11 @@ impl Interpreter {
                     if let Value::Struct { fields, .. } = &env_val {
                         if fields.is_empty() {
                             // Unit enum variant: compare against the value
-                            return if env_val == *value { Some(vec![]) } else { None };
+                            return if env_val == *value {
+                                Some(vec![])
+                            } else {
+                                None
+                            };
                         }
                     }
                 }
@@ -1600,7 +1706,11 @@ impl Interpreter {
                 }
                 None
             }
-            Pattern::Range { start, end, inclusive } => {
+            Pattern::Range {
+                start,
+                end,
+                inclusive,
+            } => {
                 // Match numeric ranges
                 let val_num = match value {
                     Value::Int(n) => Some(*n as f64),
@@ -1628,13 +1738,23 @@ impl Interpreter {
                                 _ => None,
                             };
                             match lit_val.and_then(|lv| lv.as_float()) {
-                                Some(e) => if *inclusive { v <= e } else { v < e },
+                                Some(e) => {
+                                    if *inclusive {
+                                        v <= e
+                                    } else {
+                                        v < e
+                                    }
+                                }
                                 None => false,
                             }
                         }
                         None => true,
                     };
-                    if start_ok && end_ok { Some(vec![]) } else { None }
+                    if start_ok && end_ok {
+                        Some(vec![])
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
@@ -1683,8 +1803,14 @@ impl Interpreter {
                     }
                 }
             }
-            Pattern::Struct { name: _, fields, .. } => {
-                if let Value::Struct { fields: struct_fields, .. } = value {
+            Pattern::Struct {
+                name: _, fields, ..
+            } => {
+                if let Value::Struct {
+                    fields: struct_fields,
+                    ..
+                } = value
+                {
                     for fp in fields {
                         if let Some(val) = struct_fields.get(&fp.name) {
                             if let Some(ref pat) = fp.pattern {
@@ -1840,10 +1966,7 @@ impl Interpreter {
                         let impl_type = self.resolve_type_name(impl_block.self_ty, file);
                         if impl_type == type_name {
                             for impl_item in &impl_block.items {
-                                if let eclexia_ast::ImplItem::Method {
-                                    sig, body, ..
-                                } = impl_item
-                                {
+                                if let eclexia_ast::ImplItem::Method { sig, body, .. } = impl_item {
                                     if sig.name == func.name {
                                         let r = self.eval_block(body, file, &call_env);
                                         self.call_depth -= 1;

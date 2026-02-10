@@ -82,7 +82,7 @@ impl<'a> Printer<'a> {
             Item::EffectDecl(decl) => self.format_effect_decl(decl, file),
             Item::StaticDecl(decl) => self.format_static_decl(decl, file),
             Item::ExternBlock(block) => self.format_extern_block(block, file),
-            Item::Error(_) => {} // Skip error items silently
+            Item::Error(_) => {}    // Skip error items silently
             Item::MacroDef(_) => {} // Skip macro definitions (not yet formatted)
         }
     }
@@ -267,7 +267,12 @@ impl<'a> Printer<'a> {
                     }
                     self.newline();
                 }
-                TraitItem::AssocType { name, bounds, default, .. } => {
+                TraitItem::AssocType {
+                    name,
+                    bounds,
+                    default,
+                    ..
+                } => {
                     self.write("type ");
                     self.write(name.as_str());
                     if !bounds.is_empty() {
@@ -286,7 +291,9 @@ impl<'a> Printer<'a> {
                     self.write(";");
                     self.newline();
                 }
-                TraitItem::AssocConst { name, ty, default, .. } => {
+                TraitItem::AssocConst {
+                    name, ty, default, ..
+                } => {
                     self.write("const ");
                     self.write(name.as_str());
                     self.write(": ");
@@ -328,7 +335,12 @@ impl<'a> Printer<'a> {
 
         for item in &block.items {
             match item {
-                ImplItem::Method { visibility, sig, body, .. } => {
+                ImplItem::Method {
+                    visibility,
+                    sig,
+                    body,
+                    ..
+                } => {
                     self.format_visibility(visibility);
                     self.write("fn ");
                     self.format_fn_sig(sig, file);
@@ -344,7 +356,9 @@ impl<'a> Printer<'a> {
                     self.write(";");
                     self.newline();
                 }
-                ImplItem::AssocConst { name, ty, value, .. } => {
+                ImplItem::AssocConst {
+                    name, ty, value, ..
+                } => {
                     self.write("const ");
                     self.write(name.as_str());
                     self.write(": ");
@@ -450,7 +464,9 @@ impl<'a> Printer<'a> {
                     self.write(";");
                     self.newline();
                 }
-                ExternItem::Static { mutable, name, ty, .. } => {
+                ExternItem::Static {
+                    mutable, name, ty, ..
+                } => {
                     if *mutable {
                         self.write("static mut ");
                     } else {
@@ -604,7 +620,12 @@ impl<'a> Printer<'a> {
         let stmt = &file.stmts[stmt_id];
 
         match &stmt.kind {
-            StmtKind::Let { pattern, mutable, ty, value } => {
+            StmtKind::Let {
+                pattern,
+                mutable,
+                ty,
+                value,
+            } => {
                 self.write("let ");
                 if *mutable {
                     self.write("mut ");
@@ -642,7 +663,11 @@ impl<'a> Printer<'a> {
                 self.write(" ");
                 self.format_block(body, file);
             }
-            StmtKind::For { pattern, iter, body } => {
+            StmtKind::For {
+                pattern,
+                iter,
+                body,
+            } => {
                 self.write("for ");
                 self.format_pattern(pattern);
                 self.write(" in ");
@@ -711,7 +736,11 @@ impl<'a> Printer<'a> {
                 }
                 self.write(")");
             }
-            ExprKind::MethodCall { receiver, method, args } => {
+            ExprKind::MethodCall {
+                receiver,
+                method,
+                args,
+            } => {
                 self.format_expr(*receiver, file);
                 self.write(".");
                 self.write(method.as_str());
@@ -724,7 +753,11 @@ impl<'a> Printer<'a> {
                 }
                 self.write(")");
             }
-            ExprKind::If { condition, then_branch, else_branch } => {
+            ExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 self.write("if ");
                 self.format_expr(*condition, file);
                 self.write(" ");
@@ -1027,7 +1060,11 @@ impl<'a> Printer<'a> {
                     self.format_pattern(pat);
                 }
             }
-            Pattern::Range { start, end, inclusive } => {
+            Pattern::Range {
+                start,
+                end,
+                inclusive,
+            } => {
                 if let Some(s) = start {
                     self.format_pattern(s);
                 }

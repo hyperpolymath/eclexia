@@ -50,8 +50,7 @@ pub enum TaskState {
 }
 
 /// Resource budget for a task.
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct ResourceBudget {
     /// Maximum energy this task may consume (Joules). None = unlimited.
     pub energy_limit: Option<f64>,
@@ -60,7 +59,6 @@ pub struct ResourceBudget {
     /// Maximum memory this task may use (bytes). None = unlimited.
     pub memory_limit: Option<f64>,
 }
-
 
 /// Error returned when joining a task that panicked or was cancelled.
 #[derive(Debug)]
@@ -150,10 +148,7 @@ impl Task {
     /// The budget is advisory — it is tracked but not enforced at the
     /// OS level. Eclexia's runtime uses it for shadow price calculation
     /// and adaptive scheduling decisions.
-    pub fn spawn_with_budget<F>(
-        _budget: ResourceBudget,
-        future: F,
-    ) -> TaskHandle<F::Output>
+    pub fn spawn_with_budget<F>(_budget: ResourceBudget, future: F) -> TaskHandle<F::Output>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,

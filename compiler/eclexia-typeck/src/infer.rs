@@ -7,8 +7,8 @@
 
 use crate::{TypeChecker, TypeEnv};
 use eclexia_ast::types::{Ty, TypeVar};
-use smol_str::SmolStr;
 use rustc_hash::FxHashSet;
+use smol_str::SmolStr;
 
 impl TypeChecker<'_> {
     /// Generalize a type by abstracting free type variables into a ForAll.
@@ -65,9 +65,7 @@ impl TypeChecker<'_> {
                 set.insert(v);
                 set
             }
-            Ty::Named { args, .. } => {
-                args.iter().flat_map(|t| self.free_vars(t)).collect()
-            }
+            Ty::Named { args, .. } => args.iter().flat_map(|t| self.free_vars(t)).collect(),
             Ty::Function { params, ret } => {
                 let mut vars: FxHashSet<TypeVar> =
                     params.iter().flat_map(|p| self.free_vars(p)).collect();
@@ -86,18 +84,12 @@ impl TypeChecker<'_> {
                 }
                 free
             }
-            Ty::Resource { .. } | Ty::Primitive(_) | Ty::Error | Ty::Never => {
-                FxHashSet::default()
-            }
+            Ty::Resource { .. } | Ty::Primitive(_) | Ty::Error | Ty::Never => FxHashSet::default(),
         }
     }
 
     /// Substitute type variables in a type
-    fn substitute_vars(
-        &self,
-        ty: &Ty,
-        subst: &rustc_hash::FxHashMap<SmolStr, Ty>,
-    ) -> Ty {
+    fn substitute_vars(&self, ty: &Ty, subst: &rustc_hash::FxHashMap<SmolStr, Ty>) -> Ty {
         match ty {
             Ty::Var(v) => {
                 let name = SmolStr::new(format!("t{}", v.0));
@@ -105,7 +97,10 @@ impl TypeChecker<'_> {
             }
             Ty::Named { name, args } => Ty::Named {
                 name: name.clone(),
-                args: args.iter().map(|t| self.substitute_vars(t, subst)).collect(),
+                args: args
+                    .iter()
+                    .map(|t| self.substitute_vars(t, subst))
+                    .collect(),
             },
             Ty::Function { params, ret } => Ty::Function {
                 params: params

@@ -7,4 +7,4 @@ pub mod breakpoint;
 pub mod inspection;
 pub mod session;
 
-pub use session::{DebugSession, ContinueResult};
+pub use session::{ContinueResult, DebugSession};

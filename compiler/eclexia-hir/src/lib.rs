@@ -21,7 +21,7 @@ pub use lower::{lower_source_file, LoweringContext};
 
 use eclexia_ast::dimension::Dimension;
 use eclexia_ast::span::Span;
-use eclexia_ast::types::{Ty, PrimitiveTy};
+use eclexia_ast::types::{PrimitiveTy, Ty};
 use la_arena::{Arena, Idx};
 use smol_str::SmolStr;
 
@@ -73,15 +73,9 @@ pub enum Item {
     /// Constant definition
     Const(Const),
     /// Trait declaration (placeholder for future use)
-    TraitDecl {
-        span: Span,
-        name: SmolStr,
-    },
+    TraitDecl { span: Span, name: SmolStr },
     /// Impl block (placeholder for future use)
-    ImplBlock {
-        span: Span,
-        self_ty_name: SmolStr,
-    },
+    ImplBlock { span: Span, self_ty_name: SmolStr },
     /// Module declaration
     Module {
         span: Span,
@@ -270,17 +264,11 @@ pub struct TypeDef {
 #[derive(Debug, Clone)]
 pub enum TypeDefKind {
     /// Struct with named fields
-    Struct {
-        fields: Vec<Field>,
-    },
+    Struct { fields: Vec<Field> },
     /// Enum with variant constructors
-    Enum {
-        variants: Vec<Variant>,
-    },
+    Enum { variants: Vec<Variant> },
     /// Type alias pointing to another type
-    Alias {
-        target: Ty,
-    },
+    Alias { target: Ty },
 }
 
 /// Struct field
@@ -335,28 +323,20 @@ pub enum StmtKind {
         init: Option<ExprId>,
     },
     /// Assignment
-    Assign {
-        place: Place,
-        value: ExprId,
-    },
+    Assign { place: Place, value: ExprId },
     /// Expression statement
     Expr(ExprId),
     /// Return from function
     Return(Option<ExprId>),
     /// Infinite loop
-    InfiniteLoop {
-        label: Option<SmolStr>,
-        body: Body,
-    },
+    InfiniteLoop { label: Option<SmolStr>, body: Body },
     /// Break from loop
     Break {
         label: Option<SmolStr>,
         value: Option<ExprId>,
     },
     /// Continue loop
-    Continue {
-        label: Option<SmolStr>,
-    },
+    Continue { label: Option<SmolStr> },
     /// Error placeholder from resilient parsing
     Error,
 }
@@ -367,15 +347,9 @@ pub enum Place {
     /// Local variable
     Local(LocalId),
     /// Field access
-    Field {
-        base: Box<Place>,
-        field: SmolStr,
-    },
+    Field { base: Box<Place>, field: SmolStr },
     /// Index access
-    Index {
-        base: Box<Place>,
-        index: ExprId,
-    },
+    Index { base: Box<Place>, index: ExprId },
 }
 
 /// An expression
@@ -405,16 +379,10 @@ pub enum ExprKind {
     },
 
     /// Unary operation
-    Unary {
-        op: UnaryOp,
-        operand: ExprId,
-    },
+    Unary { op: UnaryOp, operand: ExprId },
 
     /// Function call
-    Call {
-        func: ExprId,
-        args: Vec<ExprId>,
-    },
+    Call { func: ExprId, args: Vec<ExprId> },
 
     /// If expression
     If {
@@ -424,10 +392,7 @@ pub enum ExprKind {
     },
 
     /// While loop
-    Loop {
-        condition: ExprId,
-        body: Body,
-    },
+    Loop { condition: ExprId, body: Body },
 
     /// Block expression
     Block(Body),
@@ -439,22 +404,13 @@ pub enum ExprKind {
     Array(Vec<ExprId>),
 
     /// Field access
-    Field {
-        expr: ExprId,
-        field: SmolStr,
-    },
+    Field { expr: ExprId, field: SmolStr },
 
     /// Index access
-    Index {
-        expr: ExprId,
-        index: ExprId,
-    },
+    Index { expr: ExprId, index: ExprId },
 
     /// Lambda function
-    Lambda {
-        params: Vec<Param>,
-        body: Body,
-    },
+    Lambda { params: Vec<Param>, body: Body },
 
     /// Struct construction
     Struct {
@@ -463,40 +419,25 @@ pub enum ExprKind {
     },
 
     /// Type cast
-    Cast {
-        expr: ExprId,
-        target_ty: Ty,
-    },
+    Cast { expr: ExprId, target_ty: Ty },
 
     /// Assignment
-    Assign {
-        target: LocalId,
-        value: ExprId,
-    },
+    Assign { target: LocalId, value: ExprId },
 
     /// Try operator (expr?)
     Try(ExprId),
 
     /// Borrow (&expr or &mut expr)
-    Borrow {
-        expr: ExprId,
-        mutable: bool,
-    },
+    Borrow { expr: ExprId, mutable: bool },
 
     /// Dereference (*expr)
     Deref(ExprId),
 
     /// Array repeat [value; count]
-    ArrayRepeat {
-        value: ExprId,
-        count: ExprId,
-    },
+    ArrayRepeat { value: ExprId, count: ExprId },
 
     /// Infinite loop as expression
-    InfiniteLoop {
-        label: Option<SmolStr>,
-        body: Body,
-    },
+    InfiniteLoop { label: Option<SmolStr>, body: Body },
 
     /// Return as expression
     ReturnExpr(Option<ExprId>),
@@ -508,9 +449,7 @@ pub enum ExprKind {
     },
 
     /// Continue as expression
-    ContinueExpr {
-        label: Option<SmolStr>,
-    },
+    ContinueExpr { label: Option<SmolStr> },
 }
 
 /// Literal value

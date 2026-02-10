@@ -27,14 +27,24 @@ impl LintRule for NegativeResourceRule {
         for item in &ctx.file.items {
             match item {
                 Item::Function(func) => {
-                    check_block_for_negative_resources(&func.body.stmts, ctx, &mut diagnostics, self);
+                    check_block_for_negative_resources(
+                        &func.body.stmts,
+                        ctx,
+                        &mut diagnostics,
+                        self,
+                    );
                     if let Some(expr_id) = func.body.expr {
                         check_expr_for_negative_resources(expr_id, ctx, &mut diagnostics, self);
                     }
                 }
                 Item::AdaptiveFunction(func) => {
                     for solution in &func.solutions {
-                        check_block_for_negative_resources(&solution.body.stmts, ctx, &mut diagnostics, self);
+                        check_block_for_negative_resources(
+                            &solution.body.stmts,
+                            ctx,
+                            &mut diagnostics,
+                            self,
+                        );
                         if let Some(expr_id) = solution.body.expr {
                             check_expr_for_negative_resources(expr_id, ctx, &mut diagnostics, self);
                         }

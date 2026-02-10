@@ -35,6 +35,9 @@ eclexia-comptime = { path = "../eclexia-comptime" }
 eclexia-effects = { path = "../eclexia-effects" }
 eclexia-specialize = { path = "../eclexia-specialize" }
 eclexia-modules = { path = "../eclexia-modules" }
+eclexia-wasm = { path = "../eclexia-wasm" }
+eclexia-cranelift = { path = "../eclexia-cranelift" }
+eclexia-llvm = { path = "../eclexia-llvm" }
 
 notify = { workspace = true }
 clap = { workspace = true }

@@ -516,29 +516,35 @@ pub struct ResourceLiteral {
     pub unit: SmolStr,
 }
 
+/// Parses a decimal integer string slice, removing underscores.
 fn parse_int(s: &str) -> i64 {
     s.replace('_', "").parse().unwrap_or(0)
 }
 
+/// Parses a hexadecimal integer string slice (e.g., "0xFF"), removing underscores.
 fn parse_hex(s: &str) -> i64 {
     let s = &s[2..]; // skip 0x/0X
     i64::from_str_radix(&s.replace('_', ""), 16).unwrap_or(0)
 }
 
+/// Parses an octal integer string slice (e.g., "0o77"), removing underscores.
 fn parse_octal(s: &str) -> i64 {
     let s = &s[2..]; // skip 0o/0O
     i64::from_str_radix(&s.replace('_', ""), 8).unwrap_or(0)
 }
 
+/// Parses a binary integer string slice (e.g., "0b1010"), removing underscores.
 fn parse_binary(s: &str) -> i64 {
     let s = &s[2..]; // skip 0b/0B
     i64::from_str_radix(&s.replace('_', ""), 2).unwrap_or(0)
 }
 
+/// Parses a floating-point number string slice, removing underscores.
 fn parse_float(s: &str) -> f64 {
     s.replace('_', "").parse().unwrap_or(0.0)
 }
 
+/// Parses a resource literal string slice (e.g., "100J", "5ms").
 fn parse_resource(s: &str) -> ResourceLiteral {
     // Find where the number ends and unit begins
     let unit_start = s
@@ -558,6 +564,7 @@ fn parse_resource(s: &str) -> ResourceLiteral {
     }
 }
 
+/// Parses a string literal, including processing escape sequences like `\n`, `\t`, `\xHH`, `\u{XXXX}`.
 fn parse_string(s: &str) -> SmolStr {
     // Remove quotes and process escapes
     let inner = &s[1..s.len() - 1];
@@ -625,6 +632,7 @@ fn parse_string(s: &str) -> SmolStr {
     SmolStr::new(&result)
 }
 
+/// Parses a character literal, including processing escape sequences.
 fn parse_char(s: &str) -> char {
     let inner = &s[1..s.len() - 1];
     let mut chars = inner.chars().peekable();
@@ -688,10 +696,14 @@ fn parse_char(s: &str) -> char {
 
 /// Check if a character is valid as the first character of an identifier (XID_Start).
 /// This includes ASCII letters, underscore, and Unicode letter/ideograph characters.
+/// Check if a character is valid as the first character of an identifier (XID_Start).
+/// This includes ASCII letters, underscore, and Unicode letter/ideograph characters.
 fn is_xid_start(c: char) -> bool {
     c == '_' || c.is_alphabetic()
 }
 
+/// Check if a character is valid in the continuation of an identifier (XID_Continue).
+/// This includes XID_Start characters plus digits.
 /// Check if a character is valid in the continuation of an identifier (XID_Continue).
 /// This includes XID_Start characters plus digits.
 fn is_xid_continue(c: char) -> bool {
@@ -699,12 +711,17 @@ fn is_xid_continue(c: char) -> bool {
 }
 
 /// Lexer for Eclexia source code.
+/// Lexer for Eclexia source code.
+///
+/// It wraps the `logos::Lexer` and provides methods for peeking and advancing
+/// tokens, as well as checking for EOF.
 pub struct Lexer<'src> {
     inner: logos::Lexer<'src, TokenKind>,
     peeked: Option<Token>,
 }
 
 impl<'src> Lexer<'src> {
+    /// Create a new lexer for the given source.
     /// Create a new lexer for the given source.
     pub fn new(source: &'src str) -> Self {
         Self {
@@ -714,6 +731,9 @@ impl<'src> Lexer<'src> {
     }
 
     /// Get the next token.
+    /// Get the next token.
+    ///
+    /// This consumes the peeked token if available, otherwise it advances the inner lexer.
     pub fn next(&mut self) -> Token {
         if let Some(token) = self.peeked.take() {
             return token;
@@ -726,13 +746,19 @@ impl<'src> Lexer<'src> {
             }
             Some(Err(())) => {
                 let span = self.inner.span();
-                Token::new(TokenKind::Error, Span::new(span.start as u32, span.end as u32))
+                Token::new(
+                    TokenKind::Error,
+                    Span::new(span.start as u32, span.end as u32),
+                )
             }
             None => Token::new(TokenKind::Eof, Span::empty(self.inner.span().end as u32)),
         }
     }
 
     /// Peek at the next token without consuming it.
+    /// Peek at the next token without consuming it.
+    ///
+    /// The peeked token is cached and returned on subsequent calls to `peek`.
     pub fn peek(&mut self) -> &Token {
         if self.peeked.is_none() {
             self.peeked = Some(self.next());
@@ -741,15 +767,18 @@ impl<'src> Lexer<'src> {
     }
 
     /// Check if we've reached the end of input.
+    /// Check if we've reached the end of input.
     pub fn is_eof(&mut self) -> bool {
         matches!(self.peek().kind, TokenKind::Eof)
     }
 
     /// Get the current source slice for a span.
+    /// Get the current source slice for a span.
     pub fn slice(&self) -> &'src str {
         self.inner.slice()
     }
 
+    /// Get the source string.
     /// Get the source string.
     pub fn source(&self) -> &'src str {
         self.inner.source()

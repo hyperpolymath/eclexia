@@ -19,14 +19,16 @@ mod lower;
 mod optimize;
 
 pub use lower::{lower_hir_file, LoweringContext};
-pub use optimize::{optimize, optimize_resource_tracking, insert_shadow_price_hooks, OptimizationLevel};
+pub use optimize::{
+    insert_shadow_price_hooks, optimize, optimize_resource_tracking, OptimizationLevel,
+};
 
 use eclexia_ast::dimension::Dimension;
 use eclexia_ast::span::Span;
-use eclexia_ast::types::{Ty, PrimitiveTy};
+use eclexia_ast::types::{PrimitiveTy, Ty};
 use la_arena::{Arena, Idx};
-use smol_str::SmolStr;
 use rustc_hash::FxHashMap;
+use smol_str::SmolStr;
 
 /// A MIR file containing all functions
 #[derive(Debug, Clone)]
@@ -209,16 +211,10 @@ pub struct Instruction {
 #[derive(Debug, Clone)]
 pub enum InstructionKind {
     /// Assign: local = value
-    Assign {
-        target: LocalId,
-        value: Value,
-    },
+    Assign { target: LocalId, value: Value },
 
     /// Store to memory: *ptr = value
-    Store {
-        ptr: Value,
-        value: Value,
-    },
+    Store { ptr: Value, value: Value },
 
     /// Function call with resource tracking
     Call {
@@ -303,33 +299,19 @@ pub enum Value {
     },
 
     /// Unary operation
-    Unary {
-        op: UnaryOp,
-        operand: Box<Value>,
-    },
+    Unary { op: UnaryOp, operand: Box<Value> },
 
     /// Load from memory
-    Load {
-        ptr: Box<Value>,
-    },
+    Load { ptr: Box<Value> },
 
     /// Field access
-    Field {
-        base: Box<Value>,
-        field: SmolStr,
-    },
+    Field { base: Box<Value>, field: SmolStr },
 
     /// Index access
-    Index {
-        base: Box<Value>,
-        index: Box<Value>,
-    },
+    Index { base: Box<Value>, index: Box<Value> },
 
     /// Type cast
-    Cast {
-        value: Box<Value>,
-        target_ty: Ty,
-    },
+    Cast { value: Box<Value>, target_ty: Ty },
 }
 
 /// A constant value

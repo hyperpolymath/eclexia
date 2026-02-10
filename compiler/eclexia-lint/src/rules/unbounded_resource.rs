@@ -68,8 +68,7 @@ impl LintRule for UnboundedResourceRule {
                                 ),
                             )
                             .with_suggestion(
-                                "Add @requires annotation with resource constraints"
-                                    .to_string(),
+                                "Add @requires annotation with resource constraints".to_string(),
                             ),
                         );
                     }

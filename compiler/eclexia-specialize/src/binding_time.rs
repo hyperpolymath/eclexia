@@ -42,7 +42,10 @@ impl BindingTimeEnv {
 
     /// Get the binding time of a local variable.
     pub fn get_local(&self, id: u32) -> BindingTime {
-        self.locals.get(&id).copied().unwrap_or(BindingTime::Dynamic)
+        self.locals
+            .get(&id)
+            .copied()
+            .unwrap_or(BindingTime::Dynamic)
     }
 
     /// Set the binding time of a local variable.

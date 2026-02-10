@@ -15,9 +15,11 @@ mod expr;
 
 use eclexia_ast::span::Span;
 use eclexia_ast::*;
-use eclexia_lexer::{Lexer, Token, TokenKind, ResourceLiteral};
 #[allow(unused_imports)]
-use eclexia_ast::{Visibility, TraitDecl, ImplBlock, ModuleDecl, EffectDecl, StaticDecl, ExternBlock};
+use eclexia_ast::{
+    EffectDecl, ExternBlock, ImplBlock, ModuleDecl, StaticDecl, TraitDecl, Visibility,
+};
+use eclexia_lexer::{Lexer, ResourceLiteral, Token, TokenKind};
 use smol_str::SmolStr;
 
 pub use error::{ParseError, ParseResult};
@@ -44,6 +46,9 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a complete source file.
+    /// Parse a complete source file.
+    ///
+    /// Returns the parsed `SourceFile` and a list of `ParseError`s encountered.
     pub fn parse_file(&mut self) -> (SourceFile, Vec<ParseError>) {
         let mut file = SourceFile::new();
 
@@ -65,6 +70,8 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a visibility modifier.
+    /// Parse a visibility modifier (`pub`, `pub(crate)`, `pub(super)`, `pub(self)`).
+    /// Defaults to `Public` if malformed, or `Private` if no modifier is present.
     fn parse_visibility(&mut self) -> Visibility {
         if self.check(TokenKind::Pub) {
             self.advance();
@@ -97,6 +104,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a single top-level item.
+    /// Parse a single top-level item (e.g., function, type definition, import).
     fn parse_item(&mut self, file: &mut SourceFile) -> ParseResult<Item> {
         // Parse attributes (#[test], #[bench], etc.)
         let attributes = self.parse_attributes()?;
@@ -124,7 +132,9 @@ impl<'src> Parser<'src> {
             TokenKind::Const => self.parse_const(file).map(Item::Const),
             TokenKind::Trait => self.parse_trait_decl(file).map(Item::TraitDecl),
             TokenKind::Impl => self.parse_impl_block(file).map(Item::ImplBlock),
-            TokenKind::Module | TokenKind::Mod => self.parse_module_decl(file).map(Item::ModuleDecl),
+            TokenKind::Module | TokenKind::Mod => {
+                self.parse_module_decl(file).map(Item::ModuleDecl)
+            }
             TokenKind::Effect => self.parse_effect_decl(file).map(Item::EffectDecl),
             TokenKind::Static => self.parse_static_decl(file).map(Item::StaticDecl),
             TokenKind::Extern => self.parse_extern_block(file).map(Item::ExternBlock),
@@ -138,6 +148,11 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse attributes (#[name] or #[name(args)]) and annotations (@requires, @provides, etc.)
+    /// Parse attributes (#[name] or #[name(args)]) and annotations (@requires, @provides, etc.).
+    ///
+    /// Attributes are metadata attached to various AST nodes, used for things like tests,
+    /// benchmarks, or custom language extensions. Annotations provide specific semantic information,
+    /// particularly for resource management.
     fn parse_attributes(&mut self) -> ParseResult<Vec<Attribute>> {
         let mut attributes = Vec::new();
 
@@ -172,8 +187,11 @@ impl<'src> Parser<'src> {
         }
 
         // Parse @annotation(...) style annotations
-        while self.check(TokenKind::AtRequires) || self.check(TokenKind::AtProvides) ||
-              self.check(TokenKind::AtOptimize) || self.check(TokenKind::AtDeferUntil) {
+        while self.check(TokenKind::AtRequires)
+            || self.check(TokenKind::AtProvides)
+            || self.check(TokenKind::AtOptimize)
+            || self.check(TokenKind::AtDeferUntil)
+        {
             let token = self.advance();
             let start = token.span;
 
@@ -183,7 +201,12 @@ impl<'src> Parser<'src> {
                 TokenKind::AtProvides => SmolStr::new("provides"),
                 TokenKind::AtOptimize => SmolStr::new("optimize"),
                 TokenKind::AtDeferUntil => SmolStr::new("defer_until"),
-                _ => return Err(ParseError::custom(token.span, "internal error: unexpected attribute token")),
+                _ => {
+                    return Err(ParseError::custom(
+                        token.span,
+                        "internal error: unexpected attribute token",
+                    ))
+                }
             };
 
             let mut args = Vec::new();
@@ -229,6 +252,10 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a regular function definition.
+    /// Parse a regular function definition (`def` or `fn`).
+    ///
+    /// This includes parsing the function name, type parameters, parameters,
+    /// return type, constraints, where clause, and body block.
     fn parse_function(&mut self, file: &mut SourceFile) -> ParseResult<Function> {
         let start = self.peek().span;
 
@@ -294,6 +321,10 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse an adaptive function definition.
+    /// Parse an adaptive function definition.
+    ///
+    /// This includes parsing the function name, type parameters, parameters,
+    /// return type, constraints, optimization directives, and solution alternatives.
     fn parse_adaptive_function(&mut self, file: &mut SourceFile) -> ParseResult<AdaptiveFunction> {
         let start = self.peek().span;
 
@@ -363,6 +394,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse function parameters.
+    /// Parse a list of function parameters, enclosed in parentheses.
     fn parse_params(&mut self, file: &mut SourceFile) -> ParseResult<Vec<Param>> {
         let mut params = Vec::new();
 
@@ -382,6 +414,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a single parameter.
+    /// Parse a single function parameter (`name: Type`).
     fn parse_param(&mut self, file: &mut SourceFile) -> ParseResult<Param> {
         let start = self.peek().span;
         let name = self.expect_ident()?;
@@ -403,6 +436,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse constraint annotations (@requires).
+    /// Parse constraint annotations (`@requires`).
     fn parse_constraints(&mut self, file: &mut SourceFile) -> ParseResult<Vec<Constraint>> {
         let mut constraints = Vec::new();
 
@@ -431,6 +465,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a constraint kind.
+    /// Parse the kind of a constraint (resource comparison or predicate expression).
     fn parse_constraint_kind(&mut self, file: &mut SourceFile) -> ParseResult<ConstraintKind> {
         let resource = self.expect_ident()?;
 
@@ -450,10 +485,15 @@ impl<'src> Parser<'src> {
 
         let amount = self.parse_resource_amount()?;
 
-        Ok(ConstraintKind::Resource { resource, op, amount })
+        Ok(ConstraintKind::Resource {
+            resource,
+            op,
+            amount,
+        })
     }
 
     /// Parse a resource amount (e.g., 100J, 5ms).
+    /// Parse a resource amount (e.g., `100J`, `5ms`, `100`).
     fn parse_resource_amount(&mut self) -> ParseResult<ResourceAmount> {
         let token = self.advance();
 
@@ -475,6 +515,9 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse optimize directives.
+    /// Parse optimization directives (`@optimize`).
+    ///
+    /// These specify which resources an adaptive function should try to minimize or maximize.
     fn parse_optimize_directives(&mut self) -> ParseResult<Vec<Objective>> {
         let mut objectives = Vec::new();
 
@@ -516,6 +559,9 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse solution alternatives within an adaptive function.
+    /// Parse solution alternatives within an adaptive function.
+    ///
+    /// Solutions can be defined using `@solution "name": { body }` or a shorthand `name @requires(...) { body }`.
     fn parse_solutions(&mut self, file: &mut SourceFile) -> ParseResult<Vec<Solution>> {
         let mut solutions = Vec::new();
 
@@ -537,6 +583,10 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a shorthand solution: name @requires(...) { body }
+    /// Parse a shorthand solution alternative: `name @requires(...) { body }`.
+    ///
+    /// This syntax is a convenience for defining solutions that provide resources based on
+    /// their requirements.
     fn parse_solution_shorthand(&mut self, file: &mut SourceFile) -> ParseResult<Solution> {
         let start = self.peek().span;
 
@@ -583,6 +633,10 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a single solution alternative.
+    /// Parse a single solution alternative using the `@solution` annotation.
+    ///
+    /// This includes parsing the solution name, an optional `@when` guard condition,
+    /// `@provides` resource declarations, and the solution's body block.
     fn parse_solution(&mut self, file: &mut SourceFile) -> ParseResult<Solution> {
         let start = self.expect(TokenKind::AtSolution)?;
 
@@ -590,7 +644,12 @@ impl<'src> Parser<'src> {
         let name = match self.advance().kind {
             TokenKind::String(s) => s,
             TokenKind::Ident(s) => s,
-            _ => return Err(ParseError::unexpected_token(self.peek().clone(), "solution name")),
+            _ => {
+                return Err(ParseError::unexpected_token(
+                    self.peek().clone(),
+                    "solution name",
+                ))
+            }
         };
 
         self.expect(TokenKind::Colon)?;
@@ -642,6 +701,9 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a block of statements.
+    /// Parse a block of statements, enclosed in curly braces `{ ... }`.
+    ///
+    /// A block can optionally end with an expression, which becomes the value of the block.
     fn parse_block(&mut self, file: &mut SourceFile) -> ParseResult<Block> {
         let start = self.expect(TokenKind::LBrace)?;
         let mut stmts = Vec::new();
@@ -686,6 +748,10 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a statement.
+    /// Parse a single statement.
+    ///
+    /// This includes variable declarations (`let`), control flow (`if`, `while`, `for`),
+    /// return statements, and expression statements.
     fn parse_stmt(&mut self, file: &mut SourceFile) -> ParseResult<Stmt> {
         let start = self.peek().span;
         let token_kind = self.peek().kind.clone();
@@ -699,7 +765,10 @@ impl<'src> Parser<'src> {
                     span: func.span,
                     kind: ExprKind::Literal(Literal::Unit),
                 });
-                return Ok(Stmt { span: func.span, kind: StmtKind::Expr(func_expr) });
+                return Ok(Stmt {
+                    span: func.span,
+                    kind: StmtKind::Expr(func_expr),
+                });
             }
             TokenKind::Struct => {
                 let typedef = self.parse_struct_shorthand(file)?;
@@ -707,7 +776,10 @@ impl<'src> Parser<'src> {
                     span: typedef.span,
                     kind: ExprKind::Literal(Literal::Unit),
                 });
-                return Ok(Stmt { span: typedef.span, kind: StmtKind::Expr(unit_expr) });
+                return Ok(Stmt {
+                    span: typedef.span,
+                    kind: StmtKind::Expr(unit_expr),
+                });
             }
             TokenKind::Let => {
                 self.advance();
@@ -733,7 +805,12 @@ impl<'src> Parser<'src> {
                 self.expect(TokenKind::Eq)?;
                 let value = self.parse_expr(file)?;
 
-                StmtKind::Let { pattern, mutable: is_mut, ty, value }
+                StmtKind::Let {
+                    pattern,
+                    mutable: is_mut,
+                    ty,
+                    value,
+                }
             }
             TokenKind::Return => {
                 self.advance();
@@ -758,12 +835,17 @@ impl<'src> Parser<'src> {
                 // to avoid ambiguity with the for loop body block
                 let iter = self.parse_expr_no_struct(file)?;
                 let body = self.parse_block(file)?;
-                StmtKind::For { pattern, iter, body }
+                StmtKind::For {
+                    pattern,
+                    iter,
+                    body,
+                }
             }
             TokenKind::Loop => {
                 self.advance();
                 // Optional label: loop 'name { ... }
-                let label = if matches!(self.peek().kind, TokenKind::Ident(ref s) if s.starts_with('\'')) {
+                let label = if matches!(self.peek().kind, TokenKind::Ident(ref s) if s.starts_with('\''))
+                {
                     let s = self.expect_ident()?;
                     Some(s)
                 } else {
@@ -775,7 +857,8 @@ impl<'src> Parser<'src> {
             TokenKind::Break => {
                 self.advance();
                 // Optional label
-                let label = if matches!(self.peek().kind, TokenKind::Ident(ref s) if s.starts_with('\'')) {
+                let label = if matches!(self.peek().kind, TokenKind::Ident(ref s) if s.starts_with('\''))
+                {
                     let s = self.expect_ident()?;
                     Some(s)
                 } else {
@@ -792,7 +875,8 @@ impl<'src> Parser<'src> {
             TokenKind::Continue => {
                 self.advance();
                 // Optional label
-                let label = if matches!(self.peek().kind, TokenKind::Ident(ref s) if s.starts_with('\'')) {
+                let label = if matches!(self.peek().kind, TokenKind::Ident(ref s) if s.starts_with('\''))
+                {
                     let s = self.expect_ident()?;
                     Some(s)
                 } else {
@@ -809,12 +893,20 @@ impl<'src> Parser<'src> {
                 if self.check(TokenKind::Eq) {
                     self.advance(); // consume =
                     let value = self.parse_expr(file)?;
-                    StmtKind::Assign { target: expr, value }
-                } else if self.check(TokenKind::PlusEq) || self.check(TokenKind::MinusEq)
-                    || self.check(TokenKind::StarEq) || self.check(TokenKind::SlashEq)
-                    || self.check(TokenKind::PercentEq) || self.check(TokenKind::CaretEq)
-                    || self.check(TokenKind::AmpEq) || self.check(TokenKind::PipeEq)
-                    || self.check(TokenKind::LtLtEq) || self.check(TokenKind::GtGtEq)
+                    StmtKind::Assign {
+                        target: expr,
+                        value,
+                    }
+                } else if self.check(TokenKind::PlusEq)
+                    || self.check(TokenKind::MinusEq)
+                    || self.check(TokenKind::StarEq)
+                    || self.check(TokenKind::SlashEq)
+                    || self.check(TokenKind::PercentEq)
+                    || self.check(TokenKind::CaretEq)
+                    || self.check(TokenKind::AmpEq)
+                    || self.check(TokenKind::PipeEq)
+                    || self.check(TokenKind::LtLtEq)
+                    || self.check(TokenKind::GtGtEq)
                     || self.check(TokenKind::StarStarEq)
                 {
                     // Compound assignment: desugar x += y to x = x + y
@@ -831,14 +923,22 @@ impl<'src> Parser<'src> {
                         TokenKind::LtLtEq => BinaryOp::Shl,
                         TokenKind::GtGtEq => BinaryOp::Shr,
                         TokenKind::StarStarEq => BinaryOp::Pow,
-                        _ => return Err(ParseError::custom(op_token.span, "internal error: unexpected compound assignment operator")),
+                        _ => {
+                            return Err(ParseError::custom(
+                                op_token.span,
+                                "internal error: unexpected compound assignment operator",
+                            ))
+                        }
                     };
                     let rhs = self.parse_expr(file)?;
                     let bin_expr = file.exprs.alloc(Expr {
                         span: file.exprs[expr].span.merge(file.exprs[rhs].span),
                         kind: ExprKind::Binary { op, lhs: expr, rhs },
                     });
-                    StmtKind::Assign { target: expr, value: bin_expr }
+                    StmtKind::Assign {
+                        target: expr,
+                        value: bin_expr,
+                    }
                 } else {
                     // Regular expression statement
                     StmtKind::Expr(expr)
@@ -860,6 +960,9 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a type definition.
+    /// Parse a type definition (`type Name = ...` or `struct Name { ... }`).
+    ///
+    /// Supports type aliases, struct definitions, and enum definitions.
     fn parse_type_def(&mut self, file: &mut SourceFile) -> ParseResult<TypeDef> {
         let start = self.expect(TokenKind::Type)?;
         let name = self.expect_ident()?;
@@ -917,6 +1020,9 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse struct shorthand: `struct Name { fields }`
+    /// Parse struct shorthand: `struct Name { fields }`.
+    ///
+    /// This is an alternative syntax for defining struct types directly.
     fn parse_struct_shorthand(&mut self, file: &mut SourceFile) -> ParseResult<TypeDef> {
         let start = self.expect(TokenKind::Struct)?;
         let name = self.expect_ident()?;
@@ -953,6 +1059,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse struct fields.
+    /// Parse struct fields, typically within a `{ ... }` block.
     fn parse_fields(&mut self, file: &mut SourceFile) -> ParseResult<Vec<Field>> {
         let mut fields = Vec::new();
 
@@ -977,6 +1084,7 @@ impl<'src> Parser<'src> {
         Ok(fields)
     }
 
+    /// Parse enum variants (supports unit, tuple, and struct variants).
     /// Parse enum variants (supports unit, tuple, and struct variants).
     fn parse_variants(&mut self, file: &mut SourceFile) -> ParseResult<Vec<Variant>> {
         let mut variants = Vec::new();
@@ -1027,6 +1135,10 @@ impl<'src> Parser<'src> {
 
     /// Parse an import/use statement.
     /// Supports: `import foo::bar`, `use foo::bar`, `use foo::{a, b}`, `use foo::*`
+    /// Parse an import or use statement.
+    ///
+    /// Supports: `import foo::bar`, `use foo::bar`, `use foo::{a, b}`, `use foo::*`.
+    /// Also handles optional `as` aliases.
     fn parse_import(&mut self) -> ParseResult<Import> {
         let start = self.expect_one_of(&[TokenKind::Import, TokenKind::Use])?;
         let mut path = vec![self.expect_ident()?];
@@ -1051,7 +1163,9 @@ impl<'src> Parser<'src> {
                 if !self.check(TokenKind::RBrace) {
                     loop {
                         names.push(self.expect_ident()?);
-                        if !self.check(TokenKind::Comma) { break; }
+                        if !self.check(TokenKind::Comma) {
+                            break;
+                        }
                         self.advance();
                     }
                 }
@@ -1093,6 +1207,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a const definition.
+    /// Parse a constant definition (`const NAME: Type = value;`).
     fn parse_const(&mut self, file: &mut SourceFile) -> ParseResult<ConstDef> {
         let start = self.expect(TokenKind::Const)?;
         let name = self.expect_ident()?;
@@ -1123,6 +1238,10 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a type expression.
+    /// Parse a type expression.
+    ///
+    /// This handles primitive types, named types (with generics), function types,
+    /// tuple types, array types, reference types, optional types, and the inference placeholder.
     fn parse_type(&mut self, file: &mut SourceFile) -> ParseResult<TypeId> {
         let start = self.peek().span;
 
@@ -1184,7 +1303,7 @@ impl<'src> Parser<'src> {
                     TypeKind::Function { params: types, ret }
                 } else if types.len() == 1 {
                     // Parenthesized type - safe: len == 1 verified above
-                    return Ok(types.into_iter().next().expect("len checked"));
+                    return Ok(types.remove(0));
                 } else {
                     TypeKind::Tuple(types)
                 }
@@ -1255,7 +1374,10 @@ impl<'src> Parser<'src> {
         if self.check(TokenKind::Question) {
             self.advance();
             let opt_span = start.merge(self.previous_span());
-            let opt_ty = Type { span: opt_span, kind: TypeKind::Optional(ty_id) };
+            let opt_ty = Type {
+                span: opt_span,
+                kind: TypeKind::Optional(ty_id),
+            };
             ty_id = file.types.alloc(opt_ty);
         }
 
@@ -1263,6 +1385,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a trait bound: TraitName or TraitName<T, U>
+    /// Parse a trait bound: `TraitName` or `TraitName<T, U>`.
     fn parse_trait_bound(&mut self, file: &mut SourceFile) -> ParseResult<TraitBound> {
         let start = self.peek().span;
         // Parse path: Name or Name::Other
@@ -1276,7 +1399,9 @@ impl<'src> Parser<'src> {
             let mut args = Vec::new();
             loop {
                 args.push(self.parse_type(file)?);
-                if !self.check(TokenKind::Comma) { break; }
+                if !self.check(TokenKind::Comma) {
+                    break;
+                }
                 self.advance();
             }
             self.expect(TokenKind::Gt)?;
@@ -1292,17 +1417,21 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse trait bounds separated by +
+    /// Parse trait bounds separated by `+` (e.g., `Trait1 + Trait2`).
     fn parse_trait_bounds(&mut self, file: &mut SourceFile) -> ParseResult<Vec<TraitBound>> {
         let mut bounds = Vec::new();
         loop {
             bounds.push(self.parse_trait_bound(file)?);
-            if !self.check(TokenKind::Plus) { break; }
+            if !self.check(TokenKind::Plus) {
+                break;
+            }
             self.advance();
         }
         Ok(bounds)
     }
 
     /// Parse a where clause: where T: Trait, U: Trait + OtherTrait
+    /// Parse a `where` clause: `where T: Trait, U: Trait + OtherTrait`.
     fn parse_where_clause(&mut self, file: &mut SourceFile) -> ParseResult<Vec<WherePredicate>> {
         if !self.check(TokenKind::Where) {
             return Ok(Vec::new());
@@ -1322,15 +1451,23 @@ impl<'src> Parser<'src> {
                 bounds,
             });
 
-            if !self.check(TokenKind::Comma) { break; }
+            if !self.check(TokenKind::Comma) {
+                break;
+            }
             self.advance();
-            if self.check(TokenKind::LBrace) || self.is_eof() { break; }
+            if self.check(TokenKind::LBrace) || self.is_eof() {
+                break;
+            }
         }
 
         Ok(predicates)
     }
 
     /// Parse a trait declaration.
+    /// Parse a trait declaration.
+    ///
+    /// This includes parsing the trait name, generic type parameters,
+    /// optional super-trait bounds, a `where` clause, and its associated items (methods, types).
     fn parse_trait_decl(&mut self, file: &mut SourceFile) -> ParseResult<TraitDecl> {
         let start = self.expect(TokenKind::Trait)?;
         let name = self.expect_ident()?;
@@ -1365,7 +1502,9 @@ impl<'src> Parser<'src> {
                 } else {
                     None
                 };
-                if self.check(TokenKind::Semi) { self.advance(); }
+                if self.check(TokenKind::Semi) {
+                    self.advance();
+                }
                 items.push(TraitItem::AssocType {
                     span: assoc_start.merge(self.previous_span()),
                     name: assoc_name,
@@ -1377,11 +1516,15 @@ impl<'src> Parser<'src> {
                 let sig = FunctionSig {
                     span: func.span,
                     name: func.name,
-                    type_params: func.type_params.iter().map(|n| TypeParam {
-                        span: func.span,
-                        name: n.clone(),
-                        bounds: Vec::new(),
-                    }).collect(),
+                    type_params: func
+                        .type_params
+                        .iter()
+                        .map(|n| TypeParam {
+                            span: func.span,
+                            name: n.clone(),
+                            bounds: Vec::new(),
+                        })
+                        .collect(),
                     params: func.params,
                     return_type: func.return_type,
                     where_clause: func.where_clause,
@@ -1406,11 +1549,14 @@ impl<'src> Parser<'src> {
             span: start.merge(end),
             visibility: Visibility::Private,
             name,
-            type_params: type_params.iter().map(|n| TypeParam {
-                span: start,
-                name: n.clone(),
-                bounds: Vec::new(),
-            }).collect(),
+            type_params: type_params
+                .iter()
+                .map(|n| TypeParam {
+                    span: start,
+                    name: n.clone(),
+                    bounds: Vec::new(),
+                })
+                .collect(),
             super_traits,
             where_clause,
             items,
@@ -1418,6 +1564,10 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse an impl block.
+    /// Parse an `impl` block for a type or trait.
+    ///
+    /// This includes parsing generic type parameters, the type being implemented for,
+    /// an optional trait path, a `where` clause, and the associated items (methods, types).
     fn parse_impl_block(&mut self, file: &mut SourceFile) -> ParseResult<ImplBlock> {
         let start = self.expect(TokenKind::Impl)?;
         let type_params = self.parse_type_param_list_full(file)?;
@@ -1449,7 +1599,9 @@ impl<'src> Parser<'src> {
                 let assoc_name = self.expect_ident()?;
                 self.expect(TokenKind::Eq)?;
                 let ty = self.parse_type(file)?;
-                if self.check(TokenKind::Semi) { self.advance(); }
+                if self.check(TokenKind::Semi) {
+                    self.advance();
+                }
                 items.push(ImplItem::AssocType {
                     span: assoc_start.merge(self.previous_span()),
                     name: assoc_name,
@@ -1460,11 +1612,15 @@ impl<'src> Parser<'src> {
                 let sig = FunctionSig {
                     span: func.span,
                     name: func.name,
-                    type_params: func.type_params.iter().map(|n| TypeParam {
-                        span: func.span,
-                        name: n.clone(),
-                        bounds: Vec::new(),
-                    }).collect(),
+                    type_params: func
+                        .type_params
+                        .iter()
+                        .map(|n| TypeParam {
+                            span: func.span,
+                            name: n.clone(),
+                            bounds: Vec::new(),
+                        })
+                        .collect(),
                     params: func.params,
                     return_type: func.return_type,
                     where_clause: func.where_clause,
@@ -1483,11 +1639,14 @@ impl<'src> Parser<'src> {
 
         Ok(ImplBlock {
             span: start.merge(end),
-            type_params: type_params.iter().map(|n| TypeParam {
-                span: start,
-                name: n.clone(),
-                bounds: Vec::new(),
-            }).collect(),
+            type_params: type_params
+                .iter()
+                .map(|n| TypeParam {
+                    span: start,
+                    name: n.clone(),
+                    bounds: Vec::new(),
+                })
+                .collect(),
             trait_path,
             self_ty,
             where_clause,
@@ -1496,6 +1655,10 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a module declaration.
+    /// Parse a module declaration.
+    ///
+    /// This can be either a module with an inline body (`module Name { ... }`)
+    /// or a module declared by its name, implying its body is in a separate file.
     fn parse_module_decl(&mut self, file: &mut SourceFile) -> ParseResult<ModuleDecl> {
         let start = self.expect_one_of(&[TokenKind::Module, TokenKind::Mod])?;
         let name = self.expect_ident()?;
@@ -1522,6 +1685,10 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse an effect declaration.
+    /// Parse an effect declaration (`effect Name { operations }`).
+    ///
+    /// This includes parsing the effect name, generic type parameters, and the operations
+    /// (signatures) defined within the effect.
     fn parse_effect_decl(&mut self, file: &mut SourceFile) -> ParseResult<EffectDecl> {
         let start = self.expect(TokenKind::Effect)?;
         let name = self.expect_ident()?;
@@ -1544,7 +1711,9 @@ impl<'src> Parser<'src> {
             } else {
                 None
             };
-            if self.check(TokenKind::Semi) { self.advance(); }
+            if self.check(TokenKind::Semi) {
+                self.advance();
+            }
             operations.push(EffectOp {
                 span: op_start.merge(self.previous_span()),
                 name: op_name,
@@ -1558,16 +1727,20 @@ impl<'src> Parser<'src> {
             span: start.merge(end),
             visibility: Visibility::Private,
             name,
-            type_params: type_params_idents.iter().map(|n| TypeParam {
-                span: start,
-                name: n.clone(),
-                bounds: Vec::new(),
-            }).collect(),
+            type_params: type_params_idents
+                .iter()
+                .map(|n| TypeParam {
+                    span: start,
+                    name: n.clone(),
+                    bounds: Vec::new(),
+                })
+                .collect(),
             operations,
         })
     }
 
     /// Parse a static declaration.
+    /// Parse a static declaration (`static mut NAME: Type = value;`).
     fn parse_static_decl(&mut self, file: &mut SourceFile) -> ParseResult<StaticDecl> {
         let start = self.expect(TokenKind::Static)?;
         let mutable = if self.check(TokenKind::Mut) {
@@ -1581,7 +1754,9 @@ impl<'src> Parser<'src> {
         let ty = self.parse_type(file)?;
         self.expect(TokenKind::Eq)?;
         let value = self.parse_expr(file)?;
-        if self.check(TokenKind::Semi) { self.advance(); }
+        if self.check(TokenKind::Semi) {
+            self.advance();
+        }
 
         Ok(StaticDecl {
             span: start.merge(self.previous_span()),
@@ -1594,6 +1769,10 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse an extern block.
+    /// Parse an `extern` block for foreign function and static declarations.
+    ///
+    /// This includes parsing an optional ABI string (e.g., `"C"`) and the declarations
+    /// of functions and statics within the block.
     fn parse_extern_block(&mut self, file: &mut SourceFile) -> ParseResult<ExternBlock> {
         let start = self.expect(TokenKind::Extern)?;
 
@@ -1601,7 +1780,12 @@ impl<'src> Parser<'src> {
             let tok = self.advance();
             let s = match tok.kind {
                 TokenKind::String(s) => s,
-                _ => return Err(ParseError::custom(tok.span, "internal error: expected string for extern ABI")),
+                _ => {
+                    return Err(ParseError::custom(
+                        tok.span,
+                        "internal error: expected string for extern ABI",
+                    ))
+                }
             };
             Some(s)
         } else {
@@ -1624,7 +1808,9 @@ impl<'src> Parser<'src> {
                 } else {
                     None
                 };
-                if self.check(TokenKind::Semi) { self.advance(); }
+                if self.check(TokenKind::Semi) {
+                    self.advance();
+                }
                 items.push(ExternItem::Fn(FunctionSig {
                     span: fn_start.merge(self.previous_span()),
                     name: fn_name,
@@ -1636,11 +1822,18 @@ impl<'src> Parser<'src> {
             } else if self.check(TokenKind::Static) {
                 let static_start = self.peek().span;
                 self.advance();
-                let mutable = if self.check(TokenKind::Mut) { self.advance(); true } else { false };
+                let mutable = if self.check(TokenKind::Mut) {
+                    self.advance();
+                    true
+                } else {
+                    false
+                };
                 let item_name = self.expect_ident()?;
                 self.expect(TokenKind::Colon)?;
                 let ty = self.parse_type(file)?;
-                if self.check(TokenKind::Semi) { self.advance(); }
+                if self.check(TokenKind::Semi) {
+                    self.advance();
+                }
                 items.push(ExternItem::Static {
                     span: static_start.merge(self.previous_span()),
                     mutable,
@@ -1694,6 +1887,7 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse a single macro rule: `(pattern) => { template }` or `(pattern) => template`
+    /// Parse a single macro rule: `(pattern) => { template }` or `(pattern) => template`.
     fn parse_macro_rule(&mut self) -> ParseResult<MacroRule> {
         let start = self.peek().span;
 
@@ -1722,14 +1916,24 @@ impl<'src> Parser<'src> {
             self.expect(TokenKind::RBracket)?;
             t
         } else {
-            return Err(ParseError::custom(self.peek().span, "expected { or ( after => in macro rule"));
+            return Err(ParseError::custom(
+                self.peek().span,
+                "expected { or ( after => in macro rule",
+            ));
         };
 
         let span = start.merge(self.previous_span());
-        Ok(MacroRule { span, pattern, template })
+        Ok(MacroRule {
+            span,
+            pattern,
+            template,
+        })
     }
 
     /// Parse macro tokens (pattern or template) until a closing delimiter.
+    /// Parse macro tokens (pattern or template) until a matching closing delimiter is found.
+    ///
+    /// This handles nested delimiters and metavariables like `$name:kind` and repetitions `$(...)*`.
     fn parse_macro_tokens(&mut self, closing: TokenKind) -> ParseResult<Vec<MacroToken>> {
         let mut tokens = Vec::new();
         let mut brace_depth: u32 = 0;
@@ -1738,7 +1942,11 @@ impl<'src> Parser<'src> {
 
         while !self.is_eof() {
             // Only stop at closing token when all nesting is balanced
-            if self.check_discriminant(&closing) && brace_depth == 0 && paren_depth == 0 && bracket_depth == 0 {
+            if self.check_discriminant(&closing)
+                && brace_depth == 0
+                && paren_depth == 0
+                && bracket_depth == 0
+            {
                 break;
             }
             if self.check(TokenKind::Dollar) {
@@ -1812,12 +2020,19 @@ impl<'src> Parser<'src> {
                 }
             } else {
                 // Track nesting depth for balanced delimiters
-                if self.check(TokenKind::LBrace) { brace_depth += 1; }
-                else if self.check(TokenKind::RBrace) && brace_depth > 0 { brace_depth -= 1; }
-                else if self.check(TokenKind::LParen) { paren_depth += 1; }
-                else if self.check(TokenKind::RParen) && paren_depth > 0 { paren_depth -= 1; }
-                else if self.check(TokenKind::LBracket) { bracket_depth += 1; }
-                else if self.check(TokenKind::RBracket) && bracket_depth > 0 { bracket_depth -= 1; }
+                if self.check(TokenKind::LBrace) {
+                    brace_depth += 1;
+                } else if self.check(TokenKind::RBrace) && brace_depth > 0 {
+                    brace_depth -= 1;
+                } else if self.check(TokenKind::LParen) {
+                    paren_depth += 1;
+                } else if self.check(TokenKind::RParen) && paren_depth > 0 {
+                    paren_depth -= 1;
+                } else if self.check(TokenKind::LBracket) {
+                    bracket_depth += 1;
+                } else if self.check(TokenKind::RBracket) && bracket_depth > 0 {
+                    bracket_depth -= 1;
+                }
                 // Literal token - capture its text
                 let tok = self.advance();
                 let text = match &tok.kind {
@@ -1891,6 +2106,9 @@ impl<'src> Parser<'src> {
     }
 
     /// Check if peek token has the same discriminant as the given token kind.
+    /// Check if the peeked token has the same discriminant as the given token kind.
+    ///
+    /// This is useful for checking token types without matching on their inner values.
     fn check_discriminant(&mut self, expected: &TokenKind) -> bool {
         std::mem::discriminant(&self.peek().kind) == std::mem::discriminant(expected)
     }
@@ -1898,6 +2116,11 @@ impl<'src> Parser<'src> {
     /// Parse a type parameter list: <T, U: Trait, V = Default> (returns simple Ident vec)
     /// Bounds and defaults are consumed but not returned in the Ident vec
     /// (callers that need full TypeParam info use parse_type_params_full_structured)
+    /// Parse a type parameter list: `<T, U: Trait, V = Default>`.
+    ///
+    /// This method returns a vector of simple identifiers for the type parameters.
+    /// Bounds and defaults are consumed during parsing but not returned in the `Ident` vector.
+    /// (Callers that need full `TypeParam` information should use `parse_type_params_structured`.)
     fn parse_type_param_list_full(&mut self, file: &mut SourceFile) -> ParseResult<Vec<Ident>> {
         if self.check(TokenKind::Lt) {
             self.advance();
@@ -1928,8 +2151,12 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse type parameters with full TypeParam info including bounds
+    /// Parse type parameters with full `TypeParam` information including bounds and defaults.
     #[allow(dead_code)]
-    fn parse_type_params_structured(&mut self, file: &mut SourceFile) -> ParseResult<Vec<TypeParam>> {
+    fn parse_type_params_structured(
+        &mut self,
+        file: &mut SourceFile,
+    ) -> ParseResult<Vec<TypeParam>> {
         if self.check(TokenKind::Lt) {
             self.advance();
             let mut params = Vec::new();
@@ -1966,26 +2193,35 @@ impl<'src> Parser<'src> {
 
     // === Helper methods ===
 
+    /// Peek at the next token without consuming it.
     fn peek(&mut self) -> &Token {
         self.lexer.peek()
     }
 
+    /// Consume the current token and advance the lexer.
     fn advance(&mut self) -> Token {
         self.lexer.next()
     }
 
+    /// Check if the parser has reached the end of the input source.
     fn is_eof(&mut self) -> bool {
         self.lexer.is_eof()
     }
 
+    /// Check if the peeked token matches the given `TokenKind`.
     fn check(&mut self, kind: TokenKind) -> bool {
         std::mem::discriminant(&self.peek().kind) == std::mem::discriminant(&kind)
     }
 
+    /// Check if the peeked token is an identifier with the given `name`.
     fn check_ident(&mut self, name: &str) -> bool {
         matches!(&self.peek().kind, TokenKind::Ident(s) if s.as_str() == name)
     }
 
+    /// Expect the next token to be of a specific `TokenKind`.
+    ///
+    /// If the token matches, it is consumed and its span is returned.
+    /// Otherwise, a `ParseError` is returned.
     fn expect(&mut self, kind: TokenKind) -> ParseResult<Span> {
         if self.check(kind.clone()) {
             Ok(self.advance().span)
@@ -1994,6 +2230,10 @@ impl<'src> Parser<'src> {
         }
     }
 
+    /// Expect the next token to be one of the given `TokenKind`s.
+    ///
+    /// If a match is found, the token is consumed and its span is returned.
+    /// Otherwise, a `ParseError` is returned.
     fn expect_one_of(&mut self, kinds: &[TokenKind]) -> ParseResult<Span> {
         for kind in kinds {
             if self.check(kind.clone()) {
@@ -2006,6 +2246,9 @@ impl<'src> Parser<'src> {
         ))
     }
 
+    /// Expect the next token to be an identifier.
+    ///
+    /// This also handles contextual keywords that can act as identifiers (e.g., `energy`).
     fn expect_ident(&mut self) -> ParseResult<SmolStr> {
         let token = self.advance();
         match token.kind {
@@ -2024,11 +2267,17 @@ impl<'src> Parser<'src> {
         }
     }
 
+    /// Get the span of the previously consumed token.
+    ///
+    /// This is a simplified version; in practice we'd track the previous token's span directly.
     fn previous_span(&self) -> Span {
         // This is a simplified version; in practice we'd track the previous token
         Span::dummy()
     }
 
+    /// Skip tokens until a likely start of a new top-level item is found.
+    ///
+    /// This is a parser recovery mechanism to continue parsing after an error.
     fn recover_to_item(&mut self) {
         while !self.is_eof() {
             match self.peek().kind {
@@ -2059,6 +2308,9 @@ impl<'src> Parser<'src> {
         }
     }
 
+    /// Skip tokens until a likely start of a new statement is found.
+    ///
+    /// This is a parser recovery mechanism to continue parsing after an error within a block.
     fn recover_to_stmt(&mut self) {
         while !self.is_eof() {
             match self.peek().kind {
@@ -2087,8 +2339,9 @@ impl<'src> Parser<'src> {
     }
 
     /// Skip tokens until we reach a matching closing delimiter.
-    /// Tracks nesting depth to handle nested delimiters correctly.
-    /// Returns the span of the closing delimiter, or a dummy span on EOF.
+    ///
+    /// This is a parser recovery mechanism that tracks nesting depth to handle nested delimiters correctly.
+    /// Returns the span of the closing delimiter, or a dummy span on EOF if no matching delimiter is found.
     fn recover_to_closing_delimiter(&mut self, close: TokenKind) -> Span {
         let mut depth = 0u32;
         while !self.is_eof() {
@@ -2185,8 +2438,16 @@ mod tests {
         // Should have at least one error from the bad function
         assert!(!errors.is_empty(), "Expected errors from bad function");
         // Should have recovered and found the second good function
-        let func_count = file.items.iter().filter(|i| matches!(i, Item::Function(_))).count();
-        assert!(func_count >= 1, "Expected at least one parsed function after recovery, got {}", func_count);
+        let func_count = file
+            .items
+            .iter()
+            .filter(|i| matches!(i, Item::Function(_)))
+            .count();
+        assert!(
+            func_count >= 1,
+            "Expected at least one parsed function after recovery, got {}",
+            func_count
+        );
     }
 
     #[test]

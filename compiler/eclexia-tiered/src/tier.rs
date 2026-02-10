@@ -108,10 +108,13 @@ impl TierManager {
     ///
     /// Returns `Some(new_tier)` if the function should be promoted.
     pub fn record_call(&mut self, function: &SmolStr) -> Option<Tier> {
-        let entry = self.functions.entry(function.clone()).or_insert(FunctionHotness {
-            tier: Tier::Interpreter,
-            call_count: 0,
-        });
+        let entry = self
+            .functions
+            .entry(function.clone())
+            .or_insert(FunctionHotness {
+                tier: Tier::Interpreter,
+                call_count: 0,
+            });
 
         entry.call_count += 1;
 

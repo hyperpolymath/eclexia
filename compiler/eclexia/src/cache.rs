@@ -3,10 +3,10 @@
 
 //! Local package cache management.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 
 /// Package cache index (stores name-version -> path mappings).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -6,24 +6,28 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-mod commands;
-mod repl;
-mod test_runner;
 mod bench_runner;
 #[allow(dead_code)]
-mod package;
-#[allow(dead_code)]
-mod resolver;
-mod registry;
-#[allow(dead_code)]
 mod cache;
+mod commands;
 #[allow(dead_code)]
 mod lockfile;
+#[allow(dead_code)]
+mod package;
 mod package_manager;
+mod registry;
+mod repl;
+#[allow(dead_code)]
+mod resolver;
+mod test_runner;
 
 #[derive(Parser)]
 #[command(name = "eclexia")]
-#[command(author, version, about = "Eclexia: Economics-as-Code programming language")]
+#[command(
+    author,
+    version,
+    about = "Eclexia: Economics-as-Code programming language"
+)]
 #[command(propagate_version = true)]
 struct Cli {
     #[command(subcommand)]
@@ -166,6 +170,13 @@ enum Commands {
         debounce: u64,
     },
 
+    /// Serve runtime health endpoints for Kubernetes
+    Health {
+        /// Bind address for the health server
+        #[arg(short, long, default_value = "127.0.0.1:8080")]
+        bind: String,
+    },
+
     /// Disassemble compiled bytecode
     Disasm {
         /// Input file
@@ -178,10 +189,19 @@ fn main() -> miette::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Build { input, output, target, analyze } => {
+        Commands::Build {
+            input,
+            output,
+            target,
+            analyze,
+        } => {
             commands::build(&input, output.as_deref(), &target, analyze)?;
         }
-        Commands::Run { input, observe_shadow, carbon_report } => {
+        Commands::Run {
+            input,
+            observe_shadow,
+            carbon_report,
+        } => {
             commands::run(&input, observe_shadow, carbon_report)?;
         }
         Commands::Check { input } => {
@@ -211,7 +231,11 @@ fn main() -> miette::Result<()> {
         Commands::Debug { input } => {
             commands::debug(&input)?;
         }
-        Commands::Doc { input, output, format } => {
+        Commands::Doc {
+            input,
+            output,
+            format,
+        } => {
             commands::doc(&input, &output, &format)?;
         }
         Commands::Install => {
@@ -219,6 +243,9 @@ fn main() -> miette::Result<()> {
         }
         Commands::Watch { path, debounce } => {
             commands::watch(&path, debounce)?;
+        }
+        Commands::Health { bind } => {
+            commands::serve_health(&bind)?;
         }
         Commands::Disasm { input } => {
             commands::disasm(&input)?;

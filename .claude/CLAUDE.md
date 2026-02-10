@@ -1,6 +1,6 @@
 ## Current Session Status (Updated 2026-02-09)
 
-**Build Status:** 25 crates compiling, 271 lib tests passing, zero warnings, zero clippy errors
+**Build Status:** 25 crates compiling, 297 lib tests passing, zero warnings
 **Panic-Attack:** 15 weak points (331 unwraps, 28 unsafe, 48 panic sites) — scan 2026-02-09 session 6
 **Conformance:** 32/32 valid + 19/19 invalid passing (0 skips)
 **License:** All files PMPL-1.0-or-later
@@ -11,7 +11,8 @@
 - TypeChecker (Robinson unification, 2210 lines) → HIR lowering → MIR lowering
 - Bytecode codegen → Stack-based VM (934 lines, full instruction set) → .eclb serialization (serde)
 - Tree-walking interpreter (separate path, 28 builtin tests, extern block stubs)
-- `build` command uses full pipeline: Parse → TypeCheck → HIR → MIR → Bytecode (→ .eclb output)
+- `build` command uses full pipeline: Parse → TypeCheck → HIR → MIR → Bytecode (→ .eclb output) or WASM (→ .wasm)
+- `build --target wasm` generates real .wasm binary modules via wasm-encoder
 - `run` command uses interpreter with type checking
 - `run-bytecode` command loads and executes .eclb files
 - `debug` command uses full pipeline with interactive debugger
@@ -35,13 +36,16 @@
 - eclexia-absinterp: Abstract interpretation, interval analysis (38 tests)
 - eclexia-effects: Effect system, evidence passing, row polymorphism (26 tests)
 - eclexia-specialize: Binding-time analysis, specialization (14 tests)
-- eclexia-cranelift: Native backend (stub - estimates sizes, 6 tests)
-- eclexia-llvm: LLVM backend (stub - estimates sizes, 8 tests)
-- eclexia-wasm: WebAssembly backend (stub - estimates sizes, 8 tests)
+- eclexia-cranelift: Native backend (real Cranelift JIT for simple int functions, fallback estimation, 8 tests)
+- eclexia-llvm: LLVM backend (REAL - generates textual LLVM IR .ll files, 21 tests)
+- eclexia-wasm: WebAssembly backend (REAL - generates valid .wasm binaries via wasm-encoder, 15 tests)
 - eclexia-tiered: Tiered execution, PGO profiling, watch mode (26 tests)
 
 **Known Gaps:**
-- Backend crates estimate sizes rather than generating real machine code
+- All 3 backends generate real code: WASM (binary .wasm), LLVM (textual .ll IR), Cranelift (JIT for simple functions)
+- WASM: no GC/complex types/WASI yet; strings are fixed data section offsets
+- LLVM: textual IR only (no llvm-sys); needs `llc` for native compilation; no complex type lowering yet
+- Cranelift: only simple integer functions compile to real native code; complex ops fall back to estimation
 - Reactive crates not yet wired into CLI commands
 - Formal verification has Admitted/unproven theorems
 

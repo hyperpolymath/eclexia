@@ -180,11 +180,7 @@ impl ShadowPriceEngine {
 
         for constraint in &self.constraints {
             if let Some(&price) = result.prices.get(&constraint.name) {
-                dim_prices.push((
-                    constraint.name.clone(),
-                    constraint.dimension,
-                    price,
-                ));
+                dim_prices.push((constraint.name.clone(), constraint.dimension, price));
             }
         }
 
@@ -227,7 +223,11 @@ mod tests {
 
         let result = engine.compute();
         let price = result.prices["energy"];
-        assert!(price < 0.1, "slack constraint should have low price, got {}", price);
+        assert!(
+            price < 0.1,
+            "slack constraint should have low price, got {}",
+            price
+        );
     }
 
     #[test]
@@ -242,7 +242,11 @@ mod tests {
 
         let result = engine.compute();
         let price = result.prices["time"];
-        assert!(price > 0.5, "tight constraint should have high price, got {}", price);
+        assert!(
+            price > 0.5,
+            "tight constraint should have high price, got {}",
+            price
+        );
     }
 
     #[test]
@@ -257,7 +261,11 @@ mod tests {
 
         let result = engine.compute();
         let price = result.prices["memory"];
-        assert!(price > 1.0, "over-budget should have penalty price, got {}", price);
+        assert!(
+            price > 1.0,
+            "over-budget should have penalty price, got {}",
+            price
+        );
     }
 
     #[test]
@@ -272,7 +280,11 @@ mod tests {
 
         let result = engine.compute();
         let price = result.prices["zero"];
-        assert!(price > 1000.0, "zero budget should have very high price, got {}", price);
+        assert!(
+            price > 1000.0,
+            "zero budget should have very high price, got {}",
+            price
+        );
     }
 
     #[test]
@@ -303,7 +315,10 @@ mod tests {
 
         // With smoothing, p2 should be between the raw low price and p1.
         assert!(p2 > 0.0);
-        assert!(p2 < p1, "smoothed price should be less than previous high price");
+        assert!(
+            p2 < p1,
+            "smoothed price should be less than previous high price"
+        );
     }
 
     #[test]

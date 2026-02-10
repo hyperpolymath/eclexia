@@ -79,10 +79,7 @@ pub enum RuntimeError {
 
     /// No solution satisfies the adaptive function constraints
     #[error("no suitable solution found for adaptive function '{name}'")]
-    NoSuitableSolution {
-        name: String,
-        hint: Option<String>,
-    },
+    NoSuitableSolution { name: String, hint: Option<String> },
 
     /// Early return from a function (control flow, not a true error)
     #[error("return from top level")]
@@ -110,7 +107,9 @@ impl RuntimeError {
     pub fn type_error(expected: impl Into<String>, got: impl Into<String>) -> Self {
         let expected_str = expected.into();
         let got_str = got.into();
-        let hint = Some("check that the value's type matches what is expected in this context".to_string());
+        let hint = Some(
+            "check that the value's type matches what is expected in this context".to_string(),
+        );
         Self::TypeError {
             expected: expected_str,
             got: got_str,
@@ -129,10 +128,7 @@ impl RuntimeError {
     }
 
     /// Create an undefined variable error with a "did you mean?" suggestion.
-    pub fn undefined_with_suggestions(
-        name: impl Into<String>,
-        available_names: &[&str],
-    ) -> Self {
+    pub fn undefined_with_suggestions(name: impl Into<String>, available_names: &[&str]) -> Self {
         let name_str = name.into();
         let hint = find_closest_match(&name_str, available_names)
             .map(|suggestion| format!("did you mean '{}'?", suggestion))
@@ -239,27 +235,69 @@ impl RuntimeError {
     /// Add span information to this error.
     pub fn with_span(self, span: Span) -> Self {
         match self {
-            Self::UndefinedVariable { name, hint, .. } => {
-                Self::UndefinedVariable { name, span: Some(span), hint }
-            }
-            Self::TypeError { expected, got, hint, .. } => {
-                Self::TypeError { expected, got, span: Some(span), hint }
-            }
-            Self::ArityMismatch { expected, got, hint } => Self::ArityMismatch { expected, got, hint },
-            Self::DivisionByZero { hint, .. } => Self::DivisionByZero { span: Some(span), hint },
-            Self::IndexOutOfBounds { index, len, hint, .. } => {
-                Self::IndexOutOfBounds { index, len, span: Some(span), hint }
-            }
-            Self::NoSuchField { struct_name, field, hint, .. } => {
-                Self::NoSuchField { struct_name, field, span: Some(span), hint }
-            }
-            Self::NotCallable { ty, hint, .. } => Self::NotCallable { ty, span: Some(span), hint },
+            Self::UndefinedVariable { name, hint, .. } => Self::UndefinedVariable {
+                name,
+                span: Some(span),
+                hint,
+            },
+            Self::TypeError {
+                expected,
+                got,
+                hint,
+                ..
+            } => Self::TypeError {
+                expected,
+                got,
+                span: Some(span),
+                hint,
+            },
+            Self::ArityMismatch {
+                expected,
+                got,
+                hint,
+            } => Self::ArityMismatch {
+                expected,
+                got,
+                hint,
+            },
+            Self::DivisionByZero { hint, .. } => Self::DivisionByZero {
+                span: Some(span),
+                hint,
+            },
+            Self::IndexOutOfBounds {
+                index, len, hint, ..
+            } => Self::IndexOutOfBounds {
+                index,
+                len,
+                span: Some(span),
+                hint,
+            },
+            Self::NoSuchField {
+                struct_name,
+                field,
+                hint,
+                ..
+            } => Self::NoSuchField {
+                struct_name,
+                field,
+                span: Some(span),
+                hint,
+            },
+            Self::NotCallable { ty, hint, .. } => Self::NotCallable {
+                ty,
+                span: Some(span),
+                hint,
+            },
             Self::ResourceViolation { message, hint } => Self::ResourceViolation { message, hint },
             Self::NoSuitableSolution { name, hint } => Self::NoSuitableSolution { name, hint },
             Self::Return(v) => Self::Return(v),
             Self::Break => Self::Break,
             Self::Continue => Self::Continue,
-            Self::Custom { message, hint, .. } => Self::Custom { message, span: Some(span), hint },
+            Self::Custom { message, hint, .. } => Self::Custom {
+                message,
+                span: Some(span),
+                hint,
+            },
         }
     }
 }

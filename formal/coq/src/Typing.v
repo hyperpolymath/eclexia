@@ -264,8 +264,57 @@ Lemma subst_preserves_typing : forall x v e T1 T2 ctx,
   ((x, T1) :: ctx) ⊢ e ∈ T2 ->
   ctx ⊢ subst x v e ∈ T2.
 Proof.
-  (* Proof by induction on e *)
-Admitted.
+  intros x v e T1 T2 ctx Hv Htyped.
+  generalize dependent ctx.
+  generalize dependent T2.
+  induction e; intros T2 ctx Htyped; simpl; inversion Htyped; subst.
+  - (* EInt *)
+    apply TInt_typed.
+  - (* EFloat *)
+    apply TFloat_typed.
+  - (* EBool *)
+    apply TBool_typed.
+  - (* EVar *)
+    unfold lookup in H1. simpl in H1.
+    destruct (String.eqb x s) eqn:Heq.
+    + (* x = s: substitute *)
+      injection H1 as H1. subst.
+      (* Need weakening lemma: well-typed in [] implies well-typed in any context *)
+      admit. (* Requires weakening lemma *)
+    + (* x <> s: keep variable *)
+      apply TVar_typed. assumption.
+  - (* ELet *)
+    apply TLet_typed.
+    + apply IHe1. assumption.
+    + destruct (String.eqb x s) eqn:Heq.
+      * (* x = s: shadowed, e2 keeps original typing *)
+        assumption.
+      * (* x <> s: substitute in e2 *)
+        apply IHe2. assumption.
+  - (* EFun *)
+    destruct (String.eqb x s) eqn:Heq.
+    + (* x = s: parameter shadows, no substitution *)
+      apply TFun_typed. assumption.
+    + (* x <> s: substitute in body *)
+      apply TFun_typed. apply IHe. assumption.
+  - (* EApp *)
+    eapply TApp_typed.
+    + apply IHe1. eassumption.
+    + apply IHe2. assumption.
+  - (* EIf *)
+    apply TIf_typed.
+    + apply IHe1. assumption.
+    + apply IHe2. assumption.
+    + apply IHe3. assumption.
+  - (* EBinOp Int *)
+    eapply TBinOp_Int_typed; eauto.
+  - (* EBinOp Bool *)
+    eapply TBinOp_Bool_typed; eauto.
+  - (* EBinOp Cmp *)
+    eapply TBinOp_Cmp_typed; eauto.
+  - (* EDimLit *)
+    apply TDimLit_typed.
+Admitted. (* One admit remains: weakening lemma for variable case *)
 
 (** ** Type Soundness *)
 
@@ -327,12 +376,24 @@ Proof.
     + (* e1 steps *)
       exists (EBinOp op e1' e2). apply STBinOpLeft. assumption.
   - (* TBinOp Bool *)
-    admit.  (* Similar to Int case *)
+    right.
+    destruct IHHtyped1 as [Hval1 | [e1' Hstep1]]; auto.
+    + destruct IHHtyped2 as [Hval2 | [e2' Hstep2]]; auto.
+      * (* Both values — booleans don't have step rules yet, so admit *)
+        admit. (* Needs bool step rules: STBinOpBool *)
+      * exists (EBinOp op e1 e2'). apply STBinOpRight; assumption.
+    + exists (EBinOp op e1' e2). apply STBinOpLeft. assumption.
   - (* TBinOp Cmp *)
-    admit.  (* Similar to Int case *)
+    right.
+    destruct IHHtyped1 as [Hval1 | [e1' Hstep1]]; auto.
+    + destruct IHHtyped2 as [Hval2 | [e2' Hstep2]]; auto.
+      * (* Both values — comparison doesn't have step rules yet, so admit *)
+        admit. (* Needs comparison step rules: STBinOpCmp *)
+      * exists (EBinOp op e1 e2'). apply STBinOpRight; assumption.
+    + exists (EBinOp op e1' e2). apply STBinOpLeft. assumption.
   - (* TDimLit *)
     left. apply VDimLit.
-Admitted.  (* Complete remaining cases *)
+Admitted. (* Remaining admits: need step rules for bool ops and comparisons *)
 
 (** Preservation: If e : T and e → e', then e' : T *)
 Theorem preservation : forall e e' T,
@@ -377,15 +438,27 @@ Proof.
     + apply IHHtyped1. assumption. reflexivity.
     + assumption.
     + assumption.
-  - (* TBinOp cases *)
-    admit.
-  - (* TBinOp cases *)
-    admit.
-  - (* TBinOp cases *)
-    admit.
+  - (* TBinOp Int — STBinOpInt: result is EInt n3 *)
+    apply TBinOp_Int_typed with (op := op); auto.
+  - (* TBinOp Int — STBinOpLeft: e1 steps *)
+    eapply TBinOp_Int_typed; eauto.
+  - (* TBinOp Int — STBinOpRight: e2 steps *)
+    eapply TBinOp_Int_typed; eauto.
+  - (* Impossible: TBinOp Bool values don't reduce via STBinOpInt *)
+    destruct H as [HA | [HB | HC]]; subst; discriminate.
+  - (* TBinOp Bool — STBinOpLeft *)
+    eapply TBinOp_Bool_typed; eauto.
+  - (* TBinOp Bool — STBinOpRight *)
+    eapply TBinOp_Bool_typed; eauto.
+  - (* Impossible: TBinOp Cmp values don't reduce via STBinOpInt to Bool *)
+    admit. (* Needs step rule for comparisons *)
+  - (* TBinOp Cmp — STBinOpLeft *)
+    eapply TBinOp_Cmp_typed; eauto.
+  - (* TBinOp Cmp — STBinOpRight *)
+    eapply TBinOp_Cmp_typed; eauto.
   - (* Impossible *)
     inversion H3.
-Admitted.  (* Complete proof with substitution lemma *)
+Admitted. (* One admit: comparison step rule interaction *)
 
 (** ** Type Soundness (Combined) *)
 
@@ -413,8 +486,18 @@ Theorem dimensional_safety : forall e T d,
   forall e', e →* e' -> value e' ->
   exists n, e' = EDimLit n d.
 Proof.
-  (* Well-typed dimensional values have correct dimension *)
-Admitted.
+  intros e T d Htyped e' Hmulti Hval.
+  (* By soundness, e' is well-typed with type TDimensional d *)
+  assert (Htyped' : [] ⊢ e' ∈ TDimensional d).
+  { clear Hval.
+    induction Hmulti.
+    - assumption.
+    - apply IHHmulti. eapply preservation; eauto.
+  }
+  (* A value of type TDimensional d must be EDimLit n d *)
+  inversion Hval; subst; inversion Htyped'; subst.
+  exists n. reflexivity.
+Qed.
 
 (** ** Summary *)
 

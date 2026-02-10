@@ -82,9 +82,7 @@ pub struct ResourceTracker {
 impl ResourceTracker {
     /// Create a new tracker
     pub fn new() -> Self {
-        Self {
-            usage: Vec::new(),
-        }
+        Self { usage: Vec::new() }
     }
 
     /// Record resource usage

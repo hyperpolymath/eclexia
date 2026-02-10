@@ -7,9 +7,9 @@
 //! Each task carries a resource budget and the executor tracks aggregate
 //! resource usage across all tasks.
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use parking_lot::RwLock;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 
 /// Configuration for the async runtime.
 #[derive(Debug, Clone)]
@@ -93,12 +93,14 @@ impl RuntimeState {
 
     /// Record energy usage (in millijoules for integer precision).
     pub fn record_energy(&self, millijoules: u64) {
-        self.total_energy_mj.fetch_add(millijoules, Ordering::Relaxed);
+        self.total_energy_mj
+            .fetch_add(millijoules, Ordering::Relaxed);
     }
 
     /// Record carbon emissions (in micrograms CO2e for precision).
     pub fn record_carbon(&self, micrograms: u64) {
-        self.total_carbon_ug.fetch_add(micrograms, Ordering::Relaxed);
+        self.total_carbon_ug
+            .fetch_add(micrograms, Ordering::Relaxed);
     }
 }
 
@@ -152,9 +154,7 @@ impl Runtime {
 
         builder.enable_all();
 
-        let inner = builder
-            .build()
-            .expect("Failed to create tokio runtime");
+        let inner = builder.build().expect("Failed to create tokio runtime");
 
         Self {
             inner,
@@ -213,7 +213,8 @@ impl Runtime {
             tasks_completed: self.state.tasks_completed.load(Ordering::Relaxed),
             tasks_failed: self.state.tasks_failed.load(Ordering::Relaxed),
             total_energy_j: self.state.total_energy_mj.load(Ordering::Relaxed) as f64 / 1000.0,
-            total_carbon_gco2e: self.state.total_carbon_ug.load(Ordering::Relaxed) as f64 / 1_000_000.0,
+            total_carbon_gco2e: self.state.total_carbon_ug.load(Ordering::Relaxed) as f64
+                / 1_000_000.0,
         }
     }
 

@@ -33,8 +33,8 @@
 //! let type_errors = queries::type_check(&db, source); // re-runs parse + type_check
 //! ```
 
-pub mod vfs;
 pub mod queries;
+pub mod vfs;
 
 use std::sync::Arc;
 
@@ -223,8 +223,15 @@ mod tests {
         let source = SourceFile::new(&db, "def main() -> Unit { println(\"hello\") }".to_string());
 
         let (ast_wrapper, errors) = queries::parse(&db, source);
-        assert!(errors.is_empty(), "Expected no parse errors, got: {:?}", errors);
-        assert!(!ast_wrapper.ast.items.is_empty(), "Expected at least one item");
+        assert!(
+            errors.is_empty(),
+            "Expected no parse errors, got: {:?}",
+            errors
+        );
+        assert!(
+            !ast_wrapper.ast.items.is_empty(),
+            "Expected at least one item"
+        );
     }
 
     #[test]
@@ -233,7 +240,11 @@ mod tests {
         let source = SourceFile::new(&db, "def main() -> Unit { println(\"hello\") }".to_string());
 
         let type_errors = queries::type_check(&db, source);
-        assert!(type_errors.is_empty(), "Expected no type errors, got: {:?}", type_errors);
+        assert!(
+            type_errors.is_empty(),
+            "Expected no type errors, got: {:?}",
+            type_errors
+        );
     }
 
     #[test]
@@ -243,7 +254,10 @@ mod tests {
 
         let diags = queries::all_diagnostics(&db, source);
         // May have lint warnings but should have no errors
-        let errors: Vec<_> = diags.iter().filter(|d| d.severity == DiagnosticSeverity::Error).collect();
+        let errors: Vec<_> = diags
+            .iter()
+            .filter(|d| d.severity == DiagnosticSeverity::Error)
+            .collect();
         assert!(errors.is_empty(), "Expected no errors, got: {:?}", errors);
     }
 
@@ -253,7 +267,10 @@ mod tests {
         let source = SourceFile::new(&db, "def { broken syntax".to_string());
 
         let (_ast, errors) = queries::parse(&db, source);
-        assert!(!errors.is_empty(), "Expected parse errors for broken syntax");
+        assert!(
+            !errors.is_empty(),
+            "Expected parse errors for broken syntax"
+        );
     }
 
     #[test]
@@ -267,12 +284,17 @@ mod tests {
 
         // Update source text
         use salsa::Setter;
-        source.set_text(&mut db).to("def main() -> Unit { println(\"v2\") }".to_string());
+        source
+            .set_text(&mut db)
+            .to("def main() -> Unit { println(\"v2\") }".to_string());
 
         // Second parse — should produce a different generation
         let (ast2, errors2) = queries::parse(&db, source);
         assert!(errors2.is_empty());
-        assert_ne!(ast1.generation, ast2.generation, "Generation should differ after reparse");
+        assert_ne!(
+            ast1.generation, ast2.generation,
+            "Generation should differ after reparse"
+        );
     }
 
     #[test]
@@ -317,7 +339,9 @@ mod tests {
         vfs.apply_changes(&mut db, changes);
 
         // Query through VFS
-        let source = vfs.get(std::path::Path::new("test.ecl")).expect("File should be tracked");
+        let source = vfs
+            .get(std::path::Path::new("test.ecl"))
+            .expect("File should be tracked");
         let (_ast, errors) = queries::parse(&db, source);
         assert!(errors.is_empty());
     }

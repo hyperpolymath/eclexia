@@ -36,13 +36,10 @@ mod executor;
 mod parallel;
 mod task;
 
-pub use channel::{
-    Channel, ChannelError, Receiver, Sender,
-    broadcast, mpsc, oneshot,
-};
+pub use channel::{broadcast, mpsc, oneshot, Channel, ChannelError, Receiver, Sender};
 pub use executor::{Runtime, RuntimeConfig};
 pub use parallel::{ParallelIterator, ParallelMap};
-pub use task::{Task, TaskHandle, TaskId, TaskState, JoinError};
+pub use task::{JoinError, Task, TaskHandle, TaskId, TaskState};
 
 #[cfg(test)]
 mod tests {
@@ -89,24 +86,21 @@ mod tests {
     #[test]
     fn test_parallel_map() {
         let data = vec![1, 2, 3, 4, 5];
-        let result: Vec<i64> = ParallelIterator::from_vec(data)
-            .par_map(|x| x * 2);
+        let result: Vec<i64> = ParallelIterator::from_vec(data).par_map(|x| x * 2);
         assert_eq!(result, vec![2, 4, 6, 8, 10]);
     }
 
     #[test]
     fn test_parallel_filter() {
         let data = vec![1, 2, 3, 4, 5, 6];
-        let result: Vec<i64> = ParallelIterator::from_vec(data)
-            .par_filter(|x| x % 2 == 0);
+        let result: Vec<i64> = ParallelIterator::from_vec(data).par_filter(|x| x % 2 == 0);
         assert_eq!(result, vec![2, 4, 6]);
     }
 
     #[test]
     fn test_parallel_reduce() {
         let data = vec![1, 2, 3, 4, 5];
-        let result = ParallelIterator::from_vec(data)
-            .par_reduce(0, |acc, x| acc + x);
+        let result = ParallelIterator::from_vec(data).par_reduce(0, |acc, x| acc + x);
         assert_eq!(result, 15);
     }
 

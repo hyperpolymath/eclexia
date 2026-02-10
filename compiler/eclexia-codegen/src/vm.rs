@@ -7,9 +7,11 @@
 
 use crate::bytecode::{BytecodeModule, Instruction};
 use eclexia_ast::dimension::Dimension;
-use eclexia_ast::types::{Ty, PrimitiveTy};
+use eclexia_ast::types::{PrimitiveTy, Ty};
 use smol_str::SmolStr;
 use std::collections::{HashMap, HashSet};
+
+const TAG_FIELD: &str = "__eclexia_tag";
 
 /// A value on the VM stack
 #[derive(Debug, Clone)]
@@ -24,6 +26,10 @@ pub enum Value {
     Float(f64),
     /// Heap-allocated string
     String(String),
+    /// Array value
+    Array(Vec<Value>),
+    /// Struct-like map
+    Struct(HashMap<SmolStr, Value>),
     /// Unicode character
     Char(char),
     /// Function reference by index into the module's function table
@@ -308,8 +314,7 @@ impl VirtualMachine {
 
     /// Execute the module's entry point
     pub fn run(&mut self) -> Result<Value, VmError> {
-        let entry_idx = self.module.entry_point
-            .ok_or(VmError::MissingFunction(0))?;
+        let entry_idx = self.module.entry_point.ok_or(VmError::MissingFunction(0))?;
 
         self.call_function(entry_idx, &[])?;
         self.execute()
@@ -385,8 +390,15 @@ impl VirtualMachine {
 
             // Debug
             if self.debug_mode {
-                eprintln!("Exec: func={}, ip={}, inst={:?}, stack={}, locals={}, call_depth={}",
-                         func_idx, ip, inst, self.stack.len(), self.locals.len(), call_depth_before);
+                eprintln!(
+                    "Exec: func={}, ip={}, inst={:?}, stack={}, locals={}, call_depth={}",
+                    func_idx,
+                    ip,
+                    inst,
+                    self.stack.len(),
+                    self.locals.len(),
+                    call_depth_before
+                );
             }
 
             // Execute instruction
@@ -436,10 +448,7 @@ impl VirtualMachine {
     }
 
     /// Execute a single instruction
-    fn execute_instruction(
-        &mut self,
-        inst: &Instruction,
-    ) -> Result<ExecutionResult, VmError> {
+    fn execute_instruction(&mut self, inst: &Instruction) -> Result<ExecutionResult, VmError> {
         match inst {
             // Stack operations
             Instruction::PushInt(i) => {
@@ -458,8 +467,10 @@ impl VirtualMachine {
             }
 
             Instruction::PushString(idx) => {
-                let s = self.module.strings.get(*idx)
-                    .ok_or(VmError::OutOfBounds { index: *idx, size: self.module.strings.len() })?;
+                let s = self.module.strings.get(*idx).ok_or(VmError::OutOfBounds {
+                    index: *idx,
+                    size: self.module.strings.len(),
+                })?;
                 self.push(Value::String(s.clone()))?;
                 Ok(ExecutionResult::Continue)
             }
@@ -473,8 +484,13 @@ impl VirtualMachine {
                 let bp = self.call_stack.last().ok_or(VmError::StackUnderflow)?.bp;
                 let local_idx = bp + (*idx as usize);
 
-                let value = self.locals.get(local_idx)
-                    .ok_or(VmError::OutOfBounds { index: local_idx, size: self.locals.len() })?
+                let value = self
+                    .locals
+                    .get(local_idx)
+                    .ok_or(VmError::OutOfBounds {
+                        index: local_idx,
+                        size: self.locals.len(),
+                    })?
                     .clone();
 
                 self.push(value)?;
@@ -487,7 +503,10 @@ impl VirtualMachine {
                 let local_idx = bp + (*idx as usize);
 
                 if local_idx >= self.locals.len() {
-                    return Err(VmError::OutOfBounds { index: local_idx, size: self.locals.len() });
+                    return Err(VmError::OutOfBounds {
+                        index: local_idx,
+                        size: self.locals.len(),
+                    });
                 }
 
                 self.locals[local_idx] = value;
@@ -507,9 +526,24 @@ impl VirtualMachine {
 
             // Arithmetic - Integer
             Instruction::AddInt => {
-                let b = self.pop()?.as_int()?;
-                let a = self.pop()?.as_int()?;
-                self.push(Value::Int(a.wrapping_add(b)))?;
+                let b = self.pop()?;
+                let a = self.pop()?;
+                match (a, b) {
+                    (Value::String(a), Value::String(b)) => {
+                        self.push(Value::String(format!("{}{}", a, b)))?;
+                    }
+                    (Value::String(a), other) => {
+                        self.push(Value::String(format!("{}{}", a, self.display_value(&other))))?;
+                    }
+                    (other, Value::String(b)) => {
+                        self.push(Value::String(format!("{}{}", self.display_value(&other), b)))?;
+                    }
+                    (a, b) => {
+                        let a = a.as_int()?;
+                        let b = b.as_int()?;
+                        self.push(Value::Int(a.wrapping_add(b)))?;
+                    }
+                }
                 Ok(ExecutionResult::Continue)
             }
 
@@ -590,16 +624,18 @@ impl VirtualMachine {
 
             // Comparison - Integer
             Instruction::EqInt => {
-                let b = self.pop()?.as_int()?;
-                let a = self.pop()?.as_int()?;
-                self.push(Value::Bool(a == b))?;
+                let b = self.pop()?;
+                let a = self.pop()?;
+                let result = self.values_equal(&a, &b);
+                self.push(Value::Bool(result))?;
                 Ok(ExecutionResult::Continue)
             }
 
             Instruction::NeInt => {
-                let b = self.pop()?.as_int()?;
-                let a = self.pop()?.as_int()?;
-                self.push(Value::Bool(a != b))?;
+                let b = self.pop()?;
+                let a = self.pop()?;
+                let result = !self.values_equal(&a, &b);
+                self.push(Value::Bool(result))?;
                 Ok(ExecutionResult::Continue)
             }
 
@@ -753,9 +789,7 @@ impl VirtualMachine {
             }
 
             // Control flow
-            Instruction::Jump(target) => {
-                Ok(ExecutionResult::Jump(*target))
-            }
+            Instruction::Jump(target) => Ok(ExecutionResult::Jump(*target)),
 
             Instruction::JumpIf(target) => {
                 let cond = self.pop()?.as_bool()?;
@@ -775,9 +809,7 @@ impl VirtualMachine {
                 }
             }
 
-            Instruction::Return => {
-                Ok(ExecutionResult::Return(Value::Unit))
-            }
+            Instruction::Return => Ok(ExecutionResult::Return(Value::Unit)),
 
             Instruction::ReturnValue => {
                 let value = self.pop()?;
@@ -798,11 +830,30 @@ impl VirtualMachine {
 
             Instruction::CallIndirect(arg_count) => {
                 let func_val = self.pop()?;
-                let func_idx = match func_val {
-                    Value::Function(idx) => idx,
-                    _ => return Err(VmError::TypeError(
-                        "CallIndirect requires a Function value on the stack".to_string()
-                    )),
+                let (func_idx, mut captured) = match func_val {
+                    Value::Function(idx) => (idx, Vec::new()),
+                    Value::Array(items) => {
+                        if items.is_empty() {
+                            return Err(VmError::TypeError(
+                                "CallIndirect requires a Function value on the stack".to_string(),
+                            ));
+                        }
+                        let mut iter = items.into_iter();
+                        let first = iter.next().unwrap();
+                        match first {
+                            Value::Function(idx) => (idx, iter.collect()),
+                            _ => {
+                                return Err(VmError::TypeError(
+                                    "CallIndirect requires a Function value on the stack".to_string(),
+                                ))
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "CallIndirect requires a Function value on the stack".to_string(),
+                        ))
+                    }
                 };
 
                 let mut args = Vec::new();
@@ -811,7 +862,14 @@ impl VirtualMachine {
                 }
                 args.reverse();
 
-                self.call_function(func_idx, &args)?;
+                if !captured.is_empty() {
+                    let mut all_args = Vec::with_capacity(captured.len() + args.len());
+                    all_args.append(&mut captured);
+                    all_args.extend(args);
+                    self.call_function(func_idx, &all_args)?;
+                } else {
+                    self.call_function(func_idx, &args)?;
+                }
                 Ok(ExecutionResult::Continue)
             }
 
@@ -828,7 +886,10 @@ impl VirtualMachine {
             }
 
             // Resource tracking
-            Instruction::TrackResource { resource, dimension } => {
+            Instruction::TrackResource {
+                resource,
+                dimension,
+            } => {
                 let amount = self.pop()?.as_float()?;
                 self.resources.push(ResourceUsage {
                     resource: resource.clone(),
@@ -838,7 +899,10 @@ impl VirtualMachine {
                 Ok(ExecutionResult::Continue)
             }
 
-            Instruction::ShadowPriceHook { resource: _, dimension: _ } => {
+            Instruction::ShadowPriceHook {
+                resource: _,
+                dimension: _,
+            } => {
                 // Shadow price hook - in a real implementation, this would
                 // query the runtime for current shadow prices
                 Ok(ExecutionResult::Continue)
@@ -848,15 +912,9 @@ impl VirtualMachine {
             Instruction::Cast { from: _, to } => {
                 let value = self.pop()?;
                 let converted = match to {
-                    Ty::Primitive(PrimitiveTy::Int) => {
-                        Value::Int(value.as_int()?)
-                    }
-                    Ty::Primitive(PrimitiveTy::Float) => {
-                        Value::Float(value.as_float()?)
-                    }
-                    Ty::Primitive(PrimitiveTy::Bool) => {
-                        Value::Bool(value.as_bool()?)
-                    }
+                    Ty::Primitive(PrimitiveTy::Int) => Value::Int(value.as_int()?),
+                    Ty::Primitive(PrimitiveTy::Float) => Value::Float(value.as_float()?),
+                    Ty::Primitive(PrimitiveTy::Bool) => Value::Bool(value.as_bool()?),
                     Ty::Primitive(PrimitiveTy::String) => {
                         let s = match &value {
                             Value::Int(i) => format!("{}", i),
@@ -864,6 +922,19 @@ impl VirtualMachine {
                             Value::Bool(b) => format!("{}", b),
                             Value::Char(c) => format!("{}", c),
                             Value::String(s) => s.clone(),
+                            Value::Array(items) => {
+                                let parts: Vec<String> =
+                                    items.iter().map(|v| self.display_value(v)).collect();
+                                format!("[{}]", parts.join(", "))
+                            }
+                            Value::Struct(fields) => {
+                                let mut parts: Vec<String> = fields
+                                    .iter()
+                                    .map(|(k, v)| format!("{}: {}", k, self.display_value(v)))
+                                    .collect();
+                                parts.sort();
+                                format!("{{{}}}", parts.join(", "))
+                            }
                             Value::Unit => "()".to_string(),
                             Value::Function(idx) => format!("<function {}>", idx),
                             Value::Range(start, end) => format!("{}..{}", start, end),
@@ -894,17 +965,131 @@ impl VirtualMachine {
             }
 
             // Field access (simplified: fields not resolved in VM yet, leave base on stack)
-            Instruction::FieldAccess(_field) => {
-                // Base value is already on the stack; in a full implementation
-                // we would resolve the field. For now, leave the base value as-is.
-                Ok(ExecutionResult::Continue)
+            Instruction::FieldAccess(field) => {
+                let base = self.pop()?;
+                match base {
+                    Value::Struct(fields) => {
+                        if let Some(val) = fields.get(field) {
+                            self.push(val.clone())?;
+                            Ok(ExecutionResult::Continue)
+                        } else {
+                            Err(VmError::TypeError(format!(
+                                "No such field: {}",
+                                field
+                            )))
+                        }
+                    }
+                    Value::Array(items) if field.as_str() == "len" => {
+                        self.push(Value::Int(items.len() as i64))?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    Value::String(s) if field.as_str() == "len" => {
+                        self.push(Value::Int(s.len() as i64))?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    Value::Range(start, end) if field.as_str() == "len" => {
+                        let len = end.saturating_sub(start).max(0) as i64;
+                        self.push(Value::Int(len))?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    Value::RangeInclusive(start, end) if field.as_str() == "len" => {
+                        let len = end.saturating_sub(start).max(0) as i64 + 1;
+                        self.push(Value::Int(len))?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    other => Err(VmError::TypeError(format!(
+                        "Field access not supported on {}",
+                        self.display_value(&other)
+                    ))),
+                }
             }
 
             // Index access (simplified: pop index and base, push base back)
             Instruction::IndexAccess => {
-                let _index = self.pop()?;
-                // Base value remains on the stack. In a full implementation,
-                // we would perform the index operation on the base value.
+                let index = self.pop()?.as_int()? as usize;
+                let base = self.pop()?;
+                match base {
+                    Value::Array(items) => {
+                        let value = items.get(index).cloned().ok_or(VmError::OutOfBounds {
+                            index,
+                            size: items.len(),
+                        })?;
+                        self.push(value)?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    Value::String(s) => {
+                        let ch = s.chars().nth(index).ok_or(VmError::OutOfBounds {
+                            index,
+                            size: s.len(),
+                        })?;
+                        self.push(Value::Char(ch))?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    Value::Range(start, end) => {
+                        let value = start + index as i64;
+                        if value >= end {
+                            return Err(VmError::OutOfBounds {
+                                index,
+                                size: (end - start).max(0) as usize,
+                            });
+                        }
+                        self.push(Value::Int(value))?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    Value::RangeInclusive(start, end) => {
+                        let value = start + index as i64;
+                        if value > end {
+                            return Err(VmError::OutOfBounds {
+                                index,
+                                size: (end - start + 1).max(0) as usize,
+                            });
+                        }
+                        self.push(Value::Int(value))?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    _ => Err(VmError::TypeError(
+                        "Index access requires array or string".to_string(),
+                    )),
+                }
+            }
+
+            // Set a field on a struct-like value
+            Instruction::SetField(field) => {
+                let value = self.pop()?;
+                let base = self.pop()?;
+                let mut fields = match base {
+                    Value::Struct(fields) => fields,
+                    Value::Unit => HashMap::new(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "SetField requires a struct-like value".to_string(),
+                        ))
+                    }
+                };
+                fields.insert(field.clone(), value);
+                self.push(Value::Struct(fields))?;
+                Ok(ExecutionResult::Continue)
+            }
+
+            // Set an index on an array-like value
+            Instruction::SetIndex => {
+                let value = self.pop()?;
+                let index = self.pop()?.as_int()? as usize;
+                let base = self.pop()?;
+                let mut items = match base {
+                    Value::Array(items) => items,
+                    Value::Unit => Vec::new(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "SetIndex requires an array value".to_string(),
+                        ))
+                    }
+                };
+                if index >= items.len() {
+                    items.resize(index + 1, Value::Unit);
+                }
+                items[index] = value;
+                self.push(Value::Array(items))?;
                 Ok(ExecutionResult::Continue)
             }
 
@@ -965,92 +1150,221 @@ impl VirtualMachine {
                 }
                 Ok(Value::String(self.display_value(&args[0])))
             }
-            "len" => {
-                match args.first() {
-                    Some(Value::String(s)) => Ok(Value::Int(s.len() as i64)),
-                    _ => Ok(Value::Int(0)),
+            "len" => match args.first() {
+                Some(Value::String(s)) => Ok(Value::Int(s.len() as i64)),
+                Some(Value::Array(items)) => Ok(Value::Int(items.len() as i64)),
+                _ => Ok(Value::Int(0)),
+            },
+            "abs" => match args.first() {
+                Some(Value::Int(i)) => Ok(Value::Int(i.abs())),
+                Some(Value::Float(f)) => Ok(Value::Float(f.abs())),
+                _ => Ok(Value::Int(0)),
+            },
+            "min" => match (args.first(), args.get(1)) {
+                (Some(Value::Int(a)), Some(Value::Int(b))) => Ok(Value::Int(*a.min(b))),
+                (Some(Value::Float(a)), Some(Value::Float(b))) => Ok(Value::Float(a.min(*b))),
+                _ => Ok(Value::Int(0)),
+            },
+            "max" => match (args.first(), args.get(1)) {
+                (Some(Value::Int(a)), Some(Value::Int(b))) => Ok(Value::Int(*a.max(b))),
+                (Some(Value::Float(a)), Some(Value::Float(b))) => Ok(Value::Float(a.max(*b))),
+                _ => Ok(Value::Int(0)),
+            },
+            "sqrt" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.sqrt())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).sqrt())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "floor" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Int(f.floor() as i64)),
+                Some(Value::Int(i)) => Ok(Value::Int(*i)),
+                _ => Ok(Value::Int(0)),
+            },
+            "ceil" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Int(f.ceil() as i64)),
+                Some(Value::Int(i)) => Ok(Value::Int(*i)),
+                _ => Ok(Value::Int(0)),
+            },
+            "pow" => match (args.first(), args.get(1)) {
+                (Some(Value::Int(a)), Some(Value::Int(b))) => {
+                    Ok(Value::Int(a.wrapping_pow(*b as u32)))
                 }
-            }
-            "abs" => {
-                match args.first() {
-                    Some(Value::Int(i)) => Ok(Value::Int(i.abs())),
-                    Some(Value::Float(f)) => Ok(Value::Float(f.abs())),
-                    _ => Ok(Value::Int(0)),
-                }
-            }
-            "min" => {
-                match (args.first(), args.get(1)) {
-                    (Some(Value::Int(a)), Some(Value::Int(b))) => Ok(Value::Int(*a.min(b))),
-                    (Some(Value::Float(a)), Some(Value::Float(b))) => Ok(Value::Float(a.min(*b))),
-                    _ => Ok(Value::Int(0)),
-                }
-            }
-            "max" => {
-                match (args.first(), args.get(1)) {
-                    (Some(Value::Int(a)), Some(Value::Int(b))) => Ok(Value::Int(*a.max(b))),
-                    (Some(Value::Float(a)), Some(Value::Float(b))) => Ok(Value::Float(a.max(*b))),
-                    _ => Ok(Value::Int(0)),
-                }
-            }
-            "sqrt" => {
-                match args.first() {
-                    Some(Value::Float(f)) => Ok(Value::Float(f.sqrt())),
-                    Some(Value::Int(i)) => Ok(Value::Float((*i as f64).sqrt())),
-                    _ => Ok(Value::Float(0.0)),
-                }
-            }
-            "floor" => {
-                match args.first() {
-                    Some(Value::Float(f)) => Ok(Value::Int(f.floor() as i64)),
-                    Some(Value::Int(i)) => Ok(Value::Int(*i)),
-                    _ => Ok(Value::Int(0)),
-                }
-            }
-            "ceil" => {
-                match args.first() {
-                    Some(Value::Float(f)) => Ok(Value::Int(f.ceil() as i64)),
-                    Some(Value::Int(i)) => Ok(Value::Int(*i)),
-                    _ => Ok(Value::Int(0)),
-                }
-            }
-            "pow" => {
-                match (args.first(), args.get(1)) {
-                    (Some(Value::Int(a)), Some(Value::Int(b))) => {
-                        Ok(Value::Int(a.wrapping_pow(*b as u32)))
-                    }
-                    (Some(Value::Float(a)), Some(Value::Float(b))) => Ok(Value::Float(a.powf(*b))),
-                    _ => Ok(Value::Int(0)),
-                }
-            }
-            "log" => {
-                match args.first() {
-                    Some(Value::Float(f)) => Ok(Value::Float(f.ln())),
-                    Some(Value::Int(i)) => Ok(Value::Float((*i as f64).ln())),
-                    _ => Ok(Value::Float(0.0)),
-                }
-            }
-            "exp" => {
-                match args.first() {
-                    Some(Value::Float(f)) => Ok(Value::Float(f.exp())),
-                    Some(Value::Int(i)) => Ok(Value::Float((*i as f64).exp())),
-                    _ => Ok(Value::Float(0.0)),
-                }
-            }
-            "assert" => {
-                match args.first() {
-                    Some(Value::Bool(true)) => Ok(Value::Unit),
-                    Some(Value::Bool(false)) => Err(VmError::TypeError("Assertion failed".to_string())),
-                    _ => Err(VmError::TypeError("assert requires a boolean".to_string())),
-                }
-            }
+                (Some(Value::Float(a)), Some(Value::Float(b))) => Ok(Value::Float(a.powf(*b))),
+                _ => Ok(Value::Int(0)),
+            },
+            "log" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.ln())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).ln())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "exp" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.exp())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).exp())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "assert" => match args.first() {
+                Some(Value::Bool(true)) => Ok(Value::Unit),
+                Some(Value::Bool(false)) => Err(VmError::TypeError("Assertion failed".to_string())),
+                _ => Err(VmError::TypeError("assert requires a boolean".to_string())),
+            },
             "panic" => {
-                let msg = args.first().map(|a| self.display_value(a)).unwrap_or_default();
+                let msg = args
+                    .first()
+                    .map(|a| self.display_value(a))
+                    .unwrap_or_default();
                 Err(VmError::TypeError(format!("panic: {}", msg)))
             }
             "range" => {
-                match (args.first(), args.get(1)) {
-                    (Some(Value::Int(a)), Some(Value::Int(b))) => Ok(Value::Range(*a, *b)),
-                    _ => Ok(Value::Unit),
+                let (start, end) = match (args.first(), args.get(1)) {
+                    (Some(Value::Int(a)), Some(Value::Int(b))) => (*a, *b),
+                    (Some(Value::Int(end)), None) => (0, *end),
+                    _ => return Ok(Value::Unit),
+                };
+                let mut items = Vec::new();
+                for i in start..end {
+                    items.push(Value::Int(i));
+                }
+                Ok(Value::Array(items))
+            }
+            "file_exists" => match args.first() {
+                Some(Value::String(path)) => Ok(Value::Bool(std::path::Path::new(path).exists())),
+                _ => Err(VmError::TypeError(
+                    "file_exists expects a string path".to_string(),
+                )),
+            },
+            "str_trim" => match args.first() {
+                Some(Value::String(s)) => Ok(Value::String(s.trim().to_string())),
+                _ => Err(VmError::TypeError(
+                    "str_trim expects a string argument".to_string(),
+                )),
+            },
+            "str_split" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "str_split expects 2 string arguments".to_string(),
+                    ));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::String(s), Value::String(delimiter)) => {
+                        let parts: Vec<Value> = s
+                            .split(delimiter)
+                            .map(|p| Value::String(p.to_string()))
+                            .collect();
+                        Ok(Value::Array(parts))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "str_split expects two string arguments".to_string(),
+                    )),
+                }
+            },
+            "str_contains" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "str_contains expects 2 string arguments".to_string(),
+                    ));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::String(s), Value::String(sub)) => Ok(Value::Bool(s.contains(sub))),
+                    _ => Err(VmError::TypeError(
+                        "str_contains expects two string arguments".to_string(),
+                    )),
+                }
+            },
+            "str_to_lowercase" => match args.first() {
+                Some(Value::String(s)) => Ok(Value::String(s.to_lowercase())),
+                _ => Err(VmError::TypeError(
+                    "str_to_lowercase expects a string argument".to_string(),
+                )),
+            },
+            "str_to_uppercase" => match args.first() {
+                Some(Value::String(s)) => Ok(Value::String(s.to_uppercase())),
+                _ => Err(VmError::TypeError(
+                    "str_to_uppercase expects a string argument".to_string(),
+                )),
+            },
+            "str_replace" => {
+                if args.len() != 3 {
+                    return Err(VmError::TypeError(
+                        "str_replace expects 3 string arguments".to_string(),
+                    ));
+                }
+                match (&args[0], &args[1], &args[2]) {
+                    (Value::String(s), Value::String(from), Value::String(to)) => {
+                        Ok(Value::String(s.replace(from, to)))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "str_replace expects three string arguments".to_string(),
+                    )),
+                }
+            },
+            "array_sum" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "array_sum expects 1 array argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::Array(arr) => {
+                        let mut sum_int: i64 = 0;
+                        let mut sum_float: f64 = 0.0;
+                        let mut has_float = false;
+
+                        for val in arr {
+                            match val {
+                                Value::Int(n) => {
+                                    if has_float {
+                                        sum_float += *n as f64;
+                                    } else {
+                                        sum_int += n;
+                                    }
+                                }
+                                Value::Float(f) => {
+                                    if !has_float {
+                                        sum_float = sum_int as f64;
+                                        has_float = true;
+                                    }
+                                    sum_float += f;
+                                }
+                                _ => return Err(VmError::TypeError(
+                                    "array_sum expects an array of numbers".to_string(),
+                                )),
+                            }
+                        }
+
+                        if has_float {
+                            Ok(Value::Float(sum_float))
+                        } else {
+                            Ok(Value::Int(sum_int))
+                        }
+                    }
+                    _ => Err(VmError::TypeError(
+                        "array_sum expects an array argument".to_string(),
+                    )),
+                }
+            },
+            "read_file" => match args.first() {
+                Some(Value::String(path)) => std::fs::read_to_string(path)
+                    .map(Value::String)
+                    .map_err(|e| VmError::TypeError(format!("read_file failed: {}", e))),
+                _ => Err(VmError::TypeError(
+                    "read_file expects a string path".to_string(),
+                )),
+            },
+            "write_file" => {
+                if args.len() < 2 {
+                    return Err(VmError::TypeError(
+                        "write_file expects (path, content)".to_string(),
+                    ));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::String(path), Value::String(content)) => {
+                        std::fs::write(path, content)
+                            .map_err(|e| VmError::TypeError(format!("write_file failed: {}", e)))?;
+                        Ok(Value::Unit)
+                    }
+                    _ => Err(VmError::TypeError(
+                        "write_file expects (string, string)".to_string(),
+                    )),
                 }
             }
             _ => {
@@ -1058,6 +1372,50 @@ impl VirtualMachine {
                 eprintln!("Warning: unknown builtin '{}', returning Unit", name);
                 Ok(Value::Unit)
             }
+        }
+    }
+
+    fn values_equal(&self, a: &Value, b: &Value) -> bool {
+        match (a, b) {
+            (Value::Unit, Value::Unit) => true,
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Int(a), Value::Float(b)) => (*a as f64) == *b,
+            (Value::Float(a), Value::Int(b)) => *a == (*b as f64),
+            (Value::Char(a), Value::Char(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Array(a), Value::Array(b)) => {
+                if a.len() != b.len() {
+                    return false;
+                }
+                a.iter().zip(b.iter()).all(|(x, y)| self.values_equal(x, y))
+            }
+            (Value::Struct(a), Value::Struct(b)) => {
+                let tag_a = a.get(TAG_FIELD);
+                let tag_b = b.get(TAG_FIELD);
+                if tag_a != tag_b {
+                    return false;
+                }
+                let mut filtered_a: Vec<(&SmolStr, &Value)> = a
+                    .iter()
+                    .filter(|(k, _)| k.as_str() != TAG_FIELD)
+                    .collect();
+                let mut filtered_b: Vec<(&SmolStr, &Value)> = b
+                    .iter()
+                    .filter(|(k, _)| k.as_str() != TAG_FIELD)
+                    .collect();
+                if filtered_a.len() != filtered_b.len() {
+                    return false;
+                }
+                filtered_a.sort_by(|(ka, _), (kb, _)| ka.cmp(kb));
+                filtered_b.sort_by(|(ka, _), (kb, _)| ka.cmp(kb));
+                filtered_a
+                    .iter()
+                    .zip(filtered_b.iter())
+                    .all(|((ka, va), (kb, vb))| ka == kb && self.values_equal(va, vb))
+            }
+            _ => false,
         }
     }
 
@@ -1070,6 +1428,19 @@ impl VirtualMachine {
             Value::Float(f) => format!("{}", f),
             Value::String(s) => s.clone(),
             Value::Char(c) => c.to_string(),
+            Value::Array(items) => {
+                let parts: Vec<String> = items.iter().map(|v| self.display_value(v)).collect();
+                format!("[{}]", parts.join(", "))
+            }
+            Value::Struct(fields) => {
+                let mut parts: Vec<String> = fields
+                    .iter()
+                    .filter(|(k, _)| k.as_str() != TAG_FIELD)
+                    .map(|(k, v)| format!("{}: {}", k, self.display_value(v)))
+                    .collect();
+                parts.sort();
+                format!("{{{}}}", parts.join(", "))
+            }
             Value::Function(idx) => format!("<function {}>", idx),
             Value::Range(a, b) => format!("{}..{}", a, b),
             Value::RangeInclusive(a, b) => format!("{}..={}", a, b),

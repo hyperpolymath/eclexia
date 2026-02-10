@@ -4,12 +4,12 @@
 //! LSP server implementation for Eclexia.
 
 use dashmap::DashMap;
+use eclexia_ast::span::Span;
+use eclexia_ast::{Item, SourceFile, TypeId, TypeKind};
+use std::collections::HashMap;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
-use std::collections::HashMap;
-use eclexia_ast::span::Span;
-use eclexia_ast::{Item, SourceFile, TypeId, TypeKind};
 
 use crate::symbols::SymbolTable;
 
@@ -51,7 +51,11 @@ fn format_type(ty_id: TypeId, file: &SourceFile) -> String {
         }
         TypeKind::Function { params, ret } => {
             let param_strs: Vec<_> = params.iter().map(|p| format_type(*p, file)).collect();
-            format!("fn({}) -> {}", param_strs.join(", "), format_type(*ret, file))
+            format!(
+                "fn({}) -> {}",
+                param_strs.join(", "),
+                format_type(*ret, file)
+            )
         }
         TypeKind::Tuple(elems) => {
             let elem_strs: Vec<_> = elems.iter().map(|e| format_type(*e, file)).collect();
@@ -276,7 +280,9 @@ impl EclexiaLanguageServer {
                         },
                     },
                     severity: Some(severity),
-                    code: Some(tower_lsp::lsp_types::NumberOrString::String(lint_diag.rule.clone())),
+                    code: Some(tower_lsp::lsp_types::NumberOrString::String(
+                        lint_diag.rule.clone(),
+                    )),
                     code_description: None,
                     source: Some("eclexia-lint".to_string()),
                     message: lint_diag.message,
@@ -414,9 +420,7 @@ impl LanguageServer for EclexiaLanguageServer {
         self.documents.remove(&uri);
 
         // Clear diagnostics
-        self.client
-            .publish_diagnostics(uri, Vec::new(), None)
-            .await;
+        self.client.publish_diagnostics(uri, Vec::new(), None).await;
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
@@ -488,10 +492,31 @@ impl LanguageServer for EclexiaLanguageServer {
 
                 // Add keyword completions
                 let keywords = vec![
-                    "fn", "let", "if", "else", "match", "return", "true", "false",
-                    "resource", "adaptive", "shadow", "budget", "dimension",
-                    "@requires", "@provides", "@builtin", "@test", "@bench",
-                    "import", "type", "const", "for", "while", "break", "continue",
+                    "fn",
+                    "let",
+                    "if",
+                    "else",
+                    "match",
+                    "return",
+                    "true",
+                    "false",
+                    "resource",
+                    "adaptive",
+                    "shadow",
+                    "budget",
+                    "dimension",
+                    "@requires",
+                    "@provides",
+                    "@builtin",
+                    "@test",
+                    "@bench",
+                    "import",
+                    "type",
+                    "const",
+                    "for",
+                    "while",
+                    "break",
+                    "continue",
                 ];
 
                 for keyword in keywords {
@@ -530,7 +555,9 @@ impl LanguageServer for EclexiaLanguageServer {
 
                     let kind = match symbol.kind {
                         crate::symbols::SymbolKind::Function => CompletionItemKind::FUNCTION,
-                        crate::symbols::SymbolKind::AdaptiveFunction => CompletionItemKind::FUNCTION,
+                        crate::symbols::SymbolKind::AdaptiveFunction => {
+                            CompletionItemKind::FUNCTION
+                        }
                         crate::symbols::SymbolKind::TypeDef => CompletionItemKind::CLASS,
                         crate::symbols::SymbolKind::Const => CompletionItemKind::CONSTANT,
                         crate::symbols::SymbolKind::Variable => CompletionItemKind::VARIABLE,
@@ -802,8 +829,7 @@ impl LanguageServer for EclexiaLanguageServer {
 
         if let Some(doc) = self.documents.get(&uri) {
             if let Some(ref symbols) = doc.symbols {
-                let byte_offset =
-                    line_col_to_offset(&doc.text, position.line, position.character);
+                let byte_offset = line_col_to_offset(&doc.text, position.line, position.character);
                 let position_span = Span::new(byte_offset, byte_offset + 1);
 
                 if let Some(symbol) = symbols.symbol_at_position(position_span) {
@@ -859,10 +885,7 @@ impl LanguageServer for EclexiaLanguageServer {
         Ok(None)
     }
 
-    async fn signature_help(
-        &self,
-        params: SignatureHelpParams,
-    ) -> Result<Option<SignatureHelp>> {
+    async fn signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
 
@@ -871,15 +894,11 @@ impl LanguageServer for EclexiaLanguageServer {
                 let byte_offset =
                     line_col_to_offset(&doc.text, position.line, position.character) as usize;
 
-                if let Some((func_name, active_param)) =
-                    find_call_context(&doc.text, byte_offset)
-                {
+                if let Some((func_name, active_param)) = find_call_context(&doc.text, byte_offset) {
                     // Find the function in parsed items
                     for item in &parsed.items {
                         let (name, params, return_type) = match item {
-                            Item::Function(f) => {
-                                (f.name.as_str(), &f.params, &f.return_type)
-                            }
+                            Item::Function(f) => (f.name.as_str(), &f.params, &f.return_type),
                             Item::AdaptiveFunction(f) => {
                                 (f.name.as_str(), &f.params, &f.return_type)
                             }
@@ -915,12 +934,7 @@ impl LanguageServer for EclexiaLanguageServer {
                             }
                             None => String::new(),
                         };
-                        let sig_label = format!(
-                            "{}({}){}",
-                            name,
-                            param_labels.join(", "),
-                            ret_str
-                        );
+                        let sig_label = format!("{}({}){}", name, param_labels.join(", "), ret_str);
 
                         return Ok(Some(SignatureHelp {
                             signatures: vec![SignatureInformation {

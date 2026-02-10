@@ -73,10 +73,7 @@ impl EffectRegistry {
     ///
     /// Each binding is `(effect_name, operation_name)`.
     /// Returns `None` if any binding references an unknown effect or operation.
-    pub fn build_evidence(
-        &mut self,
-        bindings: &[(SmolStr, SmolStr)],
-    ) -> Option<EvidenceVector> {
+    pub fn build_evidence(&mut self, bindings: &[(SmolStr, SmolStr)]) -> Option<EvidenceVector> {
         let mut ev = EvidenceVector::new();
 
         for (effect_name, op_name) in bindings {

@@ -114,6 +114,9 @@ mod tests {
 
         // Re-parse formatted code to ensure it's valid
         let (_, errors) = parse(&formatted);
-        assert!(errors.is_empty(), "Formatted code should parse without errors");
+        assert!(
+            errors.is_empty(),
+            "Formatted code should parse without errors"
+        );
     }
 }

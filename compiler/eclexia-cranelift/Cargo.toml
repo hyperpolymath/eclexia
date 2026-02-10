@@ -15,6 +15,13 @@ eclexia-ast = { path = "../eclexia-ast" }
 eclexia-mir = { path = "../eclexia-mir" }
 eclexia-codegen = { path = "../eclexia-codegen" }
 
+cranelift-codegen = "0.116"
+cranelift-frontend = "0.116"
+cranelift-module = "0.116"
+cranelift-jit = "0.116"
+cranelift-native = "0.116"
+target-lexicon = "0.12"
+
 smol_str = { workspace = true }
 rustc-hash = { workspace = true }
 thiserror = { workspace = true }

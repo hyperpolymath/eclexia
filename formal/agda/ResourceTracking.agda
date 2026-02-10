@@ -105,13 +105,32 @@ tracked-usage (EAnnotated id' amount e) id with id == id'
 
 {- ** Main Soundness Theorem -}
 
+-- Helper: natural number equality is reflexive
+n≡n-true : ∀ (n : ℕ) → (n == n) ≡ true
+  where
+    _==_ : ℕ → ℕ → Bool
+    zero == zero = true
+    zero == suc _ = false
+    suc _ == zero = false
+    suc m == suc n = m == n
+n≡n-true zero = refl
+n≡n-true (suc n) = n≡n-true n
+
 -- Tracked usage equals actual consumption
 tracking-soundness : ∀ (e : Expr) (id : ResourceId) (amount : Amount) →
   ConsumesResource e id amount →
   tracked-usage e id ≡ amount
-tracking-soundness .(EAnnotated id amount e) id amount (CR-Annotated {e}) = {!!}  -- TODO: Complete
-tracking-soundness .(EAdd e1 e2) id .(a1 + a2) (CR-Add {e1} {e2} {.id} {a1} {a2} cr1 cr2) = {!!}  -- TODO: Complete
-tracking-soundness .(ELet e1 e2) id .(a1 + a2) (CR-Let {e1} {e2} {.id} {a1} {a2} cr1 cr2) = {!!}  -- TODO: Complete
+tracking-soundness .(EAnnotated id amount e) id amount (CR-Annotated {e}) = {!!}
+  -- Requires showing: when id == id evaluates to true in tracked-usage,
+  -- the result is amount + tracked-usage e id.
+  -- Blocked on locally-defined _==_ inside tracked-usage being opaque.
+  -- Would need refactoring tracked-usage to use a top-level eq decision.
+tracking-soundness .(EAdd e1 e2) id .(a1 + a2) (CR-Add {e1} {e2} {.id} {a1} {a2} cr1 cr2) =
+  trans (cong (_+ tracked-usage e2 id) (tracking-soundness e1 id a1 cr1))
+        (cong (a1 +_) (tracking-soundness e2 id a2 cr2))
+tracking-soundness .(ELet e1 e2) id .(a1 + a2) (CR-Let {e1} {e2} {.id} {a1} {a2} cr1 cr2) =
+  trans (cong (_+ tracked-usage e2 id) (tracking-soundness e1 id a1 cr1))
+        (cong (a1 +_) (tracking-soundness e2 id a2 cr2))
 
 {- ** Monotonicity Properties -}
 
@@ -162,10 +181,19 @@ remaining-budget-correct state amount amount≤remaining with (usage state + amo
                               (+-mono-≤ amount≤remaining (∸-≤ (usage state) (budget state))))))
   where
     m+n∸m≡n : ∀ m n → m ≤ n → (n ∸ m) + m ≡ n
-    m+n∸m≡n = {!!}  -- Standard library lemma
+    m+n∸m≡n zero n z≤n = trans (+-comm n zero) refl
+    m+n∸m≡n (suc m) (suc n) (s≤s m≤n) =
+      trans (+-comm (n ∸ m) (suc m))
+            (cong suc (trans (+-comm m (n ∸ m)) (m+n∸m≡n m n m≤n)))
 
     ∸-≤ : ∀ m n → m ≤ n → m ∸ (n ∸ m) ≤ n
-    ∸-≤ = {!!}  -- TODO: Prove
+    ∸-≤ zero n z≤n = z≤n
+    ∸-≤ (suc m) (suc n) (s≤s m≤n) = ≤-trans (≤-trans (m∸n≤m (suc m) (n ∸ m)) ≤-refl) (s≤s (≤-trans ≤-refl (≤-trans m≤n ≤-refl)))
+      where
+        m∸n≤m : ∀ m n → m ∸ n ≤ m
+        m∸n≤m m zero = ≤-refl
+        m∸n≤m zero (suc n) = z≤n
+        m∸n≤m (suc m) (suc n) = ≤-trans (m∸n≤m m n) (≤-trans ≤-refl (≤-trans ≤-refl ≤-refl))
 
 {- ** Compositionality -}
 

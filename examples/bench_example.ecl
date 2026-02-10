@@ -46,3 +46,11 @@ def bench_slow_operation() -> Int {
     // This benchmark is ignored as it's too slow
     fibonacci(20)
 }
+
+fn main() {
+    println("=== Benchmark Demo (manual run) ===")
+    println("fibonacci(10) =", fibonacci(10))
+    println("factorial(10) =", factorial(10))
+    println("sum_range(100) =", sum_range(100))
+    println("Use `eclexia bench` to run #[bench] functions.")
+}

@@ -5,11 +5,11 @@
 //!
 //! Tests: Source → Lexer → Parser → AST → TypeChecker → HIR → MIR → Bytecode → VM
 
-use eclexia_parser::Parser;
-use eclexia_typeck;
+use eclexia_codegen::{Backend, BytecodeGenerator, VirtualMachine};
 use eclexia_hir;
 use eclexia_mir;
-use eclexia_codegen::{Backend, BytecodeGenerator, VirtualMachine};
+use eclexia_parser::Parser;
+use eclexia_typeck;
 
 /// Helper to run the full pipeline
 fn compile_and_run(source: &str) -> Result<eclexia_codegen::VmValue, String> {
@@ -34,7 +34,8 @@ fn compile_and_run(source: &str) -> Result<eclexia_codegen::VmValue, String> {
 
     // 6. Generate bytecode
     let mut codegen = BytecodeGenerator::new();
-    let bytecode = codegen.generate(&mir)
+    let bytecode = codegen
+        .generate(&mir)
         .map_err(|e| format!("Codegen error: {}", e))?;
 
     // 7. Execute on VM

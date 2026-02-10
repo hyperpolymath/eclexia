@@ -210,15 +210,27 @@ mod tests {
     #[test]
     fn test_fold_int_arithmetic() {
         assert_eq!(
-            fold_binary(BinaryOp::Add, &ComptimeValue::Int(3), &ComptimeValue::Int(4)),
+            fold_binary(
+                BinaryOp::Add,
+                &ComptimeValue::Int(3),
+                &ComptimeValue::Int(4)
+            ),
             Some(ComptimeValue::Int(7))
         );
         assert_eq!(
-            fold_binary(BinaryOp::Mul, &ComptimeValue::Int(5), &ComptimeValue::Int(6)),
+            fold_binary(
+                BinaryOp::Mul,
+                &ComptimeValue::Int(5),
+                &ComptimeValue::Int(6)
+            ),
             Some(ComptimeValue::Int(30))
         );
         assert_eq!(
-            fold_binary(BinaryOp::Sub, &ComptimeValue::Int(10), &ComptimeValue::Int(3)),
+            fold_binary(
+                BinaryOp::Sub,
+                &ComptimeValue::Int(10),
+                &ComptimeValue::Int(3)
+            ),
             Some(ComptimeValue::Int(7))
         );
     }
@@ -226,7 +238,11 @@ mod tests {
     #[test]
     fn test_fold_div_by_zero() {
         assert_eq!(
-            fold_binary(BinaryOp::Div, &ComptimeValue::Int(10), &ComptimeValue::Int(0)),
+            fold_binary(
+                BinaryOp::Div,
+                &ComptimeValue::Int(10),
+                &ComptimeValue::Int(0)
+            ),
             None
         );
         assert_eq!(

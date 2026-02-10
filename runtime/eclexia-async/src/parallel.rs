@@ -61,9 +61,7 @@ impl<T: Send + Sync + Clone + 'static> ParallelIterator<T> {
             .into_iter()
             .map(|chunk| {
                 let f = Arc::clone(&f);
-                std::thread::spawn(move || {
-                    chunk.into_iter().map(|x| f(x)).collect::<Vec<U>>()
-                })
+                std::thread::spawn(move || chunk.into_iter().map(|x| f(x)).collect::<Vec<U>>())
             })
             .collect();
 
@@ -127,10 +125,7 @@ impl<T: Send + Sync + Clone + 'static> ParallelIterator<T> {
         }
 
         if self.data.len() <= self.chunk_size {
-            return self
-                .data
-                .into_iter()
-                .fold(identity, &op);
+            return self.data.into_iter().fold(identity, &op);
         }
 
         let op = Arc::new(op);
@@ -148,9 +143,7 @@ impl<T: Send + Sync + Clone + 'static> ParallelIterator<T> {
             .map(|chunk| {
                 let op = Arc::clone(&op);
                 let id = identity_clone.clone();
-                std::thread::spawn(move || {
-                    chunk.into_iter().fold(id, |acc, x| op(acc, x))
-                })
+                std::thread::spawn(move || chunk.into_iter().fold(id, |acc, x| op(acc, x)))
             })
             .collect();
 

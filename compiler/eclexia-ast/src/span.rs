@@ -21,7 +21,10 @@ impl Span {
 
     /// Create an empty span at a position.
     pub const fn empty(pos: u32) -> Self {
-        Self { start: pos, end: pos }
+        Self {
+            start: pos,
+            end: pos,
+        }
     }
 
     /// Create a dummy span for synthesized nodes.

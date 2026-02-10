@@ -6,8 +6,8 @@
 //! Selects the best implementation variant based on shadow prices
 //! and resource constraints.
 
-use crate::shadow_prices::ShadowPriceRegistry;
 use crate::resource_tracker::ResourceBudget;
+use crate::shadow_prices::ShadowPriceRegistry;
 use crate::RuntimeConfig;
 use eclexia_ast::dimension::Dimension;
 use smol_str::SmolStr;
@@ -73,7 +73,10 @@ pub enum SelectionCriteria {
     MinimizeCost,
 
     /// Minimize specific resource
-    MinimizeResource { resource: SmolStr, dimension: Dimension },
+    MinimizeResource {
+        resource: SmolStr,
+        dimension: Dimension,
+    },
 
     /// Prefer solutions with priority > threshold
     PreferPriority { threshold: f64 },
@@ -132,16 +135,14 @@ impl AdaptiveDecisionEngine {
         }
 
         // Select based on criteria
-        
 
         match &self.criteria {
-            SelectionCriteria::MinimizeCost => {
-                self.select_min_cost(&viable, prices)
-            }
+            SelectionCriteria::MinimizeCost => self.select_min_cost(&viable, prices),
 
-            SelectionCriteria::MinimizeResource { resource, dimension } => {
-                self.select_min_resource(&viable, resource, *dimension)
-            }
+            SelectionCriteria::MinimizeResource {
+                resource,
+                dimension,
+            } => self.select_min_resource(&viable, resource, *dimension),
 
             SelectionCriteria::PreferPriority { threshold } => {
                 self.select_by_priority(&viable, *threshold, prices)
@@ -152,16 +153,14 @@ impl AdaptiveDecisionEngine {
                 time_weight,
                 memory_weight,
                 carbon_weight,
-            } => {
-                self.select_weighted(
-                    &viable,
-                    prices,
-                    *energy_weight,
-                    *time_weight,
-                    *memory_weight,
-                    *carbon_weight,
-                )
-            }
+            } => self.select_weighted(
+                &viable,
+                prices,
+                *energy_weight,
+                *time_weight,
+                *memory_weight,
+                *carbon_weight,
+            ),
         }
     }
 
@@ -191,21 +190,19 @@ impl AdaptiveDecisionEngine {
         candidates
             .iter()
             .min_by(|a, b| {
-                let usage_a: f64 = a
-                    .1
-                    .costs
-                    .iter()
-                    .filter(|c| &c.resource == resource && c.dimension == dimension)
-                    .map(|c| c.amount)
-                    .sum();
+                let usage_a: f64 =
+                    a.1.costs
+                        .iter()
+                        .filter(|c| &c.resource == resource && c.dimension == dimension)
+                        .map(|c| c.amount)
+                        .sum();
 
-                let usage_b: f64 = b
-                    .1
-                    .costs
-                    .iter()
-                    .filter(|c| &c.resource == resource && c.dimension == dimension)
-                    .map(|c| c.amount)
-                    .sum();
+                let usage_b: f64 =
+                    b.1.costs
+                        .iter()
+                        .filter(|c| &c.resource == resource && c.dimension == dimension)
+                        .map(|c| c.amount)
+                        .sum();
 
                 usage_a.partial_cmp(&usage_b).unwrap()
             })

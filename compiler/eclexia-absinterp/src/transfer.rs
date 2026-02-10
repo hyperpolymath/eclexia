@@ -119,10 +119,7 @@ fn abstract_binary(op: BinaryOp, lhs: Interval, rhs: Interval) -> Interval {
                 (Interval::Range { lo: a, hi: b }, Interval::Range { lo: c, hi: d }) => {
                     let quotients = [a / c, a / d, b / c, b / d];
                     let lo = quotients.iter().copied().fold(f64::INFINITY, f64::min);
-                    let hi = quotients
-                        .iter()
-                        .copied()
-                        .fold(f64::NEG_INFINITY, f64::max);
+                    let hi = quotients.iter().copied().fold(f64::NEG_INFINITY, f64::max);
                     Interval::Range { lo, hi }
                 }
                 _ => Interval::Top,

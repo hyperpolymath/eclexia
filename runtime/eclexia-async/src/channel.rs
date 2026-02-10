@@ -52,16 +52,17 @@ pub struct Sender<T> {
 impl<T: Send> Sender<T> {
     /// Send a value on the channel, waiting if necessary.
     pub async fn send(&self, value: T) -> Result<(), ChannelError> {
-        self.inner.send(value).await.map_err(|_| ChannelError::Closed)
+        self.inner
+            .send(value)
+            .await
+            .map_err(|_| ChannelError::Closed)
     }
 
     /// Try to send a value without waiting.
     pub fn try_send(&self, value: T) -> Result<(), ChannelError> {
-        self.inner.try_send(value).map_err(|e| {
-            match e {
-                tokio::sync::mpsc::error::TrySendError::Full(_) => ChannelError::Full,
-                tokio::sync::mpsc::error::TrySendError::Closed(_) => ChannelError::Closed,
-            }
+        self.inner.try_send(value).map_err(|e| match e {
+            tokio::sync::mpsc::error::TrySendError::Full(_) => ChannelError::Full,
+            tokio::sync::mpsc::error::TrySendError::Closed(_) => ChannelError::Closed,
         })
     }
 
@@ -85,11 +86,9 @@ impl<T: Send> Receiver<T> {
 
     /// Try to receive a value without waiting.
     pub fn try_recv(&mut self) -> Result<T, ChannelError> {
-        self.inner.try_recv().map_err(|e| {
-            match e {
-                tokio::sync::mpsc::error::TryRecvError::Empty => ChannelError::Full,
-                tokio::sync::mpsc::error::TryRecvError::Disconnected => ChannelError::Closed,
-            }
+        self.inner.try_recv().map_err(|e| match e {
+            tokio::sync::mpsc::error::TryRecvError::Empty => ChannelError::Full,
+            tokio::sync::mpsc::error::TryRecvError::Disconnected => ChannelError::Closed,
         })
     }
 }
@@ -155,7 +154,10 @@ pub struct BroadcastSender<T: Clone> {
 impl<T: Clone + Send> BroadcastSender<T> {
     /// Send a value to all receivers.
     pub fn send(&self, value: T) -> Result<(), ChannelError> {
-        self.inner.send(value).map(|_| ()).map_err(|_| ChannelError::Closed)
+        self.inner
+            .send(value)
+            .map(|_| ())
+            .map_err(|_| ChannelError::Closed)
     }
 
     /// Subscribe a new receiver to this broadcast channel.
@@ -175,11 +177,9 @@ pub struct BroadcastReceiver<T: Clone> {
 impl<T: Clone + Send> BroadcastReceiver<T> {
     /// Receive the next value from the broadcast channel.
     pub async fn recv(&mut self) -> Result<T, ChannelError> {
-        self.inner.recv().await.map_err(|e| {
-            match e {
-                tokio::sync::broadcast::error::RecvError::Closed => ChannelError::Closed,
-                tokio::sync::broadcast::error::RecvError::Lagged(n) => ChannelError::Lagged(n),
-            }
+        self.inner.recv().await.map_err(|e| match e {
+            tokio::sync::broadcast::error::RecvError::Closed => ChannelError::Closed,
+            tokio::sync::broadcast::error::RecvError::Lagged(n) => ChannelError::Lagged(n),
         })
     }
 }

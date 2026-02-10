@@ -3,16 +3,16 @@
 
 //! Individual lint rules.
 
-mod unused_variable;
-mod unreachable_code;
 mod long_line;
+mod negative_resource;
 mod trailing_whitespace;
 mod unbounded_resource;
-mod negative_resource;
+mod unreachable_code;
+mod unused_variable;
 
-pub use unused_variable::UnusedVariableRule;
-pub use unreachable_code::UnreachableCodeRule;
 pub use long_line::LongLineRule;
+pub use negative_resource::NegativeResourceRule;
 pub use trailing_whitespace::TrailingWhitespaceRule;
 pub use unbounded_resource::UnboundedResourceRule;
-pub use negative_resource::NegativeResourceRule;
+pub use unreachable_code::UnreachableCodeRule;
+pub use unused_variable::UnusedVariableRule;

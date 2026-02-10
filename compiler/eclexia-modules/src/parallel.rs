@@ -124,17 +124,16 @@ impl ParallelScheduler {
             };
 
             // Check for fatal errors before proceeding to next level
-            let has_errors = level_results
-                .iter()
-                .any(|unit| unit.errors.iter().any(|e| e.severity == ErrorSeverity::Error));
+            let has_errors = level_results.iter().any(|unit| {
+                unit.errors
+                    .iter()
+                    .any(|e| e.severity == ErrorSeverity::Error)
+            });
 
             all_results.extend(level_results);
 
             if has_errors {
-                tracing::warn!(
-                    "Errors found at level {}, stopping compilation",
-                    level_idx
-                );
+                tracing::warn!("Errors found at level {}, stopping compilation", level_idx);
                 return Err(ParallelCompilationError::CompilationFailed {
                     results: all_results,
                 });
@@ -238,9 +237,9 @@ impl std::error::Error for ParallelCompilationError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rustc_hash::FxHashMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
-    use rustc_hash::FxHashMap;
 
     fn id(s: &str) -> ModuleId {
         ModuleId::new(s)

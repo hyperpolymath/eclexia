@@ -23,8 +23,8 @@ pub fn run() -> miette::Result<()> {
     println!("Multi-line input: use {{ to start a block, }} to end");
     println!();
 
-    let mut rl = DefaultEditor::new()
-        .map_err(|e| miette::miette!("Failed to create editor: {}", e))?;
+    let mut rl =
+        DefaultEditor::new().map_err(|e| miette::miette!("Failed to create editor: {}", e))?;
 
     // Try to load history
     let history_path = dirs::data_dir()
@@ -36,7 +36,11 @@ pub fn run() -> miette::Result<()> {
     let mut state = ReplState::new();
 
     loop {
-        let prompt = if state.multiline_buffer.is_some() { "...> " } else { "ecl> " };
+        let prompt = if state.multiline_buffer.is_some() {
+            "...> "
+        } else {
+            "ecl> "
+        };
 
         match rl.readline(prompt) {
             Ok(line) => {
@@ -210,7 +214,10 @@ fn handle_command(cmd: &str, state: &mut ReplState) -> CommandResult {
                 println!("  (no prices registered)");
             } else {
                 for price in &prices {
-                    println!("  {} ({:?}) = {:.6}", price.resource, price.dimension, price.price);
+                    println!(
+                        "  {} ({:?}) = {:.6}",
+                        price.resource, price.dimension, price.price
+                    );
                 }
             }
             CommandResult::Continue
@@ -398,8 +405,6 @@ mod dirs {
     pub fn data_dir() -> Option<PathBuf> {
         std::env::var_os("XDG_DATA_HOME")
             .map(PathBuf::from)
-            .or_else(|| {
-                std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share"))
-            })
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
     }
 }

@@ -6,9 +6,9 @@
 use eclexia_ast::dimension::Dimension;
 use eclexia_ast::ExprId;
 use smol_str::SmolStr;
-use std::collections::{HashMap, BTreeMap};
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::{BTreeMap, HashMap};
+use std::rc::Rc;
 
 /// A runtime value in Eclexia.
 #[derive(Debug, Clone)]
@@ -75,14 +75,9 @@ pub struct Function {
 #[derive(Debug, Clone, Copy)]
 pub enum FunctionBody {
     /// Reference to a block in the AST (for named functions)
-    Block {
-        file_idx: usize,
-        block_idx: usize,
-    },
+    Block { file_idx: usize, block_idx: usize },
     /// Reference to an expression (for lambdas)
-    Lambda {
-        expr_id: ExprId,
-    },
+    Lambda { expr_id: ExprId },
 }
 
 /// An adaptive function with multiple solutions.

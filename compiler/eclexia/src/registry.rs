@@ -3,11 +3,11 @@
 
 //! HTTP registry client for package downloads.
 
-use std::io::Write;
-use std::path::Path;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
+use std::io::Write;
+use std::path::Path;
 
 /// Package metadata from registry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,7 +37,8 @@ impl RegistryClient {
     pub fn fetch_metadata(&self, name: &str, version: &str) -> Result<PackageMetadata, String> {
         let url = format!("{}/packages/{}/{}", self.base_url, name, version);
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .send()
             .map_err(|e| format!("Failed to fetch package metadata: {}", e))?;
@@ -47,8 +48,7 @@ impl RegistryClient {
             let error_text = response.text().unwrap_or_default();
             return Err(format!(
                 "Registry returned error: {} (status {})",
-                error_text,
-                status
+                error_text, status
             ));
         }
 
@@ -64,7 +64,8 @@ impl RegistryClient {
         dest_path: &Path,
     ) -> Result<(), String> {
         // Download tarball
-        let response = self.client
+        let response = self
+            .client
             .get(&metadata.tarball_url)
             .send()
             .map_err(|e| format!("Failed to download package: {}", e))?;

@@ -135,7 +135,10 @@ pub fn validate_html(html: &str) -> Result<ValidatedHtml, String> {
         });
     }
 
-    let self_closing = ["br", "hr", "img", "input", "meta", "link", "area", "base", "col", "embed", "source", "track", "wbr"];
+    let self_closing = [
+        "br", "hr", "img", "input", "meta", "link", "area", "base", "col", "embed", "source",
+        "track", "wbr",
+    ];
     let mut tag_stack: Vec<String> = Vec::new();
     let mut i = 0;
     let bytes = html.as_bytes();
@@ -164,7 +167,11 @@ pub fn validate_html(html: &str) -> Result<ValidatedHtml, String> {
 
             if tag_content.starts_with('/') {
                 // Closing tag
-                let tag_name = tag_content[1..].split_whitespace().next().unwrap_or("").to_lowercase();
+                let tag_name = tag_content[1..]
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .to_lowercase();
                 if !tag_name.is_empty() {
                     match tag_stack.pop() {
                         Some(open_tag) if open_tag == tag_name => {}
@@ -181,7 +188,11 @@ pub fn validate_html(html: &str) -> Result<ValidatedHtml, String> {
                 }
             } else if !tag_content.ends_with('/') {
                 // Opening tag (not self-closing via />)
-                let tag_name = tag_content.split_whitespace().next().unwrap_or("").to_lowercase();
+                let tag_name = tag_content
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .to_lowercase();
                 if !tag_name.is_empty() && !self_closing.contains(&tag_name.as_str()) {
                     tag_stack.push(tag_name);
                 }
@@ -392,22 +403,32 @@ mod tests {
     #[test]
     fn test_mount_safe_success() {
         let mut success_called = false;
-        mount_safe("#app", "<div>Hello</div>", |_elem| {
-            success_called = true;
-        }, |_err| {
-            panic!("Should not error");
-        });
+        mount_safe(
+            "#app",
+            "<div>Hello</div>",
+            |_elem| {
+                success_called = true;
+            },
+            |_err| {
+                panic!("Should not error");
+            },
+        );
         assert!(success_called);
     }
 
     #[test]
     fn test_mount_safe_error() {
         let mut error_called = false;
-        mount_safe("", "<div>Hello</div>", |_elem| {
-            panic!("Should not succeed");
-        }, |_err| {
-            error_called = true;
-        });
+        mount_safe(
+            "",
+            "<div>Hello</div>",
+            |_elem| {
+                panic!("Should not succeed");
+            },
+            |_err| {
+                error_called = true;
+            },
+        );
         assert!(error_called);
     }
 

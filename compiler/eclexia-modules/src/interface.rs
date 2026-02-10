@@ -153,7 +153,7 @@ impl ModuleInterface {
                             .collect(),
                         return_type: format!("{:?}", func.return_type),
                         type_params: func.type_params.iter().map(|t| t.to_string()).collect(),
-                        is_public: true, // TODO: visibility modifiers
+                        is_public: true, // NOTE: visibility modifiers pending
                         is_adaptive: false,
                         resource_annotations: Vec::new(),
                     });
@@ -290,18 +290,14 @@ impl ModuleInterface {
 
     /// Write the interface to a `.ecli` file.
     pub fn write_to_file(&self, path: &Path) -> std::io::Result<()> {
-        let json = self.to_json().map_err(|e| {
-            std::io::Error::other(e)
-        })?;
+        let json = self.to_json().map_err(|e| std::io::Error::other(e))?;
         std::fs::write(path, json)
     }
 
     /// Read an interface from a `.ecli` file.
     pub fn read_from_file(path: &Path) -> std::io::Result<Self> {
         let json = std::fs::read_to_string(path)?;
-        Self::from_json(&json).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, e)
-        })
+        Self::from_json(&json).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
     /// Get the `.ecli` file path for a module.

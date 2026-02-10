@@ -73,7 +73,11 @@ impl LintRule for UnusedVariableRule {
     }
 }
 
-fn collect_used_vars(stmt_id: eclexia_ast::StmtId, ctx: &LintContext, used: &mut HashSet<smol_str::SmolStr>) {
+fn collect_used_vars(
+    stmt_id: eclexia_ast::StmtId,
+    ctx: &LintContext,
+    used: &mut HashSet<smol_str::SmolStr>,
+) {
     let stmt = &ctx.file.stmts[stmt_id];
     match &stmt.kind {
         StmtKind::Let { value, .. } => {
@@ -118,7 +122,11 @@ fn collect_used_vars(stmt_id: eclexia_ast::StmtId, ctx: &LintContext, used: &mut
     }
 }
 
-fn collect_used_vars_expr(expr_id: ExprId, ctx: &LintContext, used: &mut HashSet<smol_str::SmolStr>) {
+fn collect_used_vars_expr(
+    expr_id: ExprId,
+    ctx: &LintContext,
+    used: &mut HashSet<smol_str::SmolStr>,
+) {
     let expr = &ctx.file.exprs[expr_id];
     match &expr.kind {
         ExprKind::Var(name) => {
@@ -150,7 +158,11 @@ fn collect_used_vars_expr(expr_id: ExprId, ctx: &LintContext, used: &mut HashSet
             collect_used_vars_expr(*expr, ctx, used);
             collect_used_vars_expr(*index, ctx, used);
         }
-        ExprKind::If { condition, then_branch, else_branch } => {
+        ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
             collect_used_vars_expr(*condition, ctx, used);
             for &stmt_id in &then_branch.stmts {
                 collect_used_vars(stmt_id, ctx, used);

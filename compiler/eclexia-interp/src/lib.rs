@@ -11,16 +11,16 @@
 //! - Resource tracking (simulated)
 //! - Shadow price computation (simplified)
 
-mod value;
+mod builtins;
 mod env;
 mod error;
 mod eval;
-mod builtins;
+mod value;
 
-pub use value::Value;
 pub use env::Environment;
 pub use error::{RuntimeError, RuntimeResult};
 pub use eval::Interpreter;
+pub use value::Value;
 
 use eclexia_ast::SourceFile;
 

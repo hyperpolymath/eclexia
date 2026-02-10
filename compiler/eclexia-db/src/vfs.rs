@@ -209,10 +209,7 @@ impl FileWatcher {
     ///
     /// Returns a channel receiver that yields `ChangeSet` batches
     /// whenever files change on disk.
-    pub fn watch(
-        &self,
-        path: PathBuf,
-    ) -> std::io::Result<std::sync::mpsc::Receiver<ChangeSet>> {
+    pub fn watch(&self, path: PathBuf) -> std::io::Result<std::sync::mpsc::Receiver<ChangeSet>> {
         use notify::{RecursiveMode, Watcher};
         use std::sync::mpsc;
 
@@ -222,18 +219,19 @@ impl FileWatcher {
         std::thread::spawn(move || {
             let (notify_tx, notify_rx) = mpsc::channel();
 
-            let mut watcher =
-                match notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+            let mut watcher = match notify::recommended_watcher(
+                move |res: Result<notify::Event, notify::Error>| {
                     if let Ok(event) = res {
                         let _ = notify_tx.send(event);
                     }
-                }) {
-                    Ok(w) => w,
-                    Err(e) => {
-                        tracing::error!("Failed to create file watcher: {}", e);
-                        return;
-                    }
-                };
+                },
+            ) {
+                Ok(w) => w,
+                Err(e) => {
+                    tracing::error!("Failed to create file watcher: {}", e);
+                    return;
+                }
+            };
 
             if let Err(e) = watcher.watch(&path, RecursiveMode::Recursive) {
                 tracing::error!("Failed to watch path {}: {}", path.display(), e);
@@ -254,9 +252,9 @@ impl FileWatcher {
                     std::time::Instant::now() + std::time::Duration::from_millis(debounce_ms);
 
                 while std::time::Instant::now() < deadline {
-                    match notify_rx.recv_timeout(
-                        deadline.saturating_duration_since(std::time::Instant::now()),
-                    ) {
+                    match notify_rx
+                        .recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))
+                    {
                         Ok(event) => events.push(event),
                         Err(_) => break,
                     }
@@ -285,10 +283,9 @@ impl FileWatcher {
                     }
                 }
 
-                if !changeset.changes.is_empty()
-                    && tx.send(changeset).is_err() {
-                        break;
-                    }
+                if !changeset.changes.is_empty() && tx.send(changeset).is_err() {
+                    break;
+                }
             }
         });
 

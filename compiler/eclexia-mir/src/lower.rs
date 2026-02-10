@@ -7,7 +7,9 @@
 
 use crate::*;
 use eclexia_hir as hir;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
+
+const STRUCT_TAG_FIELD: &str = "__eclexia_tag";
 
 /// Lowering context for HIR → MIR transformation
 pub struct LoweringContext<'hir> {
@@ -88,8 +90,9 @@ impl<'hir> LoweringContext<'hir> {
 
     /// Allocate a new basic block
     fn alloc_block(&mut self, label: SmolStr) -> BlockId {
-        let func = self.current_function.as_mut()
-            .expect("BUG: alloc_block called without current function — this is an internal compiler error");
+        let func = self.current_function.as_mut().expect(
+            "BUG: alloc_block called without current function — this is an internal compiler error",
+        );
         func.basic_blocks.alloc(BasicBlock {
             label,
             instructions: Vec::new(),
@@ -115,6 +118,16 @@ impl<'hir> LoweringContext<'hir> {
                 func.basic_blocks[block_id].terminator = terminator;
             }
         }
+    }
+
+    /// Check whether the current block already has a terminator.
+    fn is_current_block_terminated(&self) -> bool {
+        if let Some(func) = &self.current_function {
+            if let Some(block_id) = self.current_block {
+                return !matches!(func.basic_blocks[block_id].terminator, Terminator::Unreachable);
+            }
+        }
+        false
     }
 
     /// Lower a HIR item
@@ -178,10 +191,104 @@ impl<'hir> LoweringContext<'hir> {
                         self.mir.functions.push(func);
                     }
                 }
+
+                // Emit a simple wrapper that calls the first solution.
+                // This keeps bytecode execution functional until adaptive dispatch is implemented.
+                if let Some(first_solution) = func.solutions.first() {
+                    self.local_map.clear();
+                    self.next_local = 0;
+
+                    let params: Vec<Local> = func
+                        .params
+                        .iter()
+                        .map(|p| {
+                            let id = self.next_local;
+                            self.next_local += 1;
+                            self.local_map.insert(p.local, id);
+                            Local {
+                                id,
+                                name: p.name.clone(),
+                                ty: p.ty.clone(),
+                                mutable: false,
+                            }
+                        })
+                        .collect();
+
+                    let mut wrapper = Function {
+                        span: func.span,
+                        name: func.name.clone(),
+                        params,
+                        return_ty: func.return_ty.clone(),
+                        locals: Vec::new(),
+                        basic_blocks: Arena::new(),
+                        entry_block: BlockId::from_raw(la_arena::RawIdx::from_u32(0)),
+                        resource_constraints: self.lower_constraints(&func.constraints),
+                        is_adaptive: true,
+                    };
+
+                    let result_local = self.next_local;
+                    self.next_local += 1;
+                    wrapper.locals.push(Local {
+                        id: result_local,
+                        name: SmolStr::new("result"),
+                        ty: func.return_ty.clone(),
+                        mutable: false,
+                    });
+
+                    self.current_function = Some(wrapper);
+                    let entry = self.alloc_block(SmolStr::new("entry"));
+                    if let Some(f) = &mut self.current_function {
+                        f.entry_block = entry;
+                    }
+                    self.current_block = Some(entry);
+
+                    let solution_name =
+                        SmolStr::new(format!("{}_{}", func.name, first_solution.name));
+                    let func_ty = Ty::Function {
+                        params: func.params.iter().map(|p| p.ty.clone()).collect(),
+                        ret: Box::new(func.return_ty.clone()),
+                    };
+                    let const_id = self.mir.constants.alloc(Constant {
+                        ty: func_ty,
+                        kind: ConstantKind::Function(solution_name),
+                    });
+
+                    let args: Vec<Value> = func
+                        .params
+                        .iter()
+                        .map(|p| {
+                            let local_id = self
+                                .local_map
+                                .get(&p.local)
+                                .copied()
+                                .unwrap_or(0);
+                            Value::Local(local_id)
+                        })
+                        .collect();
+
+                    self.emit(
+                        func.span,
+                        InstructionKind::Call {
+                            target: Some(result_local),
+                            func: Value::Constant(const_id),
+                            args,
+                            resource_budget: None,
+                        },
+                    );
+
+                    self.terminate(Terminator::Return(Some(Value::Local(result_local))));
+
+                    if let Some(func) = self.current_function.take() {
+                        self.mir.functions.push(func);
+                    }
+                }
             }
-            hir::Item::TypeDef(_) | hir::Item::Const(_)
-            | hir::Item::TraitDecl { .. } | hir::Item::ImplBlock { .. }
-            | hir::Item::Module { .. } | hir::Item::Static { .. }
+            hir::Item::TypeDef(_)
+            | hir::Item::Const(_)
+            | hir::Item::TraitDecl { .. }
+            | hir::Item::ImplBlock { .. }
+            | hir::Item::Module { .. }
+            | hir::Item::Static { .. }
             | hir::Item::Error(_) => {
                 // Type definitions, constants, declarations, and error items don't produce MIR functions
             }
@@ -236,12 +343,16 @@ impl<'hir> LoweringContext<'hir> {
         self.lower_body(&func.body);
 
         // Extract function
-        self.current_function.take()
-            .expect("BUG: current_function is None after lowering — this is an internal compiler error")
+        self.current_function.take().expect(
+            "BUG: current_function is None after lowering — this is an internal compiler error",
+        )
     }
 
     /// Lower resource constraints
-    fn lower_constraints(&self, constraints: &[hir::ResourceConstraint]) -> Vec<ResourceConstraint> {
+    fn lower_constraints(
+        &self,
+        constraints: &[hir::ResourceConstraint],
+    ) -> Vec<ResourceConstraint> {
         constraints
             .iter()
             .map(|c| ResourceConstraint {
@@ -276,6 +387,190 @@ impl<'hir> LoweringContext<'hir> {
         }
     }
 
+    /// Lower a body inline (statements + optional final expr) without adding a return terminator.
+    fn lower_body_expr(&mut self, body: &hir::Body) -> Value {
+        for &stmt_id in &body.stmts {
+            self.lower_stmt(stmt_id);
+        }
+
+        if let Some(expr_id) = body.expr {
+            self.lower_expr(expr_id)
+        } else {
+            Value::Constant(self.mir.constants.alloc(Constant {
+                ty: Ty::Primitive(PrimitiveTy::Unit),
+                kind: ConstantKind::Unit,
+            }))
+        }
+    }
+
+    fn collect_locals_in_place(
+        &self,
+        place: &hir::Place,
+        used: &mut Vec<hir::LocalId>,
+        seen: &mut FxHashSet<hir::LocalId>,
+    ) {
+        match place {
+            hir::Place::Local(local) => {
+                if seen.insert(*local) {
+                    used.push(*local);
+                }
+            }
+            hir::Place::Field { base, .. } => {
+                self.collect_locals_in_place(base, used, seen);
+            }
+            hir::Place::Index { base, index } => {
+                self.collect_locals_in_place(base, used, seen);
+                self.collect_locals_in_expr(*index, used, seen);
+            }
+        }
+    }
+
+    fn collect_locals_in_body(
+        &self,
+        body: &hir::Body,
+        used: &mut Vec<hir::LocalId>,
+        seen: &mut FxHashSet<hir::LocalId>,
+    ) {
+        for &stmt_id in &body.stmts {
+            let stmt = &self.hir.stmts[stmt_id];
+            match &stmt.kind {
+                hir::StmtKind::Let { init, .. } => {
+                    if let Some(init_expr) = init {
+                        self.collect_locals_in_expr(*init_expr, used, seen);
+                    }
+                }
+                hir::StmtKind::Assign { place, value } => {
+                    self.collect_locals_in_place(place, used, seen);
+                    self.collect_locals_in_expr(*value, used, seen);
+                }
+                hir::StmtKind::Expr(expr) => {
+                    self.collect_locals_in_expr(*expr, used, seen);
+                }
+                hir::StmtKind::Return(expr) => {
+                    if let Some(expr_id) = expr {
+                        self.collect_locals_in_expr(*expr_id, used, seen);
+                    }
+                }
+                hir::StmtKind::InfiniteLoop { body, .. } => {
+                    self.collect_locals_in_body(body, used, seen);
+                }
+                hir::StmtKind::Break { value, .. } => {
+                    if let Some(expr_id) = value {
+                        self.collect_locals_in_expr(*expr_id, used, seen);
+                    }
+                }
+                hir::StmtKind::Continue { .. } | hir::StmtKind::Error => {}
+            }
+        }
+
+        if let Some(expr_id) = body.expr {
+            self.collect_locals_in_expr(expr_id, used, seen);
+        }
+    }
+
+    fn collect_locals_in_expr(
+        &self,
+        expr_id: hir::ExprId,
+        used: &mut Vec<hir::LocalId>,
+        seen: &mut FxHashSet<hir::LocalId>,
+    ) {
+        let expr = &self.hir.exprs[expr_id];
+        match &expr.kind {
+            hir::ExprKind::Local(local_id) => {
+                if seen.insert(*local_id) {
+                    used.push(*local_id);
+                }
+            }
+            hir::ExprKind::Binary { lhs, rhs, .. } => {
+                self.collect_locals_in_expr(*lhs, used, seen);
+                self.collect_locals_in_expr(*rhs, used, seen);
+            }
+            hir::ExprKind::Unary { operand, .. } => {
+                self.collect_locals_in_expr(*operand, used, seen);
+            }
+            hir::ExprKind::Call { func, args } => {
+                self.collect_locals_in_expr(*func, used, seen);
+                for arg in args {
+                    self.collect_locals_in_expr(*arg, used, seen);
+                }
+            }
+            hir::ExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                self.collect_locals_in_expr(*condition, used, seen);
+                self.collect_locals_in_body(then_branch, used, seen);
+                if let Some(else_body) = else_branch {
+                    self.collect_locals_in_body(else_body, used, seen);
+                }
+            }
+            hir::ExprKind::Loop { condition, body } => {
+                self.collect_locals_in_expr(*condition, used, seen);
+                self.collect_locals_in_body(body, used, seen);
+            }
+            hir::ExprKind::Block(body) => {
+                self.collect_locals_in_body(body, used, seen);
+            }
+            hir::ExprKind::Tuple(elems) | hir::ExprKind::Array(elems) => {
+                for elem in elems {
+                    self.collect_locals_in_expr(*elem, used, seen);
+                }
+            }
+            hir::ExprKind::Field { expr, .. } => {
+                self.collect_locals_in_expr(*expr, used, seen);
+            }
+            hir::ExprKind::Index { expr, index } => {
+                self.collect_locals_in_expr(*expr, used, seen);
+                self.collect_locals_in_expr(*index, used, seen);
+            }
+            hir::ExprKind::Lambda { .. } => {
+                // Skip nested lambdas when computing captures.
+            }
+            hir::ExprKind::Struct { fields, .. } => {
+                for (_, field_expr) in fields {
+                    self.collect_locals_in_expr(*field_expr, used, seen);
+                }
+            }
+            hir::ExprKind::Cast { expr, .. } => {
+                self.collect_locals_in_expr(*expr, used, seen);
+            }
+            hir::ExprKind::Assign { target, value } => {
+                if seen.insert(*target) {
+                    used.push(*target);
+                }
+                self.collect_locals_in_expr(*value, used, seen);
+            }
+            hir::ExprKind::Try(inner) => {
+                self.collect_locals_in_expr(*inner, used, seen);
+            }
+            hir::ExprKind::Borrow { expr, .. } => {
+                self.collect_locals_in_expr(*expr, used, seen);
+            }
+            hir::ExprKind::Deref(inner) => {
+                self.collect_locals_in_expr(*inner, used, seen);
+            }
+            hir::ExprKind::ArrayRepeat { value, count } => {
+                self.collect_locals_in_expr(*value, used, seen);
+                self.collect_locals_in_expr(*count, used, seen);
+            }
+            hir::ExprKind::InfiniteLoop { body, .. } => {
+                self.collect_locals_in_body(body, used, seen);
+            }
+            hir::ExprKind::ReturnExpr(inner) => {
+                if let Some(expr_id) = inner {
+                    self.collect_locals_in_expr(*expr_id, used, seen);
+                }
+            }
+            hir::ExprKind::BreakExpr { value, .. } => {
+                if let Some(expr_id) = value {
+                    self.collect_locals_in_expr(*expr_id, used, seen);
+                }
+            }
+            hir::ExprKind::ContinueExpr { .. } | hir::ExprKind::Literal(_) => {}
+        }
+    }
+
     /// Lower a statement
     fn lower_stmt(&mut self, stmt_id: hir::StmtId) {
         let stmt = &self.hir.stmts[stmt_id];
@@ -305,10 +600,13 @@ impl<'hir> LoweringContext<'hir> {
 
                 if let Some(init_expr) = init {
                     let value = self.lower_expr(*init_expr);
-                    self.emit(stmt.span, InstructionKind::Assign {
-                        target: mir_local,
-                        value,
-                    });
+                    self.emit(
+                        stmt.span,
+                        InstructionKind::Assign {
+                            target: mir_local,
+                            value,
+                        },
+                    );
                 }
             }
             hir::StmtKind::Assign { place, value } => {
@@ -316,18 +614,24 @@ impl<'hir> LoweringContext<'hir> {
                 match place {
                     hir::Place::Local(local) => {
                         let mir_local = self.local_map[local];
-                        self.emit(stmt.span, InstructionKind::Assign {
-                            target: mir_local,
-                            value: mir_value,
-                        });
+                        self.emit(
+                            stmt.span,
+                            InstructionKind::Assign {
+                                target: mir_local,
+                                value: mir_value,
+                            },
+                        );
                     }
                     hir::Place::Field { .. } | hir::Place::Index { .. } => {
                         // Lower the place to a pointer value, then store
                         let ptr_val = self.lower_place(place);
-                        self.emit(stmt.span, InstructionKind::Store {
-                            ptr: ptr_val,
-                            value: mir_value,
-                        });
+                        self.emit(
+                            stmt.span,
+                            InstructionKind::Store {
+                                ptr: ptr_val,
+                                value: mir_value,
+                            },
+                        );
                     }
                 }
             }
@@ -345,7 +649,8 @@ impl<'hir> LoweringContext<'hir> {
                 let loop_exit = self.alloc_block(SmolStr::new("loop_exit"));
 
                 // Push loop onto stack for break/continue resolution
-                self.loop_stack.push((label.clone(), loop_header, loop_exit));
+                self.loop_stack
+                    .push((label.clone(), loop_header, loop_exit));
 
                 self.terminate(Terminator::Goto(loop_header));
 
@@ -354,8 +659,10 @@ impl<'hir> LoweringContext<'hir> {
                 self.terminate(Terminator::Goto(loop_body));
 
                 self.current_block = Some(loop_body);
-                self.lower_body(body);
-                self.terminate(Terminator::Goto(loop_header));
+                self.lower_body_expr(body);
+                if !self.is_current_block_terminated() {
+                    self.terminate(Terminator::Goto(loop_header));
+                }
 
                 // Pop loop from stack
                 self.loop_stack.pop();
@@ -448,9 +755,26 @@ impl<'hir> LoweringContext<'hir> {
                 Value::Constant(self.mir.constants.alloc(constant))
             }
             hir::ExprKind::Local(local) => {
+                let local_name = &self.hir.locals[*local].name;
                 if let Some(&mir_local) = self.local_map.get(local) {
+                    let local_ty = &self.hir.locals[*local].ty;
+                    if matches!(local_ty, Ty::Primitive(PrimitiveTy::Unit))
+                        && self.function_names.contains_key(local_name)
+                    {
+                        return Value::Constant(self.mir.constants.alloc(Constant {
+                            ty: expr.ty.clone(),
+                            kind: ConstantKind::Function(local_name.clone()),
+                        }));
+                    }
                     Value::Local(mir_local)
                 } else {
+                    if self.function_names.contains_key(local_name) {
+                        return Value::Constant(self.mir.constants.alloc(Constant {
+                            ty: expr.ty.clone(),
+                            kind: ConstantKind::Function(local_name.clone()),
+                        }));
+                    }
+
                     // Unknown local — produce a unit constant rather than panicking.
                     // This can happen when lowering incomplete ASTs (e.g. error recovery).
                     let constant = Constant {
@@ -522,16 +846,23 @@ impl<'hir> LoweringContext<'hir> {
                 }
 
                 // Emit call instruction
-                self.emit(expr.span, InstructionKind::Call {
-                    target: Some(result_local),
-                    func: func_val,
-                    args: arg_vals,
-                    resource_budget: None,
-                });
+                self.emit(
+                    expr.span,
+                    InstructionKind::Call {
+                        target: Some(result_local),
+                        func: func_val,
+                        args: arg_vals,
+                        resource_budget: None,
+                    },
+                );
 
                 Value::Local(result_local)
             }
-            hir::ExprKind::If { condition, then_branch, else_branch } => {
+            hir::ExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 // Allocate a result temporary that both branches will assign to
                 let result_local = self.next_local;
                 self.next_local += 1;
@@ -561,37 +892,47 @@ impl<'hir> LoweringContext<'hir> {
 
                 // Lower then branch
                 self.current_block = Some(then_block);
-                if let Some(ref body_expr) = then_branch.expr {
-                    let then_val = self.lower_expr(*body_expr);
-                    self.emit(expr.span, InstructionKind::Assign {
-                        target: result_local,
-                        value: then_val,
-                    });
+                let then_val = self.lower_body_expr(then_branch);
+                if !self.is_current_block_terminated() {
+                    self.emit(
+                        expr.span,
+                        InstructionKind::Assign {
+                            target: result_local,
+                            value: then_val,
+                        },
+                    );
+                    self.terminate(Terminator::Goto(merge_block));
                 }
-                self.terminate(Terminator::Goto(merge_block));
 
                 // Lower else branch
                 self.current_block = Some(else_block);
                 if let Some(ref else_b) = else_branch {
-                    if let Some(ref body_expr) = else_b.expr {
-                        let else_val = self.lower_expr(*body_expr);
-                        self.emit(expr.span, InstructionKind::Assign {
-                            target: result_local,
-                            value: else_val,
-                        });
+                    let else_val = self.lower_body_expr(else_b);
+                    if !self.is_current_block_terminated() {
+                        self.emit(
+                            expr.span,
+                            InstructionKind::Assign {
+                                target: result_local,
+                                value: else_val,
+                            },
+                        );
+                        self.terminate(Terminator::Goto(merge_block));
                     }
-                } else {
+                } else if !self.is_current_block_terminated() {
                     // No else branch - assign unit
                     let unit_val = Value::Constant(self.mir.constants.alloc(Constant {
                         ty: Ty::Primitive(PrimitiveTy::Unit),
                         kind: ConstantKind::Unit,
                     }));
-                    self.emit(expr.span, InstructionKind::Assign {
-                        target: result_local,
-                        value: unit_val,
-                    });
+                    self.emit(
+                        expr.span,
+                        InstructionKind::Assign {
+                            target: result_local,
+                            value: unit_val,
+                        },
+                    );
+                    self.terminate(Terminator::Goto(merge_block));
                 }
-                self.terminate(Terminator::Goto(merge_block));
 
                 // Merge block - result is in the temporary
                 self.current_block = Some(merge_block);
@@ -617,8 +958,10 @@ impl<'hir> LoweringContext<'hir> {
                 });
 
                 self.current_block = Some(loop_body);
-                self.lower_body(body);
-                self.terminate(Terminator::Goto(loop_header));
+                self.lower_body_expr(body);
+                if !self.is_current_block_terminated() {
+                    self.terminate(Terminator::Goto(loop_header));
+                }
 
                 // Pop loop from stack
                 self.loop_stack.pop();
@@ -667,13 +1010,16 @@ impl<'hir> LoweringContext<'hir> {
                         ty: Ty::Primitive(PrimitiveTy::Int),
                         kind: ConstantKind::Int(i as i64),
                     });
-                    self.emit(expr.span, InstructionKind::Store {
-                        ptr: Value::Index {
-                            base: Box::new(Value::Local(result_local)),
-                            index: Box::new(Value::Constant(idx_const)),
+                    self.emit(
+                        expr.span,
+                        InstructionKind::Store {
+                            ptr: Value::Index {
+                                base: Box::new(Value::Local(result_local)),
+                                index: Box::new(Value::Constant(idx_const)),
+                            },
+                            value: elem_val,
                         },
-                        value: elem_val,
-                    });
+                    );
                 }
 
                 Value::Local(result_local)
@@ -696,7 +1042,10 @@ impl<'hir> LoweringContext<'hir> {
                 }
             }
 
-            hir::ExprKind::Cast { expr: inner, target_ty } => {
+            hir::ExprKind::Cast {
+                expr: inner,
+                target_ty,
+            } => {
                 let inner_val = self.lower_expr(*inner);
                 Value::Cast {
                     value: Box::new(inner_val),
@@ -721,10 +1070,13 @@ impl<'hir> LoweringContext<'hir> {
                 }
 
                 // Assign inner value to temporary (the ok path unwraps)
-                self.emit(expr.span, InstructionKind::Assign {
-                    target: result_local,
-                    value: inner_val.clone(),
-                });
+                self.emit(
+                    expr.span,
+                    InstructionKind::Assign {
+                        target: result_local,
+                        value: inner_val.clone(),
+                    },
+                );
 
                 // Create ok/err/merge blocks
                 let ok_block = self.alloc_block(SmolStr::new("try_ok"));
@@ -760,7 +1112,9 @@ impl<'hir> LoweringContext<'hir> {
             hir::ExprKind::Deref(inner) => {
                 // Deref: evaluate inner (no actual deref in MIR yet)
                 let inner_val = self.lower_expr(*inner);
-                Value::Load { ptr: Box::new(inner_val) }
+                Value::Load {
+                    ptr: Box::new(inner_val),
+                }
             }
 
             hir::ExprKind::ArrayRepeat { value, count } => {
@@ -780,7 +1134,8 @@ impl<'hir> LoweringContext<'hir> {
                 let loop_exit = self.alloc_block(SmolStr::new("loop_exit"));
 
                 // Push loop onto stack for break/continue resolution
-                self.loop_stack.push((label.clone(), loop_header, loop_exit));
+                self.loop_stack
+                    .push((label.clone(), loop_header, loop_exit));
 
                 self.terminate(Terminator::Goto(loop_header));
 
@@ -849,6 +1204,20 @@ impl<'hir> LoweringContext<'hir> {
                 let lambda_name = SmolStr::new(format!("__lambda_{}", self.lambda_counter));
                 self.lambda_counter += 1;
 
+                // Collect captured locals from the outer scope
+                let mut used_locals: Vec<hir::LocalId> = Vec::new();
+                let mut seen_locals: FxHashSet<hir::LocalId> = FxHashSet::default();
+                self.collect_locals_in_body(body, &mut used_locals, &mut seen_locals);
+                let capture_locals: Vec<hir::LocalId> = used_locals
+                    .into_iter()
+                    .filter(|local_id| self.local_map.contains_key(local_id))
+                    .collect();
+                let capture_values: Vec<Value> = capture_locals
+                    .iter()
+                    .filter_map(|local_id| self.local_map.get(local_id).copied())
+                    .map(Value::Local)
+                    .collect();
+
                 // Save the current lowering state
                 let saved_function = self.current_function.take();
                 let saved_block = self.current_block.take();
@@ -856,21 +1225,34 @@ impl<'hir> LoweringContext<'hir> {
                 let saved_next_local = self.next_local;
                 self.next_local = 0;
 
+                let mut mir_params: Vec<Local> = Vec::new();
+
+                // Add captured locals as leading parameters
+                for local_id in &capture_locals {
+                    let hir_local = &self.hir.locals[*local_id];
+                    let id = self.next_local;
+                    self.next_local += 1;
+                    self.local_map.insert(*local_id, id);
+                    mir_params.push(Local {
+                        id,
+                        name: hir_local.name.clone(),
+                        ty: hir_local.ty.clone(),
+                        mutable: false,
+                    });
+                }
+
                 // Lower parameters for the lambda
-                let mir_params: Vec<Local> = params
-                    .iter()
-                    .map(|p| {
-                        let id = self.next_local;
-                        self.next_local += 1;
-                        self.local_map.insert(p.local, id);
-                        Local {
-                            id,
-                            name: p.name.clone(),
-                            ty: p.ty.clone(),
-                            mutable: false,
-                        }
-                    })
-                    .collect();
+                mir_params.extend(params.iter().map(|p| {
+                    let id = self.next_local;
+                    self.next_local += 1;
+                    self.local_map.insert(p.local, id);
+                    Local {
+                        id,
+                        name: p.name.clone(),
+                        ty: p.ty.clone(),
+                        mutable: false,
+                    }
+                }));
 
                 // Create the lambda MIR function
                 let lambda_func = Function {
@@ -908,11 +1290,63 @@ impl<'hir> LoweringContext<'hir> {
                 self.local_map = saved_local_map;
                 self.next_local = saved_next_local;
 
-                // Return a function reference constant
-                Value::Constant(self.mir.constants.alloc(Constant {
-                    ty: expr.ty.clone(),
-                    kind: ConstantKind::Function(lambda_name),
-                }))
+                if capture_values.is_empty() {
+                    // Return a function reference constant (no captures)
+                    Value::Constant(self.mir.constants.alloc(Constant {
+                        ty: expr.ty.clone(),
+                        kind: ConstantKind::Function(lambda_name),
+                    }))
+                } else {
+                    // Build a closure as an array: [function, captures...]
+                    let closure_local = self.next_local;
+                    self.next_local += 1;
+                    if let Some(f) = &mut self.current_function {
+                        f.locals.push(Local {
+                            id: closure_local,
+                            name: SmolStr::new(format!("closure_{}", closure_local)),
+                            ty: expr.ty.clone(),
+                            mutable: false,
+                        });
+                    }
+
+                    let func_const = self.mir.constants.alloc(Constant {
+                        ty: expr.ty.clone(),
+                        kind: ConstantKind::Function(lambda_name),
+                    });
+                    let idx_zero = self.mir.constants.alloc(Constant {
+                        ty: Ty::Primitive(PrimitiveTy::Int),
+                        kind: ConstantKind::Int(0),
+                    });
+                    self.emit(
+                        expr.span,
+                        InstructionKind::Store {
+                            ptr: Value::Index {
+                                base: Box::new(Value::Local(closure_local)),
+                                index: Box::new(Value::Constant(idx_zero)),
+                            },
+                            value: Value::Constant(func_const),
+                        },
+                    );
+
+                    for (offset, capture_val) in capture_values.into_iter().enumerate() {
+                        let idx_const = self.mir.constants.alloc(Constant {
+                            ty: Ty::Primitive(PrimitiveTy::Int),
+                            kind: ConstantKind::Int((offset + 1) as i64),
+                        });
+                        self.emit(
+                            expr.span,
+                            InstructionKind::Store {
+                                ptr: Value::Index {
+                                    base: Box::new(Value::Local(closure_local)),
+                                    index: Box::new(Value::Constant(idx_const)),
+                                },
+                                value: capture_val,
+                            },
+                        );
+                    }
+
+                    Value::Local(closure_local)
+                }
             }
 
             hir::ExprKind::Struct { name, fields } => {
@@ -930,16 +1364,35 @@ impl<'hir> LoweringContext<'hir> {
                     });
                 }
 
+                // Tag the struct with its name so bytecode can match variants.
+                let tag_const = self.mir.constants.alloc(Constant {
+                    ty: Ty::Primitive(PrimitiveTy::String),
+                    kind: ConstantKind::String(name.clone()),
+                });
+                self.emit(
+                    expr.span,
+                    InstructionKind::Store {
+                        ptr: Value::Field {
+                            base: Box::new(Value::Local(result_local)),
+                            field: SmolStr::new(STRUCT_TAG_FIELD),
+                        },
+                        value: Value::Constant(tag_const),
+                    },
+                );
+
                 // Evaluate each field value and emit a Store for each field
                 for (field_name, field_expr) in fields {
                     let field_val = self.lower_expr(*field_expr);
-                    self.emit(expr.span, InstructionKind::Store {
-                        ptr: Value::Field {
-                            base: Box::new(Value::Local(result_local)),
-                            field: field_name.clone(),
+                    self.emit(
+                        expr.span,
+                        InstructionKind::Store {
+                            ptr: Value::Field {
+                                base: Box::new(Value::Local(result_local)),
+                                field: field_name.clone(),
+                            },
+                            value: field_val,
                         },
-                        value: field_val,
-                    });
+                    );
                 }
 
                 Value::Local(result_local)
@@ -949,10 +1402,13 @@ impl<'hir> LoweringContext<'hir> {
                 // Lower assignment expression: evaluate value and assign to target local
                 let mir_value = self.lower_expr(*value);
                 if let Some(&mir_local) = self.local_map.get(target) {
-                    self.emit(expr.span, InstructionKind::Assign {
-                        target: mir_local,
-                        value: mir_value,
-                    });
+                    self.emit(
+                        expr.span,
+                        InstructionKind::Assign {
+                            target: mir_local,
+                            value: mir_value,
+                        },
+                    );
                     Value::Local(mir_local)
                 } else {
                     // Target local not found in map; return unit

@@ -43,9 +43,10 @@ pub fn optimize(mir: &mut MirFile, level: OptimizationLevel) {
 /// Remove no-op instructions
 fn remove_nops(func: &mut Function) {
     for block in func.basic_blocks.iter_mut() {
-        block.1.instructions.retain(|inst| {
-            !matches!(inst.kind, InstructionKind::Nop)
-        });
+        block
+            .1
+            .instructions
+            .retain(|inst| !matches!(inst.kind, InstructionKind::Nop));
     }
 }
 
@@ -62,11 +63,17 @@ fn dead_code_elimination(func: &mut Function) {
                 Terminator::Goto(target) => {
                     worklist.push(*target);
                 }
-                Terminator::Branch { then_block, else_block, .. } => {
+                Terminator::Branch {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
                     worklist.push(*then_block);
                     worklist.push(*else_block);
                 }
-                Terminator::Switch { targets, default, .. } => {
+                Terminator::Switch {
+                    targets, default, ..
+                } => {
                     for (_, target) in targets {
                         worklist.push(*target);
                     }
@@ -136,7 +143,10 @@ fn constant_propagation(func: &mut Function, _constants: &Arena<Constant>) {
 }
 
 /// Replace local variable reads with their constant values if known
-fn replace_locals_with_constants(value: &mut Value, const_locals: &rustc_hash::FxHashMap<LocalId, ConstantId>) {
+fn replace_locals_with_constants(
+    value: &mut Value,
+    const_locals: &rustc_hash::FxHashMap<LocalId, ConstantId>,
+) {
     match value {
         Value::Local(local_id) => {
             // If this local holds a constant, replace it
@@ -220,7 +230,9 @@ fn inline_small_blocks(func: &mut Function) {
                         *else_block = target;
                     }
                 }
-                Terminator::Switch { targets, default, .. } => {
+                Terminator::Switch {
+                    targets, default, ..
+                } => {
                     for (_, dest) in targets.iter_mut() {
                         if *dest == block_id {
                             *dest = target;
@@ -248,11 +260,16 @@ pub fn optimize_resource_tracking(func: &mut Function) {
     // Combine consecutive resource tracking operations
     for block in func.basic_blocks.iter_mut() {
         let mut new_instructions = Vec::new();
-        let mut pending_resources: FxHashMap<SmolStr, (Dimension, Vec<Value>)> = FxHashMap::default();
+        let mut pending_resources: FxHashMap<SmolStr, (Dimension, Vec<Value>)> =
+            FxHashMap::default();
 
         for inst in block.1.instructions.drain(..) {
             match &inst.kind {
-                InstructionKind::ResourceTrack { resource, dimension, amount } => {
+                InstructionKind::ResourceTrack {
+                    resource,
+                    dimension,
+                    amount,
+                } => {
                     // Accumulate resource tracking
                     pending_resources
                         .entry(resource.clone())
@@ -274,13 +291,14 @@ pub fn optimize_resource_tracking(func: &mut Function) {
                             });
                         } else if !amounts.is_empty() {
                             // Combine multiple tracking operations
-                            let combined = amounts.into_iter().reduce(|acc, val| {
-                                Value::Binary {
+                            let combined = amounts
+                                .into_iter()
+                                .reduce(|acc, val| Value::Binary {
                                     op: BinaryOp::Add,
                                     lhs: Box::new(acc),
                                     rhs: Box::new(val),
-                                }
-                            }).unwrap();
+                                })
+                                .unwrap();
 
                             new_instructions.push(Instruction {
                                 span: inst.span,
@@ -301,13 +319,14 @@ pub fn optimize_resource_tracking(func: &mut Function) {
         // Flush any remaining resources
         for (resource, (dimension, amounts)) in pending_resources.drain() {
             if !amounts.is_empty() {
-                let combined = amounts.into_iter().reduce(|acc, val| {
-                    Value::Binary {
+                let combined = amounts
+                    .into_iter()
+                    .reduce(|acc, val| Value::Binary {
                         op: BinaryOp::Add,
                         lhs: Box::new(acc),
                         rhs: Box::new(val),
-                    }
-                }).unwrap();
+                    })
+                    .unwrap();
 
                 new_instructions.push(Instruction {
                     span: Span::default(),

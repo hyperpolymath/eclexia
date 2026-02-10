@@ -11,7 +11,7 @@ use eclexia_mir::MirFile;
 
 /// Cranelift JIT backend
 pub struct CraneliftBackend {
-    // TODO: Cranelift context and module
+    // NOTE: Placeholder for Cranelift context and module state.
 }
 
 impl CraneliftBackend {
@@ -31,9 +31,9 @@ impl Backend for CraneliftBackend {
     type Output = Vec<u8>; // Native code bytes
 
     fn generate(&mut self, _mir: &MirFile) -> Result<Self::Output, CodegenError> {
-        // TODO: Implement Cranelift code generation
+        // NOTE: Cranelift codegen is not available in this build.
         Err(CodegenError::UnsupportedFeature(
-            "Cranelift backend not yet implemented".to_string()
+            "Cranelift backend is unavailable in this build".to_string(),
         ))
     }
 

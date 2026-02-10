@@ -37,14 +37,17 @@ impl<Msg> fmt::Debug for Cmd<Msg> {
         match self {
             Cmd::None => write!(f, "Cmd::None"),
             Cmd::Batch(cmds) => f.debug_tuple("Cmd::Batch").field(&cmds.len()).finish(),
-            Cmd::Http { method, url, .. } => f.debug_struct("Cmd::Http")
+            Cmd::Http { method, url, .. } => f
+                .debug_struct("Cmd::Http")
                 .field("method", method)
                 .field("url", url)
                 .finish(),
-            Cmd::Timer { delay_ms, .. } => f.debug_struct("Cmd::Timer")
+            Cmd::Timer { delay_ms, .. } => f
+                .debug_struct("Cmd::Timer")
                 .field("delay_ms", delay_ms)
                 .finish(),
-            Cmd::Custom { kind, payload } => f.debug_struct("Cmd::Custom")
+            Cmd::Custom { kind, payload } => f
+                .debug_struct("Cmd::Custom")
                 .field("kind", kind)
                 .field("payload", payload)
                 .finish(),
@@ -82,10 +85,16 @@ impl<Msg> fmt::Debug for Sub<Msg> {
         match self {
             Sub::None => write!(f, "Sub::None"),
             Sub::Batch(subs) => f.debug_tuple("Sub::Batch").field(&subs.len()).finish(),
-            Sub::OnTimer { interval_ms, .. } => f.debug_struct("Sub::OnTimer")
+            Sub::OnTimer { interval_ms, .. } => f
+                .debug_struct("Sub::OnTimer")
                 .field("interval_ms", interval_ms)
                 .finish(),
-            Sub::OnEvent { event_name, selector, .. } => f.debug_struct("Sub::OnEvent")
+            Sub::OnEvent {
+                event_name,
+                selector,
+                ..
+            } => f
+                .debug_struct("Sub::OnEvent")
                 .field("event_name", event_name)
                 .field("selector", selector)
                 .finish(),
@@ -119,7 +128,10 @@ impl Html {
     pub fn element(tag: &str, attrs: Vec<(&str, &str)>, children: Vec<Html>) -> Self {
         Html::Element {
             tag: tag.to_string(),
-            attrs: attrs.into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            attrs: attrs
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
             children,
         }
     }
@@ -157,7 +169,11 @@ impl Html {
     /// Render to HTML string
     pub fn render(&self) -> String {
         match self {
-            Html::Element { tag, attrs, children } => {
+            Html::Element {
+                tag,
+                attrs,
+                children,
+            } => {
                 let attr_str = if attrs.is_empty() {
                     String::new()
                 } else {
@@ -171,7 +187,12 @@ impl Html {
                 let children_str: String = children.iter().map(|c| c.render()).collect();
 
                 // Self-closing tags
-                if children.is_empty() && matches!(tag.as_str(), "input" | "br" | "hr" | "img" | "meta" | "link") {
+                if children.is_empty()
+                    && matches!(
+                        tag.as_str(),
+                        "input" | "br" | "hr" | "img" | "meta" | "link"
+                    )
+                {
                     format!("<{}{} />", tag, attr_str)
                 } else {
                     format!("<{}{}>{}</{}>", tag, attr_str, children_str, tag)
@@ -227,7 +248,11 @@ impl<A: App> Program<A> {
     pub fn new(app: A) -> Self {
         let (model, _cmd) = app.init();
         let rendered = app.view(&model).render();
-        Program { app, model, rendered }
+        Program {
+            app,
+            model,
+            rendered,
+        }
     }
 
     /// Get the current model
@@ -282,20 +307,27 @@ mod tests {
 
         fn update(&self, model: &CounterModel, msg: CounterMsg) -> (CounterModel, Cmd<CounterMsg>) {
             let new_model = match msg {
-                CounterMsg::Increment => CounterModel { count: model.count + 1 },
-                CounterMsg::Decrement => CounterModel { count: model.count - 1 },
+                CounterMsg::Increment => CounterModel {
+                    count: model.count + 1,
+                },
+                CounterMsg::Decrement => CounterModel {
+                    count: model.count - 1,
+                },
                 CounterMsg::Reset => CounterModel { count: 0 },
             };
             (new_model, Cmd::None)
         }
 
         fn view(&self, model: &CounterModel) -> Html {
-            Html::div(vec![], vec![
-                Html::h1(vec![], vec![Html::text(&format!("Count: {}", model.count))]),
-                Html::button(vec![("id", "inc")], vec![Html::text("+")]),
-                Html::button(vec![("id", "dec")], vec![Html::text("-")]),
-                Html::button(vec![("id", "reset")], vec![Html::text("Reset")]),
-            ])
+            Html::div(
+                vec![],
+                vec![
+                    Html::h1(vec![], vec![Html::text(&format!("Count: {}", model.count))]),
+                    Html::button(vec![("id", "inc")], vec![Html::text("+")]),
+                    Html::button(vec![("id", "dec")], vec![Html::text("-")]),
+                    Html::button(vec![("id", "reset")], vec![Html::text("Reset")]),
+                ],
+            )
         }
     }
 

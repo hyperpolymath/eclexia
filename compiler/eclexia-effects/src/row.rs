@@ -157,17 +157,33 @@ impl EffectRow {
     pub fn union(&self, other: &Self) -> Self {
         match (self, other) {
             (Self::Pure, x) | (x, Self::Pure) => x.clone(),
-            (Self::Closed(a), Self::Closed(b)) => {
-                Self::Closed(a.union(b).cloned().collect())
-            }
-            (Self::Open { effects: a, variable }, Self::Closed(b))
-            | (Self::Closed(b), Self::Open { effects: a, variable }) => Self::Open {
+            (Self::Closed(a), Self::Closed(b)) => Self::Closed(a.union(b).cloned().collect()),
+            (
+                Self::Open {
+                    effects: a,
+                    variable,
+                },
+                Self::Closed(b),
+            )
+            | (
+                Self::Closed(b),
+                Self::Open {
+                    effects: a,
+                    variable,
+                },
+            ) => Self::Open {
                 effects: a.union(b).cloned().collect(),
                 variable: variable.clone(),
             },
             (
-                Self::Open { effects: a, variable: va },
-                Self::Open { effects: b, variable: _vb },
+                Self::Open {
+                    effects: a,
+                    variable: va,
+                },
+                Self::Open {
+                    effects: b,
+                    variable: _vb,
+                },
             ) => Self::Open {
                 effects: a.union(b).cloned().collect(),
                 variable: va.clone(), // prefer first variable
@@ -183,7 +199,15 @@ impl std::fmt::Display for EffectRow {
             Self::Closed(effects) => {
                 let mut sorted: Vec<_> = effects.iter().collect();
                 sorted.sort();
-                write!(f, "<{}>", sorted.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "))
+                write!(
+                    f,
+                    "<{}>",
+                    sorted
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
             Self::Open { effects, variable } => {
                 let mut sorted: Vec<_> = effects.iter().collect();
@@ -194,7 +218,11 @@ impl std::fmt::Display for EffectRow {
                     write!(
                         f,
                         "<{} | {variable}>",
-                        sorted.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+                        sorted
+                            .iter()
+                            .map(|s| s.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     )
                 }
             }
@@ -217,10 +245,7 @@ mod tests {
 
     #[test]
     fn test_closed_row() {
-        let row = EffectRow::closed(vec![
-            SmolStr::new("Console"),
-            SmolStr::new("State"),
-        ]);
+        let row = EffectRow::closed(vec![SmolStr::new("Console"), SmolStr::new("State")]);
         assert!(!row.is_pure());
         assert!(!row.is_open());
         assert!(row.contains("Console"));
@@ -237,10 +262,7 @@ mod tests {
 
     #[test]
     fn test_open_row() {
-        let row = EffectRow::open(
-            vec![SmolStr::new("Console")],
-            SmolStr::new("r"),
-        );
+        let row = EffectRow::open(vec![SmolStr::new("Console")], SmolStr::new("r"));
         assert!(!row.is_pure());
         assert!(row.is_open());
         assert!(row.contains("Console"));
@@ -258,20 +280,14 @@ mod tests {
     #[test]
     fn test_subrow_closed() {
         let a = EffectRow::closed(vec![SmolStr::new("Console")]);
-        let b = EffectRow::closed(vec![
-            SmolStr::new("Console"),
-            SmolStr::new("State"),
-        ]);
+        let b = EffectRow::closed(vec![SmolStr::new("Console"), SmolStr::new("State")]);
         assert!(a.is_subrow_of(&b));
         assert!(!b.is_subrow_of(&a));
     }
 
     #[test]
     fn test_handle_removes_effects() {
-        let row = EffectRow::closed(vec![
-            SmolStr::new("Console"),
-            SmolStr::new("State"),
-        ]);
+        let row = EffectRow::closed(vec![SmolStr::new("Console"), SmolStr::new("State")]);
         let handled = row.handle(&[SmolStr::new("Console")]);
         assert!(!handled.contains("Console"));
         assert!(handled.contains("State"));

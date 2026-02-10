@@ -3,10 +3,10 @@
 
 //! Lock file generation and management.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use serde::{Deserialize, Serialize};
 
 /// Lock file entry for a single package.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,11 +51,10 @@ impl LockFile {
 
     /// Load lock file from path.
     pub fn load(path: &Path) -> Result<Self, String> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read lock file: {}", e))?;
+        let content =
+            fs::read_to_string(path).map_err(|e| format!("Failed to read lock file: {}", e))?;
 
-        toml::from_str(&content)
-            .map_err(|e| format!("Failed to parse lock file: {}", e))
+        toml::from_str(&content).map_err(|e| format!("Failed to parse lock file: {}", e))
     }
 
     /// Save lock file to path.
@@ -63,8 +62,7 @@ impl LockFile {
         let content = toml::to_string_pretty(self)
             .map_err(|e| format!("Failed to serialize lock file: {}", e))?;
 
-        fs::write(path, content)
-            .map_err(|e| format!("Failed to write lock file: {}", e))?;
+        fs::write(path, content).map_err(|e| format!("Failed to write lock file: {}", e))?;
 
         Ok(())
     }

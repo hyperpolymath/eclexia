@@ -37,6 +37,17 @@ pub enum CarbonSignal {
     Red,
 }
 
+impl CarbonSignal {
+    /// Numeric level of the signal (Green=0, Yellow=1, Red=2).
+    pub fn level(&self) -> u8 {
+        match self {
+            CarbonSignal::Green => 0,
+            CarbonSignal::Yellow => 1,
+            CarbonSignal::Red => 2,
+        }
+    }
+}
+
 /// Carbon intensity monitor.
 pub struct CarbonMonitor {
     /// Current intensity reading.
@@ -65,8 +76,8 @@ impl CarbonMonitor {
             current: None,
             history: Vec::new(),
             max_history: 168,
-            green_threshold: 200.0,  // gCO2e/kWh
-            red_threshold: 500.0,    // gCO2e/kWh
+            green_threshold: 200.0, // gCO2e/kWh
+            red_threshold: 500.0,   // gCO2e/kWh
             default_region: SmolStr::new("global"),
         }
     }
@@ -126,11 +137,7 @@ impl CarbonMonitor {
         if self.history.is_empty() {
             return self.current_intensity();
         }
-        let sum: f64 = self
-            .history
-            .iter()
-            .map(|r| r.intensity_gco2e_per_kwh)
-            .sum();
+        let sum: f64 = self.history.iter().map(|r| r.intensity_gco2e_per_kwh).sum();
         let count = self.history.len() as f64;
         sum / count
     }

@@ -7,8 +7,8 @@
 //! They guide adaptive function selection to minimize total cost.
 
 use eclexia_ast::dimension::Dimension;
-use smol_str::SmolStr;
 use rustc_hash::FxHashMap;
+use smol_str::SmolStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// A shadow price for a resource
@@ -148,10 +148,8 @@ impl ShadowPriceRegistry {
         if let Some(sp) = self.prices.get_mut(&key) {
             sp.update(price);
         } else {
-            self.prices.insert(
-                key,
-                ShadowPrice::new(resource, dimension, price),
-            );
+            self.prices
+                .insert(key, ShadowPrice::new(resource, dimension, price));
         }
     }
 
