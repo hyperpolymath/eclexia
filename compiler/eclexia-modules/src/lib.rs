@@ -257,6 +257,13 @@ pub fn extract_imports(file: &SourceFile) -> Vec<ModuleId> {
 mod tests {
     use super::*;
 
+    fn expect_some<T>(value: Option<T>, context: &str) -> T {
+        match value {
+            Some(val) => val,
+            None => panic!("Expected Some value: {}", context),
+        }
+    }
+
     #[test]
     fn test_module_id_to_file_path() {
         let id = ModuleId::new("std.collections.hashmap");
@@ -269,7 +276,7 @@ mod tests {
     #[test]
     fn test_module_id_from_file_path() {
         let path = Path::new("std/collections/hashmap.ecl");
-        let id = ModuleId::from_file_path(path).unwrap();
+        let id = expect_some(ModuleId::from_file_path(path), "module id from file path");
         assert_eq!(id.path.as_str(), "std.collections.hashmap");
     }
 

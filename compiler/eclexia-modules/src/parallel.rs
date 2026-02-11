@@ -241,6 +241,13 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
+    fn expect_ok<T, E: std::fmt::Debug>(res: Result<T, E>) -> T {
+        match res {
+            Ok(val) => val,
+            Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+        }
+    }
+
     fn id(s: &str) -> ModuleId {
         ModuleId::new(s)
     }
@@ -261,7 +268,7 @@ mod tests {
         graph.add_dependency(&id("b"), &id("a"));
 
         let scheduler = ParallelScheduler::new();
-        let results = scheduler.compile_all(&graph, dummy_compile).unwrap();
+        let results = expect_ok(scheduler.compile_all(&graph, dummy_compile));
 
         assert_eq!(results.len(), 3);
 
@@ -289,12 +296,10 @@ mod tests {
         let counter = compile_counter.clone();
 
         let scheduler = ParallelScheduler::new();
-        let results = scheduler
-            .compile_all(&graph, |module_id| {
-                counter.fetch_add(1, Ordering::Relaxed);
-                dummy_compile(module_id)
-            })
-            .unwrap();
+        let results = expect_ok(scheduler.compile_all(&graph, |module_id| {
+            counter.fetch_add(1, Ordering::Relaxed);
+            dummy_compile(module_id)
+        }));
 
         assert_eq!(results.len(), 4);
         assert_eq!(compile_counter.load(Ordering::Relaxed), 4);
@@ -309,7 +314,7 @@ mod tests {
         graph.add_module(id("z"));
 
         let scheduler = ParallelScheduler::new();
-        let results = scheduler.compile_all(&graph, dummy_compile).unwrap();
+        let results = expect_ok(scheduler.compile_all(&graph, dummy_compile));
 
         assert_eq!(results.len(), 3);
     }
@@ -369,12 +374,12 @@ mod tests {
         let scheduler = ParallelScheduler::new();
 
         // Only "a" changed — must recompile a, b, c, d (all depend on a)
-        let results = scheduler
-            .compile_incremental(&graph, &[id("a")], |module_id| {
+        let results = expect_ok(
+            scheduler.compile_incremental(&graph, &[id("a")], |module_id| {
                 counter.fetch_add(1, Ordering::Relaxed);
                 dummy_compile(module_id)
-            })
-            .unwrap();
+            }),
+        );
 
         assert_eq!(results.len(), 4);
         assert_eq!(compile_counter.load(Ordering::Relaxed), 4);
@@ -395,12 +400,12 @@ mod tests {
         let scheduler = ParallelScheduler::new();
 
         // Only "d" changed — only recompile d (nothing depends on d)
-        let results = scheduler
-            .compile_incremental(&graph, &[id("d")], |module_id| {
+        let results = expect_ok(
+            scheduler.compile_incremental(&graph, &[id("d")], |module_id| {
                 counter.fetch_add(1, Ordering::Relaxed);
                 dummy_compile(module_id)
-            })
-            .unwrap();
+            }),
+        );
 
         assert_eq!(results.len(), 1);
         assert_eq!(compile_counter.load(Ordering::Relaxed), 1);
@@ -413,7 +418,7 @@ mod tests {
         graph.add_module(id("b"));
 
         let scheduler = ParallelScheduler::new().with_max_threads(2);
-        let results = scheduler.compile_all(&graph, dummy_compile).unwrap();
+        let results = expect_ok(scheduler.compile_all(&graph, dummy_compile));
 
         assert_eq!(results.len(), 2);
     }

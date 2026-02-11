@@ -19,6 +19,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::ModuleId;
+use eclexia_ast::types::Ty;
 
 /// A serialized module interface capturing the public API.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,14 +41,14 @@ pub struct ModuleInterface {
 }
 
 /// Current interface format version.
-pub const INTERFACE_VERSION: u32 = 1;
+pub const INTERFACE_VERSION: u32 = 2;
 
 /// A function signature in the interface.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionSig {
     pub name: String,
     pub params: Vec<ParamSig>,
-    pub return_type: String,
+    pub return_type: Ty,
     pub type_params: Vec<String>,
     pub is_public: bool,
     pub is_adaptive: bool,
@@ -58,7 +59,7 @@ pub struct FunctionSig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParamSig {
     pub name: String,
-    pub ty: String,
+    pub ty: Ty,
 }
 
 /// A type definition in the interface.
@@ -75,14 +76,14 @@ pub struct TypeDef {
 pub enum TypeDefKind {
     Struct { fields: Vec<FieldSig> },
     Enum { variants: Vec<VariantSig> },
-    Alias { target: String },
+    Alias { target: Ty },
 }
 
 /// A struct field signature.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldSig {
     pub name: String,
-    pub ty: String,
+    pub ty: Ty,
     pub is_public: bool,
 }
 
@@ -106,7 +107,7 @@ pub struct TraitSig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConstantSig {
     pub name: String,
-    pub ty: String,
+    pub ty: Ty,
     pub is_public: bool,
 }
 
@@ -137,21 +138,32 @@ impl ModuleInterface {
     /// Extracts the public API from the source file's items.
     pub fn from_ast(module_id: &ModuleId, file: &eclexia_ast::SourceFile) -> Self {
         let mut iface = Self::new(module_id);
+        let mut resolver = eclexia_typeck::TypeChecker::new(file);
 
         for item in &file.items {
             match item {
                 eclexia_ast::Item::Function(func) => {
+                    resolver.set_type_params(&func.type_params);
+                    let params = func
+                        .params
+                        .iter()
+                        .map(|p| ParamSig {
+                            name: p.name.to_string(),
+                            ty: p
+                                .ty
+                                .map(|ty_id| resolver.resolve_type_id(ty_id))
+                                .unwrap_or_else(|| resolver.fresh_var()),
+                        })
+                        .collect();
+                    let return_type = func
+                        .return_type
+                        .map(|ty_id| resolver.resolve_type_id(ty_id))
+                        .unwrap_or_else(|| resolver.fresh_var());
+                    resolver.clear_type_params();
                     iface.functions.push(FunctionSig {
                         name: func.name.to_string(),
-                        params: func
-                            .params
-                            .iter()
-                            .map(|p| ParamSig {
-                                name: p.name.to_string(),
-                                ty: format!("{:?}", p.ty),
-                            })
-                            .collect(),
-                        return_type: format!("{:?}", func.return_type),
+                        params,
+                        return_type,
                         type_params: func.type_params.iter().map(|t| t.to_string()).collect(),
                         is_public: true, // NOTE: visibility modifiers pending
                         is_adaptive: false,
@@ -159,17 +171,27 @@ impl ModuleInterface {
                     });
                 }
                 eclexia_ast::Item::AdaptiveFunction(func) => {
+                    resolver.set_type_params(&func.type_params);
+                    let params = func
+                        .params
+                        .iter()
+                        .map(|p| ParamSig {
+                            name: p.name.to_string(),
+                            ty: p
+                                .ty
+                                .map(|ty_id| resolver.resolve_type_id(ty_id))
+                                .unwrap_or_else(|| resolver.fresh_var()),
+                        })
+                        .collect();
+                    let return_type = func
+                        .return_type
+                        .map(|ty_id| resolver.resolve_type_id(ty_id))
+                        .unwrap_or_else(|| resolver.fresh_var());
+                    resolver.clear_type_params();
                     iface.functions.push(FunctionSig {
                         name: func.name.to_string(),
-                        params: func
-                            .params
-                            .iter()
-                            .map(|p| ParamSig {
-                                name: p.name.to_string(),
-                                ty: format!("{:?}", p.ty),
-                            })
-                            .collect(),
-                        return_type: format!("{:?}", func.return_type),
+                        params,
+                        return_type,
                         type_params: func.type_params.iter().map(|t| t.to_string()).collect(),
                         is_public: true,
                         is_adaptive: true,
@@ -177,16 +199,17 @@ impl ModuleInterface {
                     });
                 }
                 eclexia_ast::Item::TypeDef(typedef) => {
+                    resolver.set_type_params(&typedef.params);
                     let kind = match &typedef.kind {
                         eclexia_ast::TypeDefKind::Alias(ty) => TypeDefKind::Alias {
-                            target: format!("{:?}", ty),
+                            target: resolver.resolve_type_id(*ty),
                         },
                         eclexia_ast::TypeDefKind::Struct(fields) => TypeDefKind::Struct {
                             fields: fields
                                 .iter()
                                 .map(|f| FieldSig {
                                     name: f.name.to_string(),
-                                    ty: format!("{:?}", f.ty),
+                                    ty: resolver.resolve_type_id(f.ty),
                                     is_public: true,
                                 })
                                 .collect(),
@@ -204,7 +227,7 @@ impl ModuleInterface {
                                                 .enumerate()
                                                 .map(|(i, ty)| FieldSig {
                                                     name: format!("_{i}"),
-                                                    ty: format!("{ty:?}"),
+                                                    ty: resolver.resolve_type_id(*ty),
                                                     is_public: true,
                                                 })
                                                 .collect()
@@ -214,6 +237,7 @@ impl ModuleInterface {
                                 .collect(),
                         },
                     };
+                    resolver.clear_type_params();
                     iface.types.push(TypeDef {
                         name: typedef.name.to_string(),
                         kind,
@@ -222,22 +246,38 @@ impl ModuleInterface {
                     });
                 }
                 eclexia_ast::Item::TraitDecl(trait_decl) => {
+                    let trait_params: Vec<smol_str::SmolStr> =
+                        trait_decl.type_params.iter().map(|t| t.name.clone()).collect();
                     let methods = trait_decl
                         .items
                         .iter()
                         .filter_map(|item| {
                             if let eclexia_ast::TraitItem::Method { sig, .. } = item {
+                                let mut method_params = trait_params.clone();
+                                method_params.extend(
+                                    sig.type_params.iter().map(|t| t.name.clone()),
+                                );
+                                resolver.set_type_params(&method_params);
+                                let params = sig
+                                    .params
+                                    .iter()
+                                    .map(|p| ParamSig {
+                                        name: p.name.to_string(),
+                                        ty: p
+                                            .ty
+                                            .map(|ty_id| resolver.resolve_type_id(ty_id))
+                                            .unwrap_or_else(|| resolver.fresh_var()),
+                                    })
+                                    .collect();
+                                let return_type = sig
+                                    .return_type
+                                    .map(|ty_id| resolver.resolve_type_id(ty_id))
+                                    .unwrap_or_else(|| resolver.fresh_var());
+                                resolver.clear_type_params();
                                 Some(FunctionSig {
                                     name: sig.name.to_string(),
-                                    params: sig
-                                        .params
-                                        .iter()
-                                        .map(|p| ParamSig {
-                                            name: p.name.to_string(),
-                                            ty: format!("{:?}", p.ty),
-                                        })
-                                        .collect(),
-                                    return_type: format!("{:?}", sig.return_type),
+                                    params,
+                                    return_type,
                                     type_params: sig
                                         .type_params
                                         .iter()
@@ -266,7 +306,10 @@ impl ModuleInterface {
                 eclexia_ast::Item::Const(const_def) => {
                     iface.constants.push(ConstantSig {
                         name: const_def.name.to_string(),
-                        ty: format!("{:?}", const_def.ty),
+                        ty: const_def
+                            .ty
+                            .map(|ty_id| resolver.resolve_type_id(ty_id))
+                            .unwrap_or_else(|| resolver.fresh_var()),
                         is_public: true,
                     });
                 }
@@ -312,6 +355,13 @@ impl ModuleInterface {
 mod tests {
     use super::*;
 
+    fn expect_ok<T, E: std::fmt::Debug>(res: Result<T, E>) -> T {
+        match res {
+            Ok(val) => val,
+            Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+        }
+    }
+
     #[test]
     fn test_interface_roundtrip() {
         let module_id = ModuleId::new("test.module");
@@ -321,17 +371,17 @@ mod tests {
             name: "greet".to_string(),
             params: vec![ParamSig {
                 name: "name".to_string(),
-                ty: "String".to_string(),
+                ty: Ty::Primitive(eclexia_ast::types::PrimitiveTy::String),
             }],
-            return_type: "Unit".to_string(),
+            return_type: Ty::Primitive(eclexia_ast::types::PrimitiveTy::Unit),
             type_params: vec![],
             is_public: true,
             is_adaptive: false,
             resource_annotations: vec![],
         });
 
-        let json = iface.to_json().unwrap();
-        let restored = ModuleInterface::from_json(&json).unwrap();
+        let json = expect_ok(iface.to_json());
+        let restored = expect_ok(ModuleInterface::from_json(&json));
 
         assert_eq!(restored.module_id, "test.module");
         assert_eq!(restored.functions.len(), 1);

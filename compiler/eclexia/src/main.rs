@@ -127,6 +127,81 @@ enum Commands {
         energy: bool,
     },
 
+    /// Profile an Eclexia program and emit timing/resource reports
+    Profile {
+        /// Input source (.ecl) or bytecode (.eclb) file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+
+        /// Output file for report (default: stdout)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Report format: json | flamegraph
+        #[arg(short, long, default_value = "json")]
+        format: String,
+
+        /// Include shadow prices in profile output
+        #[arg(long)]
+        observe_shadow: bool,
+
+        /// Include carbon report in profile output
+        #[arg(long)]
+        carbon_report: bool,
+    },
+
+    /// Run coverage analysis (cargo-tarpaulin wrapper)
+    Coverage {
+        /// Optional output path for coverage report
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Coverage output format: text | Json | Html | Xml | Lcov
+        #[arg(short, long, default_value = "text")]
+        format: String,
+    },
+
+    /// Run fuzzing target (cargo-fuzz wrapper)
+    Fuzz {
+        /// Fuzz target name
+        #[arg(value_name = "TARGET", default_value = "fuzz_main")]
+        target: String,
+
+        /// Number of fuzz iterations/runs
+        #[arg(long)]
+        runs: Option<u64>,
+    },
+
+    /// Apply migration files from a directory
+    Migrate {
+        /// Migration directory (contains *.sql files)
+        #[arg(value_name = "DIR", default_value = "migrations")]
+        dir: PathBuf,
+
+        /// Dry run without marking migrations as applied
+        #[arg(long)]
+        dry_run: bool,
+
+        /// List migration status without applying
+        #[arg(long)]
+        list: bool,
+    },
+
+    /// Scaffold a project from templates (enhanced `new`)
+    Scaffold {
+        /// Project name
+        #[arg(value_name = "NAME")]
+        name: Option<String>,
+
+        /// Template name
+        #[arg(short, long, default_value = "bin")]
+        template: String,
+
+        /// List available templates
+        #[arg(long)]
+        list_templates: bool,
+    },
+
     /// Lint Eclexia source code
     Lint {
         /// Input file(s)
@@ -177,9 +252,9 @@ enum Commands {
         bind: String,
     },
 
-    /// Disassemble compiled bytecode
+    /// Disassemble Eclexia source to bytecode listing
     Disasm {
-        /// Input file
+        /// Input source file
         #[arg(value_name = "FILE")]
         input: PathBuf,
     },
@@ -224,6 +299,37 @@ fn main() -> miette::Result<()> {
         }
         Commands::Bench { filter, energy } => {
             commands::bench(filter.as_deref(), energy)?;
+        }
+        Commands::Profile {
+            input,
+            output,
+            format,
+            observe_shadow,
+            carbon_report,
+        } => {
+            commands::profile(
+                &input,
+                output.as_deref(),
+                &format,
+                observe_shadow,
+                carbon_report,
+            )?;
+        }
+        Commands::Coverage { output, format } => {
+            commands::coverage(output.as_deref(), &format)?;
+        }
+        Commands::Fuzz { target, runs } => {
+            commands::fuzz(&target, runs)?;
+        }
+        Commands::Migrate { dir, dry_run, list } => {
+            commands::migrate(&dir, dry_run, list)?;
+        }
+        Commands::Scaffold {
+            name,
+            template,
+            list_templates,
+        } => {
+            commands::scaffold(name.as_deref(), &template, list_templates)?;
         }
         Commands::Lint { input } => {
             commands::lint(&input)?;

@@ -120,6 +120,13 @@ pub fn select_best_solution<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn expect_some<T>(value: Option<T>, context: &str) -> T {
+        match value {
+            Some(val) => val,
+            None => panic!("Expected Some value: {}", context),
+        }
+    }
     use eclexia_ast::dimension::Dimension;
     use eclexia_mir::{ResourceConstraint, ResourceCost, Solution};
     use smol_str::SmolStr;
@@ -209,7 +216,10 @@ mod tests {
             bound: 50.0,
         }];
 
-        let best = select_best_solution(&solutions, &constraints).unwrap();
+        let best = expect_some(
+            select_best_solution(&solutions, &constraints),
+            "best solution",
+        );
         // quicksort (80) exceeds budget, mergesort (40) fits first
         assert_eq!(best.name, "mergesort");
     }

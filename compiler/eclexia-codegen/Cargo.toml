@@ -13,6 +13,7 @@ repository.workspace = true
 [dependencies]
 eclexia-ast = { path = "../eclexia-ast" }
 eclexia-mir = { path = "../eclexia-mir" }
+eclexia-dom = { path = "../../runtime/eclexia-dom" }
 smol_str = { workspace = true }
 rustc-hash = { workspace = true }
 la-arena = { workspace = true }

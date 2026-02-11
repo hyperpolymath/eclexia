@@ -87,6 +87,15 @@ impl PackageManager {
 
 impl Default for PackageManager {
     fn default() -> Self {
-        Self::new().expect("Failed to create package manager")
+        match Self::new() {
+            Ok(manager) => manager,
+            Err(err) => {
+                eprintln!("Warning: failed to create package manager: {}", err);
+                Self {
+                    registry: RegistryClient::default(),
+                    cache: Cache::default(),
+                }
+            }
+        }
     }
 }

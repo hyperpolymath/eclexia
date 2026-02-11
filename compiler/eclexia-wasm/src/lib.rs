@@ -1165,7 +1165,11 @@ impl WasmBackend {
     ) {
         match terminator {
             Terminator::Return(None) => {
-                if block_id != *block_order.last().unwrap() {
+                let is_last = block_order
+                    .last()
+                    .map(|last| *last == block_id)
+                    .unwrap_or(true);
+                if !is_last {
                     func_body.instruction(&Instruction::Return);
                 }
             }
@@ -1179,7 +1183,11 @@ impl WasmBackend {
                     string_offsets,
                     indices,
                 );
-                if block_id != *block_order.last().unwrap() {
+                let is_last = block_order
+                    .last()
+                    .map(|last| *last == block_id)
+                    .unwrap_or(true);
+                if !is_last {
                     func_body.instruction(&Instruction::Return);
                 }
             }
@@ -1567,6 +1575,28 @@ mod tests {
     use la_arena::Arena;
     use smol_str::SmolStr;
 
+    trait UnwrapOk<T> {
+        fn unwrap_ok(self) -> T;
+    }
+
+    impl<T, E: std::fmt::Debug> UnwrapOk<T> for Result<T, E> {
+        fn unwrap_ok(self) -> T {
+            match self {
+                Ok(val) => val,
+                Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+            }
+        }
+    }
+
+    impl<T> UnwrapOk<T> for Option<T> {
+        fn unwrap_ok(self) -> T {
+            match self {
+                Some(val) => val,
+                None => panic!("Expected Some, got None"),
+            }
+        }
+    }
+
     fn make_test_mir_with_resources() -> MirFile {
         let mut constants: Arena<Constant> = Arena::new();
         let c = constants.alloc(Constant {
@@ -1750,7 +1780,7 @@ mod tests {
     fn test_wasm_generate() {
         let mut backend = WasmBackend::new();
         let mir = make_test_mir_with_resources();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 1);
         assert_eq!(module.functions[0].name, "main");
@@ -1763,7 +1793,7 @@ mod tests {
     fn test_wasm_imports_resource_tracking() {
         let mut backend = WasmBackend::new();
         let mir = make_test_mir_with_resources();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert!(!module.imports.is_empty());
         assert_eq!(module.imports[0].module, "eclexia");
@@ -1774,7 +1804,7 @@ mod tests {
     fn test_wasm_no_imports_when_no_resources() {
         let mut backend = WasmBackend::new();
         let mir = make_simple_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert!(module.imports.is_empty());
     }
@@ -1783,7 +1813,7 @@ mod tests {
     fn test_wasm_exports() {
         let mut backend = WasmBackend::new();
         let mir = make_simple_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         // Should export the function + memory
         assert_eq!(module.exports.len(), 2);
@@ -1799,7 +1829,7 @@ mod tests {
             .with_initial_memory(32)
             .with_max_memory(512);
         let mir = make_simple_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.initial_memory_pages, 32);
         assert_eq!(module.max_memory_pages, 512);
@@ -1812,7 +1842,7 @@ mod tests {
             functions: vec![],
             constants: Arena::new(),
         };
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert!(module.functions.is_empty());
         // Should still export memory
@@ -1832,7 +1862,7 @@ mod tests {
     fn test_wasm_binary_magic_number() {
         let mut backend = WasmBackend::new();
         let mir = make_simple_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         let bytes = module.to_bytes();
         assert!(
@@ -1850,7 +1880,7 @@ mod tests {
     fn test_wasm_binary_nonempty() {
         let mut backend = WasmBackend::new();
         let mir = make_simple_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert!(
             module.binary_size > 8,
@@ -1863,7 +1893,7 @@ mod tests {
     fn test_wasm_arithmetic_function() {
         let mut backend = WasmBackend::new();
         let mir = make_arithmetic_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         let bytes = module.to_bytes();
         assert_eq!(&bytes[0..4], b"\0asm");
@@ -1878,7 +1908,7 @@ mod tests {
     fn test_wasm_function_params() {
         let mut backend = WasmBackend::new();
         let mir = make_params_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 1);
         assert_eq!(module.functions[0].name, "add");
@@ -1897,7 +1927,7 @@ mod tests {
     fn test_wasm_into_bytes() {
         let mut backend = WasmBackend::new();
         let mir = make_simple_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         let size = module.binary_size;
         let bytes = module.into_bytes();
@@ -1991,7 +2021,7 @@ mod tests {
         };
 
         let mut backend = WasmBackend::new();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         assert_eq!(module.functions.len(), 1);
         assert_eq!(module.functions[0].name, "branch_test");
         // Should produce valid WASM
@@ -2063,7 +2093,7 @@ mod tests {
         };
 
         let mut backend = WasmBackend::new();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         assert_eq!(module.functions.len(), 1);
         assert_eq!(module.functions[0].name, "switch_test");
         let bytes = module.to_bytes();
@@ -2123,11 +2153,11 @@ mod tests {
         };
 
         let mut backend = WasmBackend::new();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         // Should have a pow import
         assert!(module.imports.iter().any(|i| i.name == "pow"));
-        assert_eq!(module.imports.last().unwrap().name, "pow");
+        assert_eq!(module.imports.last().unwrap_ok().name, "pow");
 
         let bytes = module.to_bytes();
         assert_eq!(&bytes[0..4], b"\0asm");
@@ -2178,7 +2208,7 @@ mod tests {
         };
 
         let mut backend = WasmBackend::new();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         assert_eq!(module.functions.len(), 1);
         let bytes = module.to_bytes();
         assert_eq!(&bytes[0..4], b"\0asm");
@@ -2225,7 +2255,7 @@ mod tests {
         };
 
         let mut backend = WasmBackend::new();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         // Should have exactly 1 import (query_shadow_price) at index 0
         assert_eq!(module.imports.len(), 1);
         assert_eq!(module.imports[0].name, "query_shadow_price");

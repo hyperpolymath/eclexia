@@ -11,6 +11,11 @@ use crate::shadow_prices::ShadowPriceRegistry;
 use crate::RuntimeConfig;
 use eclexia_ast::dimension::Dimension;
 use smol_str::SmolStr;
+use std::cmp::Ordering;
+
+fn cmp_f64(a: f64, b: f64) -> Ordering {
+    a.partial_cmp(&b).unwrap_or(Ordering::Equal)
+}
 
 /// A candidate solution for adaptive selection
 #[derive(Debug, Clone)]
@@ -175,7 +180,7 @@ impl AdaptiveDecisionEngine {
             .min_by(|a, b| {
                 let cost_a = a.1.calculate_cost(prices);
                 let cost_b = b.1.calculate_cost(prices);
-                cost_a.partial_cmp(&cost_b).unwrap()
+                cmp_f64(cost_a, cost_b)
             })
             .map(|(idx, _)| *idx)
     }
@@ -204,7 +209,7 @@ impl AdaptiveDecisionEngine {
                         .map(|c| c.amount)
                         .sum();
 
-                usage_a.partial_cmp(&usage_b).unwrap()
+                cmp_f64(usage_a, usage_b)
             })
             .map(|(idx, _)| *idx)
     }
@@ -262,7 +267,7 @@ impl AdaptiveDecisionEngine {
                     carbon_weight,
                 );
 
-                score_a.partial_cmp(&score_b).unwrap()
+                cmp_f64(score_a, score_b)
             })
             .map(|(idx, _)| *idx)
     }

@@ -28,11 +28,10 @@ impl Inspector {
         let locals = vm.get_locals();
         let call_stack = vm.get_call_stack();
 
-        if call_stack.is_empty() {
-            return "Locals: (no active frame)".to_string();
-        }
-
-        let frame = call_stack.last().unwrap();
+        let frame = match call_stack.last() {
+            Some(frame) => frame,
+            None => return "Locals: (no active frame)".to_string(),
+        };
         let module = vm.get_module();
         let func = &module.functions[frame.function_idx];
 
@@ -87,11 +86,10 @@ impl Inspector {
     /// Format current instruction for display.
     pub fn format_current_instruction(vm: &VirtualMachine) -> String {
         let call_stack = vm.get_call_stack();
-        if call_stack.is_empty() {
-            return "No active frame".to_string();
-        }
-
-        let frame = call_stack.last().unwrap();
+        let frame = match call_stack.last() {
+            Some(frame) => frame,
+            None => return "No active frame".to_string(),
+        };
         let module = vm.get_module();
         let func = &module.functions[frame.function_idx];
 

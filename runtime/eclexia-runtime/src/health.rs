@@ -63,7 +63,10 @@ fn handle_connection(mut stream: TcpStream, runtime: Arc<Mutex<Runtime>>) -> std
 
     let (status_line, body) = match path {
         "/health" => {
-            let snapshot = runtime.lock().unwrap().health_snapshot();
+            let snapshot = match runtime.lock() {
+                Ok(guard) => guard.health_snapshot(),
+                Err(poisoned) => poisoned.into_inner().health_snapshot(),
+            };
             let body = format!(
                 r#"{{"status":"ok","total_resources":{},"carbon_signal":"{:?}"}}"#,
                 snapshot.stats.total_resources, snapshot.carbon_signal
@@ -71,7 +74,10 @@ fn handle_connection(mut stream: TcpStream, runtime: Arc<Mutex<Runtime>>) -> std
             ("HTTP/1.1 200 OK", body)
         }
         "/ready" => {
-            let ready = runtime.lock().unwrap().is_ready();
+            let ready = match runtime.lock() {
+                Ok(guard) => guard.is_ready(),
+                Err(poisoned) => poisoned.into_inner().is_ready(),
+            };
             let body = format!(r#"{{"ready":{}}}"#, ready);
             let status = if ready {
                 "HTTP/1.1 200 OK"

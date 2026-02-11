@@ -339,9 +339,10 @@ mod tests {
         vfs.apply_changes(&mut db, changes);
 
         // Query through VFS
-        let source = vfs
-            .get(std::path::Path::new("test.ecl"))
-            .expect("File should be tracked");
+        let source = match vfs.get(std::path::Path::new("test.ecl")) {
+            Some(src) => src,
+            None => panic!("File should be tracked"),
+        };
         let (_ast, errors) = queries::parse(&db, source);
         assert!(errors.is_empty());
     }

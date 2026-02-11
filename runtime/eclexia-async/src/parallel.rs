@@ -67,7 +67,10 @@ impl<T: Send + Sync + Clone + 'static> ParallelIterator<T> {
 
         let mut result = Vec::new();
         for handle in handles {
-            result.extend(handle.join().expect("parallel map worker panicked"));
+            match handle.join() {
+                Ok(values) => result.extend(values),
+                Err(_) => panic!("parallel map worker panicked"),
+            }
         }
         result
     }
@@ -106,7 +109,10 @@ impl<T: Send + Sync + Clone + 'static> ParallelIterator<T> {
 
         let mut result = Vec::new();
         for handle in handles {
-            result.extend(handle.join().expect("parallel filter worker panicked"));
+            match handle.join() {
+                Ok(values) => result.extend(values),
+                Err(_) => panic!("parallel filter worker panicked"),
+            }
         }
         result
     }
@@ -149,7 +155,10 @@ impl<T: Send + Sync + Clone + 'static> ParallelIterator<T> {
 
         let mut partial_results: Vec<T> = Vec::new();
         for handle in handles {
-            partial_results.push(handle.join().expect("parallel reduce worker panicked"));
+            match handle.join() {
+                Ok(value) => partial_results.push(value),
+                Err(_) => panic!("parallel reduce worker panicked"),
+            }
         }
 
         partial_results

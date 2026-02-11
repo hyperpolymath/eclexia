@@ -243,6 +243,13 @@ impl Default for DependencyGraph {
 mod tests {
     use super::*;
 
+    fn expect_some<T>(value: Option<T>, context: &str) -> T {
+        match value {
+            Some(val) => val,
+            None => panic!("Expected Some value: {}", context),
+        }
+    }
+
     fn id(s: &str) -> ModuleId {
         ModuleId::new(s)
     }
@@ -277,11 +284,11 @@ mod tests {
         graph.add_dependency(&id("c"), &id("b"));
         graph.add_dependency(&id("b"), &id("a"));
 
-        let order = graph.topological_order().unwrap();
+        let order = expect_some(graph.topological_order(), "topological order");
         // Should compile a first, then b, then c
-        let a_pos = order.iter().position(|m| *m == &id("a")).unwrap();
-        let b_pos = order.iter().position(|m| *m == &id("b")).unwrap();
-        let c_pos = order.iter().position(|m| *m == &id("c")).unwrap();
+        let a_pos = expect_some(order.iter().position(|m| *m == &id("a")), "position a");
+        let b_pos = expect_some(order.iter().position(|m| *m == &id("b")), "position b");
+        let c_pos = expect_some(order.iter().position(|m| *m == &id("c")), "position c");
 
         assert!(a_pos < b_pos, "a should come before b");
         assert!(b_pos < c_pos, "b should come before c");
@@ -296,7 +303,7 @@ mod tests {
         graph.add_dependency(&id("b"), &id("a"));
         graph.add_dependency(&id("c"), &id("a"));
 
-        let levels = graph.parallel_levels().unwrap();
+        let levels = expect_some(graph.parallel_levels(), "parallel levels");
         assert_eq!(levels.len(), 3); // Level 0: a, Level 1: b+c, Level 2: d
 
         assert!(levels[0].contains(&&id("a")));

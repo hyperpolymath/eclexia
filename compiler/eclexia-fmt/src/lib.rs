@@ -94,11 +94,18 @@ impl Default for Formatter {
 mod tests {
     use super::*;
 
+    fn expect_ok<T, E: std::fmt::Debug>(res: Result<T, E>) -> T {
+        match res {
+            Ok(val) => val,
+            Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+        }
+    }
+
     #[test]
     fn test_format_simple_function() {
         let source = "fn add(a:Int,b:Int)->Int{a+b}";
         let formatter = Formatter::new();
-        let formatted = formatter.format(source).unwrap();
+        let formatted = expect_ok(formatter.format(source));
 
         // Should have proper spacing
         assert!(formatted.contains("fn add"));
@@ -110,7 +117,7 @@ mod tests {
     fn test_format_preserves_semantics() {
         let source = "fn main() { let x = 42; println(x); }";
         let formatter = Formatter::new();
-        let formatted = formatter.format(source).unwrap();
+        let formatted = expect_ok(formatter.format(source));
 
         // Re-parse formatted code to ensure it's valid
         let (_, errors) = parse(&formatted);

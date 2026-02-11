@@ -6,8 +6,9 @@
 use eclexia_runtime::{HealthServer, PowerMetrics, Runtime};
 use miette::{Context, IntoDiagnostic};
 use std::path::Path;
+use std::process::Command;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Build an Eclexia program.
 pub fn build(
@@ -34,19 +35,8 @@ pub fn build(
         ));
     }
 
-    // Type check
-    let type_errors = eclexia_typeck::check(&file);
-
-    if !type_errors.is_empty() {
-        eprintln!("Type errors:");
-        for err in &type_errors {
-            eprintln!("  {}", err.format_with_source(&source));
-        }
-        return Err(miette::miette!(
-            "Type checking failed with {} errors",
-            type_errors.len()
-        ));
-    }
+    // Module resolution + interface generation (wiring eclexia-modules into CLI)
+    compile_module_graph(input)?;
 
     // Lower to HIR
     let hir_file = eclexia_hir::lower_source_file(&file);
@@ -56,7 +46,7 @@ pub fn build(
 
     // Run analysis passes if requested
     if analyze {
-        run_mir_analysis(&mir_file, &file);
+        run_mir_analysis(&mir_file, &file, &source);
     }
 
     // Select backend based on target
@@ -180,8 +170,465 @@ pub fn build(
     Ok(())
 }
 
+fn find_project_root(input: &Path) -> std::path::PathBuf {
+    for ancestor in input.ancestors() {
+        if ancestor.join("package.toml").is_file() || ancestor.join("Cargo.toml").is_file() {
+            return ancestor.to_path_buf();
+        }
+    }
+
+    input
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf()
+}
+
+fn find_stdlib_root(root: &Path) -> Option<std::path::PathBuf> {
+    for ancestor in root.ancestors() {
+        let candidate = ancestor.join("stdlib");
+        if candidate.is_dir() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn module_id_for_path(root: &Path, path: &Path) -> eclexia_modules::ModuleId {
+    let rel = path.strip_prefix(root).unwrap_or(path);
+    eclexia_modules::ModuleId::from_file_path(rel).unwrap_or_else(|| {
+        let raw = rel
+            .with_extension("")
+            .to_string_lossy()
+            .replace(std::path::MAIN_SEPARATOR, ".");
+        eclexia_modules::ModuleId::new(raw)
+    })
+}
+
+fn compile_module_graph(input: &Path) -> miette::Result<()> {
+    use eclexia_modules::dep_graph::DependencyGraph;
+    use eclexia_modules::interface::ModuleInterface;
+    use eclexia_modules::parallel::{
+        CompilationError, CompilationUnit, ErrorSeverity, ParallelCompilationError,
+        ParallelScheduler,
+    };
+    use eclexia_modules::{extract_imports, ModuleResolver};
+    use std::collections::{HashMap, HashSet, VecDeque};
+    use std::sync::Arc;
+
+    let root = find_project_root(input);
+    let mut resolver = ModuleResolver::new(root.clone());
+    if let Some(stdlib) = find_stdlib_root(&root) {
+        resolver.add_search_path(stdlib);
+    }
+
+    let entry_id = module_id_for_path(&root, input);
+    let mut graph = DependencyGraph::new();
+    let mut module_paths: HashMap<eclexia_modules::ModuleId, std::path::PathBuf> = HashMap::new();
+    let mut queue = VecDeque::new();
+    let mut visited: HashSet<eclexia_modules::ModuleId> = HashSet::new();
+
+    graph.add_module(entry_id.clone());
+    module_paths.insert(entry_id.clone(), input.to_path_buf());
+    queue.push_back(entry_id.clone());
+
+    while let Some(module_id) = queue.pop_front() {
+        if visited.contains(&module_id) {
+            continue;
+        }
+        visited.insert(module_id.clone());
+
+        let path = if let Some(path) = module_paths.get(&module_id) {
+            path.clone()
+        } else {
+            resolver
+                .resolve(&module_id)
+                .map_err(|e| miette::miette!("Module resolution failed: {}", e))?
+        };
+
+        let source = std::fs::read_to_string(&path)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to read {}", path.display()))?;
+
+        let (file, parse_errors) = eclexia_parser::parse(&source);
+        if !parse_errors.is_empty() {
+            eprintln!("Parse errors in {}:", path.display());
+            for err in &parse_errors {
+                eprintln!("  {}", err.format_with_source(&source));
+            }
+            return Err(miette::miette!(
+                "Parsing failed for {} with {} errors",
+                path.display(),
+                parse_errors.len()
+            ));
+        }
+
+        let imports = extract_imports(&file);
+        for import in imports {
+            graph.add_dependency(&module_id, &import);
+            if !module_paths.contains_key(&import) {
+                let import_path = resolver
+                    .resolve(&import)
+                    .map_err(|e| miette::miette!("Module resolution failed: {}", e))?;
+                module_paths.insert(import.clone(), import_path);
+            }
+            queue.push_back(import);
+        }
+    }
+
+    let Some(_order) = graph.topological_order() else {
+        return Err(miette::miette!("Module dependency cycle detected"));
+    };
+
+    let build_dir = root.join("target").join("eclexia").join("interfaces");
+    std::fs::create_dir_all(&build_dir)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Failed to create {}", build_dir.display()))?;
+
+    let module_paths = Arc::new(module_paths);
+    let build_dir = Arc::new(build_dir);
+
+    let scheduler = ParallelScheduler::new();
+    let results = match scheduler.compile_all(&graph, |module_id| {
+        let mut errors = Vec::new();
+        let path = match module_paths.get(module_id) {
+            Some(path) => path.clone(),
+            None => {
+                errors.push(CompilationError {
+                    module_id: module_id.clone(),
+                    message: "module path not resolved".to_string(),
+                    severity: ErrorSeverity::Error,
+                });
+                return CompilationUnit {
+                    module_id: module_id.clone(),
+                    interface: ModuleInterface::new(module_id),
+                    errors,
+                };
+            }
+        };
+
+        let iface_path = ModuleInterface::interface_path(module_id, &build_dir);
+        let dependencies = graph.dependencies(module_id);
+        if interface_is_fresh(&path, &iface_path, &dependencies, &build_dir) {
+            if let Ok(interface) = ModuleInterface::read_from_file(&iface_path) {
+                return CompilationUnit {
+                    module_id: module_id.clone(),
+                    interface,
+                    errors,
+                };
+            }
+        }
+
+        let source = match std::fs::read_to_string(&path) {
+            Ok(source) => source,
+            Err(err) => {
+                errors.push(CompilationError {
+                    module_id: module_id.clone(),
+                    message: format!("failed to read {}: {}", path.display(), err),
+                    severity: ErrorSeverity::Error,
+                });
+                return CompilationUnit {
+                    module_id: module_id.clone(),
+                    interface: ModuleInterface::new(module_id),
+                    errors,
+                };
+            }
+        };
+
+        let (file, parse_errors) = eclexia_parser::parse(&source);
+        if !parse_errors.is_empty() {
+            for err in &parse_errors {
+                errors.push(CompilationError {
+                    module_id: module_id.clone(),
+                    message: err.format_with_source(&source),
+                    severity: ErrorSeverity::Error,
+                });
+            }
+        }
+
+        let mut dependency_interfaces = Vec::new();
+        if parse_errors.is_empty() {
+            for dep in &dependencies {
+                let dep_iface = ModuleInterface::interface_path(dep, &build_dir);
+                match ModuleInterface::read_from_file(&dep_iface) {
+                    Ok(interface) => dependency_interfaces.push(interface),
+                    Err(err) => {
+                        errors.push(CompilationError {
+                            module_id: module_id.clone(),
+                            message: format!(
+                                "failed to read interface {}: {}",
+                                dep_iface.display(),
+                                err
+                            ),
+                            severity: ErrorSeverity::Error,
+                        });
+                    }
+                }
+            }
+        }
+
+        let type_errors = if parse_errors.is_empty() && errors.is_empty() {
+            type_check_with_interfaces(&file, &dependency_interfaces)
+        } else {
+            Vec::new()
+        };
+        for err in &type_errors {
+            errors.push(CompilationError {
+                module_id: module_id.clone(),
+                message: err.format_with_source(&source),
+                severity: ErrorSeverity::Error,
+            });
+        }
+
+        let interface = ModuleInterface::from_ast(module_id, &file);
+        if errors.is_empty() {
+            let iface_path = ModuleInterface::interface_path(module_id, &build_dir);
+            if let Err(err) = interface.write_to_file(&iface_path) {
+                errors.push(CompilationError {
+                    module_id: module_id.clone(),
+                    message: format!("failed to write {}: {}", iface_path.display(), err),
+                    severity: ErrorSeverity::Error,
+                });
+            }
+        }
+
+        CompilationUnit {
+            module_id: module_id.clone(),
+            interface,
+            errors,
+        }
+    }) {
+        Ok(results) => results,
+        Err(ParallelCompilationError::CompilationFailed { results }) => {
+            report_module_errors(&results);
+            return Err(miette::miette!("Module compilation failed"));
+        }
+        Err(ParallelCompilationError::CyclicDependency) => {
+            return Err(miette::miette!("Module dependency cycle detected"));
+        }
+        Err(ParallelCompilationError::ThreadPoolError(message)) => {
+            return Err(miette::miette!("Parallel compilation failed: {}", message));
+        }
+    };
+
+    println!(
+        "  Modules compiled: {} (interfaces in {})",
+        results.len(),
+        build_dir.display()
+    );
+
+    Ok(())
+}
+
+fn interface_is_fresh(
+    source_path: &Path,
+    iface_path: &Path,
+    deps: &[&eclexia_modules::ModuleId],
+    build_dir: &Path,
+) -> bool {
+    let iface_mtime = match std::fs::metadata(iface_path).and_then(|m| m.modified()) {
+        Ok(time) => time,
+        Err(_) => return false,
+    };
+    let source_mtime = match std::fs::metadata(source_path).and_then(|m| m.modified()) {
+        Ok(time) => time,
+        Err(_) => return false,
+    };
+
+    if iface_mtime < source_mtime {
+        return false;
+    }
+
+    for dep in deps {
+        let dep_iface = eclexia_modules::interface::ModuleInterface::interface_path(dep, build_dir);
+        let dep_mtime = match std::fs::metadata(&dep_iface).and_then(|m| m.modified()) {
+            Ok(time) => time,
+            Err(_) => return false,
+        };
+        if dep_mtime > iface_mtime {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn type_check_with_interfaces(
+    file: &eclexia_ast::SourceFile,
+    interfaces: &[eclexia_modules::interface::ModuleInterface],
+) -> Vec<eclexia_typeck::TypeError> {
+    let mut checker = eclexia_typeck::TypeChecker::new(file);
+    apply_module_interfaces(&mut checker, interfaces);
+    checker.check_all()
+}
+
+fn apply_module_interfaces(
+    checker: &mut eclexia_typeck::TypeChecker,
+    interfaces: &[eclexia_modules::interface::ModuleInterface],
+) {
+    use eclexia_ast::types::{Ty, TypeVar};
+    use rustc_hash::FxHashMap;
+
+    for iface in interfaces {
+        let mut mapping: FxHashMap<TypeVar, TypeVar> = FxHashMap::default();
+        let mut freshen = |ty: &Ty| freshen_type_with_map(checker, ty, &mut mapping);
+
+        for func in &iface.functions {
+            let raw_ty = Ty::Function {
+                params: func.params.iter().map(|p| p.ty.clone()).collect(),
+                ret: Box::new(func.return_type.clone()),
+            };
+            let func_ty = freshen(&raw_ty);
+            checker
+                .env_mut()
+                .insert_mono(smol_str::SmolStr::new(func.name.clone()), func_ty);
+        }
+
+        for typedef in &iface.types {
+            match &typedef.kind {
+                eclexia_modules::interface::TypeDefKind::Struct { fields } => {
+                    let field_info = fields
+                        .iter()
+                        .map(|f| (smol_str::SmolStr::new(f.name.clone()), freshen(&f.ty)))
+                        .collect();
+                    checker
+                        .env_mut()
+                        .register_struct(smol_str::SmolStr::new(typedef.name.clone()), field_info);
+                }
+                eclexia_modules::interface::TypeDefKind::Enum { variants } => {
+                    let enum_name = smol_str::SmolStr::new(typedef.name.clone());
+                    for variant in variants {
+                        if variant.fields.is_empty() {
+                            checker.env_mut().insert_mono(
+                                smol_str::SmolStr::new(variant.name.clone()),
+                                Ty::Named {
+                                    name: enum_name.clone(),
+                                    args: vec![],
+                                },
+                            );
+                        } else {
+                            let params = variant
+                                .fields
+                                .iter()
+                                .map(|f| freshen(&f.ty))
+                                .collect();
+                            let ctor_ty = Ty::Function {
+                                params,
+                                ret: Box::new(Ty::Named {
+                                    name: enum_name.clone(),
+                                    args: vec![],
+                                }),
+                            };
+                            checker.env_mut().insert_mono(
+                                smol_str::SmolStr::new(variant.name.clone()),
+                                ctor_ty,
+                            );
+                        }
+                    }
+                }
+                eclexia_modules::interface::TypeDefKind::Alias { target } => {
+                    let alias_ty = freshen(target);
+                    checker
+                        .env_mut()
+                        .insert_mono(smol_str::SmolStr::new(typedef.name.clone()), alias_ty);
+                }
+            }
+        }
+
+        for tr in &iface.traits {
+            let methods = tr
+                .methods
+                .iter()
+                .map(|m| {
+                    let raw_ty = Ty::Function {
+                        params: m.params.iter().map(|p| p.ty.clone()).collect(),
+                        ret: Box::new(m.return_type.clone()),
+                    };
+                    let method_ty = freshen(&raw_ty);
+                    (smol_str::SmolStr::new(m.name.clone()), method_ty)
+                })
+                .collect();
+            checker
+                .env_mut()
+                .register_trait(smol_str::SmolStr::new(tr.name.clone()), methods);
+        }
+
+        for constant in &iface.constants {
+            let const_ty = freshen(&constant.ty);
+            checker
+                .env_mut()
+                .insert_mono(smol_str::SmolStr::new(constant.name.clone()), const_ty);
+        }
+    }
+}
+
+fn freshen_type_with_map(
+    checker: &mut eclexia_typeck::TypeChecker,
+    ty: &eclexia_ast::types::Ty,
+    mapping: &mut rustc_hash::FxHashMap<eclexia_ast::types::TypeVar, eclexia_ast::types::TypeVar>,
+) -> eclexia_ast::types::Ty {
+    use eclexia_ast::types::Ty;
+
+    match ty {
+        Ty::Primitive(p) => Ty::Primitive(*p),
+        Ty::Named { name, args } => Ty::Named {
+            name: name.clone(),
+            args: args
+                .iter()
+                .map(|arg| freshen_type_with_map(checker, arg, mapping))
+                .collect(),
+        },
+        Ty::Function { params, ret } => Ty::Function {
+            params: params
+                .iter()
+                .map(|p| freshen_type_with_map(checker, p, mapping))
+                .collect(),
+            ret: Box::new(freshen_type_with_map(checker, ret, mapping)),
+        },
+        Ty::Tuple(elems) => Ty::Tuple(
+            elems
+                .iter()
+                .map(|elem| freshen_type_with_map(checker, elem, mapping))
+                .collect(),
+        ),
+        Ty::Array { elem, size } => Ty::Array {
+            elem: Box::new(freshen_type_with_map(checker, elem, mapping)),
+            size: *size,
+        },
+        Ty::Resource { base, dimension } => Ty::Resource {
+            base: *base,
+            dimension: dimension.clone(),
+        },
+        Ty::Var(var) => {
+            let entry = mapping.entry(*var).or_insert_with(|| {
+                let fresh = checker.fresh_var();
+                if let Ty::Var(new_var) = fresh {
+                    new_var
+                } else {
+                    eclexia_ast::types::TypeVar::new(0)
+                }
+            });
+            Ty::Var(*entry)
+        }
+        Ty::ForAll { vars, body } => Ty::ForAll {
+            vars: vars.clone(),
+            body: Box::new(freshen_type_with_map(checker, body, mapping)),
+        },
+        Ty::Error => Ty::Error,
+        Ty::Never => Ty::Never,
+    }
+}
+
+fn report_module_errors(results: &[eclexia_modules::parallel::CompilationUnit]) {
+    eprintln!("Module compilation errors:");
+    for unit in results {
+        for err in &unit.errors {
+            eprintln!("  {}: {}", unit.module_id, err.message);
+        }
+    }
+}
+
 /// Run MIR-level analysis passes: constant folding, resource analysis, budget verification.
-fn run_mir_analysis(mir: &eclexia_mir::MirFile, ast: &eclexia_ast::SourceFile) {
+fn run_mir_analysis(mir: &eclexia_mir::MirFile, ast: &eclexia_ast::SourceFile, source: &str) {
     println!("\n--- MIR Analysis ---");
 
     // Compile-time constant folding analysis
@@ -363,7 +810,7 @@ fn run_mir_analysis(mir: &eclexia_mir::MirFile, ast: &eclexia_ast::SourceFile) {
     // Incremental compilation readiness (salsa database)
     {
         let db = eclexia_db::CompilerDatabase::new();
-        let source_text = format!("{:?}", ast); // Use AST debug repr as proxy
+        let source_text = source.to_string();
         let source = eclexia_db::SourceFile::new(&db, source_text);
         let all_diags = eclexia_db::queries::all_diagnostics(&db, source);
         let errors: Vec<_> = all_diags
@@ -421,19 +868,8 @@ pub fn run(input: &Path, observe_shadow: bool, carbon_report: bool) -> miette::R
         ));
     }
 
-    // Type check
-    let type_errors = eclexia_typeck::check(&file);
-
-    if !type_errors.is_empty() {
-        eprintln!("Type errors:");
-        for err in &type_errors {
-            eprintln!("  {}", err.format_with_source(&source));
-        }
-        return Err(miette::miette!(
-            "Type checking failed with {} errors",
-            type_errors.len()
-        ));
-    }
+    // Module resolution + interface generation
+    compile_module_graph(input)?;
 
     if observe_shadow {
         let registry = eclexia_runtime::ShadowPriceRegistry::new();
@@ -570,15 +1006,8 @@ pub fn check(input: &Path) -> miette::Result<()> {
         return Err(miette::miette!("Parsing failed"));
     }
 
-    let type_errors = eclexia_typeck::check(&file);
-
-    if !type_errors.is_empty() {
-        eprintln!("Type errors:");
-        for err in &type_errors {
-            eprintln!("  {}", err.format_with_source(&source));
-        }
-        return Err(miette::miette!("Type checking failed"));
-    }
+    // Module resolution + interface generation
+    compile_module_graph(input)?;
 
     println!("✓ No errors found");
 
@@ -1768,6 +2197,388 @@ pub fn bench(filter: Option<&str>, energy_enabled: bool) -> miette::Result<()> {
 
     println!("✓ All {} benchmarks passed", total_summary.benchmarks_run);
     Ok(())
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+struct MigrationState {
+    applied: Vec<String>,
+}
+
+/// Profile a program and emit timing/resource reports.
+pub fn profile(
+    input: &Path,
+    output: Option<&Path>,
+    format: &str,
+    observe_shadow: bool,
+    carbon_report: bool,
+) -> miette::Result<()> {
+    use eclexia_ast::dimension::Dimension;
+    use serde_json::json;
+    use smol_str::SmolStr;
+
+    if eclexia_codegen::bytecode::BytecodeModule::is_eclb_path(input)
+        && format == "json"
+        && output.is_none()
+    {
+        return Err(miette::miette!(
+            "JSON profiling for bytecode requires --output to avoid mixed stdout from the program"
+        ));
+    }
+
+    let total_start = Instant::now();
+    let mut stages: Vec<(String, f64)> = Vec::new();
+
+    let mut resources = serde_json::Map::new();
+    let mut shadow = serde_json::Map::new();
+    let result_repr: String;
+    let program_output: String;
+    let mode: &str;
+
+    if eclexia_codegen::bytecode::BytecodeModule::is_eclb_path(input) {
+        mode = "bytecode";
+
+        let t0 = Instant::now();
+        let module = eclexia_codegen::bytecode::BytecodeModule::read_eclb(input)
+            .map_err(|e| miette::miette!("{}", e))?;
+        stages.push((
+            "load_bytecode".to_string(),
+            t0.elapsed().as_secs_f64() * 1000.0,
+        ));
+
+        let t1 = Instant::now();
+        let mut vm = eclexia_codegen::VirtualMachine::new(module);
+        let vm_result = vm.run().map_err(|e| miette::miette!("VM error: {}", e))?;
+        stages.push((
+            "execute_vm".to_string(),
+            t1.elapsed().as_secs_f64() * 1000.0,
+        ));
+        result_repr = format!("{:?}", vm_result);
+        program_output = String::new();
+
+        for (name, amount) in vm.get_resource_usage() {
+            resources.insert(name.to_string(), json!(amount));
+        }
+
+        if observe_shadow {
+            let mut runtime = Runtime::new();
+            runtime.ingest_usage(
+                vm.get_resources()
+                    .iter()
+                    .map(|entry| (entry.resource.clone(), entry.dimension, entry.amount)),
+            );
+            let computed_prices = runtime.refresh_shadow_prices_from_usage();
+            if computed_prices.is_empty() {
+                shadow.insert(
+                    "energy".to_string(),
+                    json!(runtime.get_shadow_price(&SmolStr::new("energy"), Dimension::energy())),
+                );
+                shadow.insert(
+                    "time".to_string(),
+                    json!(runtime.get_shadow_price(&SmolStr::new("time"), Dimension::time())),
+                );
+                shadow.insert(
+                    "carbon".to_string(),
+                    json!(runtime.get_shadow_price(&SmolStr::new("carbon"), Dimension::carbon())),
+                );
+            } else {
+                for (name, dimension, price) in computed_prices {
+                    shadow.insert(format!("{}::{:?}", name, dimension), json!(price));
+                }
+            }
+        }
+    } else {
+        mode = "interpreter";
+
+        let t0 = Instant::now();
+        let source = std::fs::read_to_string(input)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to read {}", input.display()))?;
+        stages.push((
+            "read_source".to_string(),
+            t0.elapsed().as_secs_f64() * 1000.0,
+        ));
+
+        let t1 = Instant::now();
+        let (file, parse_errors) = eclexia_parser::parse(&source);
+        if !parse_errors.is_empty() {
+            return Err(miette::miette!(
+                "Parsing failed with {} errors",
+                parse_errors.len()
+            ));
+        }
+        stages.push(("parse".to_string(), t1.elapsed().as_secs_f64() * 1000.0));
+
+        let t2 = Instant::now();
+        let type_errors = eclexia_typeck::check(&file);
+        if !type_errors.is_empty() {
+            return Err(miette::miette!(
+                "Type checking failed with {} errors",
+                type_errors.len()
+            ));
+        }
+        stages.push(("typecheck".to_string(), t2.elapsed().as_secs_f64() * 1000.0));
+
+        let t3 = Instant::now();
+        let (interp_result, captured_output) = eclexia_interp::run_capturing_output(&file)
+            .map_err(|e| miette::miette!("Runtime error: {}", e))?;
+        stages.push((
+            "execute_interp".to_string(),
+            t3.elapsed().as_secs_f64() * 1000.0,
+        ));
+        result_repr = format!("{:?}", interp_result);
+        program_output = captured_output;
+
+        if observe_shadow {
+            let registry = eclexia_runtime::ShadowPriceRegistry::new();
+            shadow.insert(
+                "energy".to_string(),
+                json!(registry.get_price(&SmolStr::new("energy"), Dimension::energy())),
+            );
+            shadow.insert(
+                "time".to_string(),
+                json!(registry.get_price(&SmolStr::new("time"), Dimension::time())),
+            );
+            shadow.insert(
+                "carbon".to_string(),
+                json!(registry.get_price(&SmolStr::new("carbon"), Dimension::carbon())),
+            );
+        }
+    }
+
+    let total_ms = total_start.elapsed().as_secs_f64() * 1000.0;
+    let report_json = json!({
+        "tool": "eclexia-profile",
+        "input": input.display().to_string(),
+        "mode": mode,
+        "total_ms": total_ms,
+        "stages": stages.iter().map(|(name, ms)| json!({ "name": name, "ms": ms })).collect::<Vec<_>>(),
+        "result": result_repr,
+        "program_output": program_output,
+        "resource_usage": resources,
+        "shadow_prices": shadow,
+        "carbon_report": if carbon_report { json!("enabled") } else { json!("disabled") },
+    });
+
+    let rendered = match format {
+        "json" => serde_json::to_string_pretty(&report_json)
+            .into_diagnostic()
+            .wrap_err("Failed to serialize profile report")?,
+        "flamegraph" => stages
+            .iter()
+            .map(|(name, ms)| {
+                let micros = (*ms * 1000.0).max(1.0) as u64;
+                format!("eclexia;{} {}", name, micros)
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        other => {
+            return Err(miette::miette!(
+                "Unsupported profile format '{}'. Use 'json' or 'flamegraph'.",
+                other
+            ));
+        }
+    };
+
+    if let Some(path) = output {
+        std::fs::write(path, rendered)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to write {}", path.display()))?;
+        println!("✓ Profile report written to {}", path.display());
+    } else {
+        println!("{}", rendered);
+    }
+
+    Ok(())
+}
+
+/// Run coverage analysis via cargo-tarpaulin.
+pub fn coverage(output: Option<&Path>, format: &str) -> miette::Result<()> {
+    let mut cmd = Command::new("cargo");
+    cmd.arg("tarpaulin");
+
+    if format != "text" {
+        cmd.arg("--out").arg(format);
+    }
+
+    if let Some(path) = output {
+        cmd.arg("--output-dir").arg(path);
+    }
+
+    println!("Running coverage: {:?}", cmd);
+    let status = cmd
+        .status()
+        .into_diagnostic()
+        .wrap_err("Failed to execute cargo-tarpaulin. Is it installed?")?;
+
+    if !status.success() {
+        return Err(miette::miette!(
+            "Coverage command failed. Install tarpaulin with: cargo install cargo-tarpaulin"
+        ));
+    }
+
+    println!("✓ Coverage run completed");
+    Ok(())
+}
+
+/// Run fuzzing target via cargo-fuzz.
+pub fn fuzz(target: &str, runs: Option<u64>) -> miette::Result<()> {
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .into_diagnostic()
+        .wrap_err("Failed to resolve workspace root")?;
+    let fuzz_dir = workspace_root.join("fuzz");
+    let fuzz_manifest = fuzz_dir.join("Cargo.toml");
+
+    if !fuzz_manifest.exists() {
+        return Err(miette::miette!(
+            "Fuzz workspace not found at {}",
+            fuzz_manifest.display()
+        ));
+    }
+
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(&fuzz_dir)
+        .arg("+nightly")
+        .arg("fuzz")
+        .arg("run")
+        .arg(target);
+
+    if let Some(runs) = runs {
+        cmd.arg("--").arg(format!("-runs={}", runs));
+    }
+
+    println!(
+        "Running fuzz target '{}' in {}...",
+        target,
+        fuzz_dir.display()
+    );
+    let status = cmd
+        .status()
+        .into_diagnostic()
+        .wrap_err("Failed to execute cargo-fuzz. Is it installed and on PATH?")?;
+
+    if !status.success() {
+        return Err(miette::miette!(
+            "Fuzz command failed. Ensure nightly is installed (`rustup toolchain install nightly`), cargo-fuzz is installed (`cargo install cargo-fuzz`), and the target exists under fuzz/fuzz_targets."
+        ));
+    }
+
+    println!("✓ Fuzz run completed");
+    Ok(())
+}
+
+/// Apply file-based SQL migrations.
+pub fn migrate(dir: &Path, dry_run: bool, list: bool) -> miette::Result<()> {
+    std::fs::create_dir_all(dir)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Failed to create {}", dir.display()))?;
+
+    let state_file = dir.join(".eclexia-migrate-state.json");
+    let mut state: MigrationState = if state_file.exists() {
+        let raw = std::fs::read_to_string(&state_file)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to read {}", state_file.display()))?;
+        serde_json::from_str(&raw).unwrap_or_default()
+    } else {
+        MigrationState::default()
+    };
+
+    let mut migrations: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+        .into_diagnostic()?
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("sql"))
+        .collect();
+    migrations.sort();
+
+    if migrations.is_empty() {
+        println!("No migrations found in {}", dir.display());
+        return Ok(());
+    }
+
+    if list {
+        println!("Migration status:");
+        for migration in &migrations {
+            let name = migration
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("<unknown>");
+            let status = if state.applied.iter().any(|applied| applied == name) {
+                "applied"
+            } else {
+                "pending"
+            };
+            println!("  [{}] {}", status, name);
+        }
+        return Ok(());
+    }
+
+    let mut applied_now = 0usize;
+    for migration in &migrations {
+        let name = migration
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("<unknown>")
+            .to_string();
+
+        if state.applied.iter().any(|applied| applied == &name) {
+            continue;
+        }
+
+        let sql = std::fs::read_to_string(migration)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to read {}", migration.display()))?;
+
+        if dry_run {
+            println!("Would apply {} ({} bytes)", name, sql.len());
+        } else {
+            println!("Applying {} ({} bytes)", name, sql.len());
+            state.applied.push(name);
+            applied_now += 1;
+        }
+    }
+
+    if dry_run {
+        println!("✓ Dry run completed");
+        return Ok(());
+    }
+
+    let encoded = serde_json::to_string_pretty(&state)
+        .into_diagnostic()
+        .wrap_err("Serialize state")?;
+    std::fs::write(&state_file, encoded)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Failed to write {}", state_file.display()))?;
+
+    println!("✓ Applied {} migration(s)", applied_now);
+    Ok(())
+}
+
+/// Scaffold project templates (wrapper around `new` + template listing).
+pub fn scaffold(name: Option<&str>, template: &str, list_templates: bool) -> miette::Result<()> {
+    let templates = [
+        "bin",
+        "lib",
+        "web",
+        "cli",
+        "mcp",
+        "ssg",
+        "lsp",
+        "tool",
+        "framework",
+        "db-connector",
+    ];
+
+    if list_templates {
+        println!("Available templates:");
+        for t in &templates {
+            println!("  - {}", t);
+        }
+        return Ok(());
+    }
+
+    let name = name.unwrap_or("my-eclexia-project");
+    new_project(name, template)
 }
 
 /// Install dependencies from package.toml.

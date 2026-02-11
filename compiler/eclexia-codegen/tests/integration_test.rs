@@ -13,6 +13,13 @@ use eclexia_mir::{
 use la_arena::Arena;
 use smol_str::SmolStr;
 
+fn expect_ok<T, E: std::fmt::Debug>(res: Result<T, E>) -> T {
+    match res {
+        Ok(val) => val,
+        Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+    }
+}
+
 #[test]
 fn test_simple_arithmetic() {
     // Create a simple MIR function: fn main() -> Int { 5 + 10 }
@@ -60,11 +67,11 @@ fn test_simple_arithmetic() {
 
     // Generate bytecode
     let mut codegen = BytecodeGenerator::new();
-    let bytecode = codegen.generate(&mir).expect("Bytecode generation failed");
+    let bytecode = expect_ok(codegen.generate(&mir));
 
     // Execute on VM
     let mut vm = VirtualMachine::new(bytecode);
-    let result = vm.run().expect("VM execution failed");
+    let result = expect_ok(vm.run());
 
     // Verify result
     match result {
@@ -120,10 +127,10 @@ fn test_local_variables() {
 
     // Generate and execute
     let mut codegen = BytecodeGenerator::new();
-    let bytecode = codegen.generate(&mir).expect("Bytecode generation failed");
+    let bytecode = expect_ok(codegen.generate(&mir));
 
     let mut vm = VirtualMachine::new(bytecode);
-    let result = vm.run().expect("VM execution failed");
+    let result = expect_ok(vm.run());
 
     match result {
         VmValue::Int(n) => assert_eq!(n, 42, "Expected x = 42"),
@@ -173,10 +180,10 @@ fn test_comparison_operations() {
 
     // Generate and execute
     let mut codegen = BytecodeGenerator::new();
-    let bytecode = codegen.generate(&mir).expect("Bytecode generation failed");
+    let bytecode = expect_ok(codegen.generate(&mir));
 
     let mut vm = VirtualMachine::new(bytecode);
-    let result = vm.run().expect("VM execution failed");
+    let result = expect_ok(vm.run());
 
     match result {
         VmValue::Bool(b) => assert!(b, "Expected 10 > 5 = true"),

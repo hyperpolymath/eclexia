@@ -180,8 +180,8 @@ impl Default for ResourceTracker {
 /// Get current timestamp
 fn current_timestamp() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => duration.as_millis() as u64,
+        Err(err) => err.duration().as_millis() as u64,
+    }
 }

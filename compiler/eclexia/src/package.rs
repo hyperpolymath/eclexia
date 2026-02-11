@@ -164,6 +164,13 @@ pub fn remove_dependency(manifest: &mut PackageManifest, name: &str, dev: bool) 
 mod tests {
     use super::*;
 
+    fn expect_ok<T, E: std::fmt::Debug>(res: Result<T, E>) -> T {
+        match res {
+            Ok(val) => val,
+            Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+        }
+    }
+
     #[test]
     fn test_parse_manifest() {
         let toml = r#"
@@ -181,7 +188,7 @@ output = "bin"
 entry = "src/main.ecl"
 "#;
 
-        let manifest: PackageManifest = toml::from_str(toml).unwrap();
+        let manifest: PackageManifest = expect_ok(toml::from_str(toml));
         assert_eq!(manifest.package.name, "test-package");
         assert_eq!(manifest.package.version, "0.1.0");
         assert_eq!(manifest.dependencies.get("core"), Some(&"0.1".to_string()));

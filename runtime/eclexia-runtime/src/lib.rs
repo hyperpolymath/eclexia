@@ -20,7 +20,10 @@ mod shadow;
 mod shadow_prices;
 
 pub use adaptive::{AdaptiveDecisionEngine, SelectionCriteria, SolutionCandidate};
-pub use carbon::{CarbonMonitor, CarbonReading, CarbonSignal};
+pub use carbon::{
+    CarbonError, CarbonForecast, CarbonMonitor, CarbonProvider, CarbonReading, CarbonSignal,
+    LocalHeuristicProvider, StaticCarbonProvider,
+};
 use eclexia_ast::dimension::Dimension;
 pub use health::HealthServer;
 pub use power_metrics::{PowerMetrics, PowerSample};

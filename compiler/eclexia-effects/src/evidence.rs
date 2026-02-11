@@ -161,6 +161,13 @@ pub fn check_handler_completeness(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn expect_some<T>(value: Option<T>, context: &str) -> T {
+        match value {
+            Some(val) => val,
+            None => panic!("Expected Some value: {}", context),
+        }
+    }
     use crate::OperationSignature;
 
     fn make_console_effect() -> EffectSignature {
@@ -210,7 +217,7 @@ mod tests {
         assert!(!reg.contains("IO"));
         assert_eq!(reg.len(), 1);
 
-        let sig = reg.get("Console").unwrap();
+        let sig = expect_some(reg.get("Console"), "expected Console signature");
         assert_eq!(sig.operations.len(), 2);
     }
 
@@ -235,7 +242,7 @@ mod tests {
             (SmolStr::new("Console"), SmolStr::new("read")),
         ];
 
-        let ev = reg.build_evidence(&bindings).unwrap();
+        let ev = expect_some(reg.build_evidence(&bindings), "expected evidence");
         assert_eq!(ev.len(), 2);
         assert!(ev.lookup("Console", "print").is_some());
         assert!(ev.lookup("Console", "read").is_some());

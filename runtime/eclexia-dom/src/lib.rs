@@ -114,7 +114,10 @@ pub fn validate_selector(selector: &str) -> Result<ValidatedSelector, String> {
     }
 
     // Must start with a valid selector character
-    let first = selector.chars().next().unwrap();
+    let first = match selector.chars().next() {
+        Some(ch) => ch,
+        None => return Err("Selector cannot be empty".to_string()),
+    };
     if !matches!(first, '#' | '.' | '*' | ':' | '[' | 'a'..='z' | 'A'..='Z' | '_') {
         return Err(format!("Selector cannot start with '{}'", first));
     }
@@ -330,6 +333,13 @@ fn mount_wasm(selector: &ValidatedSelector, html: &ValidatedHtml) -> MountResult
 mod tests {
     use super::*;
 
+    fn expect_ok<T, E: std::fmt::Debug>(res: Result<T, E>) -> T {
+        match res {
+            Ok(val) => val,
+            Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+        }
+    }
+
     #[test]
     fn test_validate_selector_valid() {
         assert!(validate_selector("#app").is_ok());
@@ -450,7 +460,8 @@ mod tests {
         ];
         let result = mount_batch(&specs);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().len(), 3);
+        let elements = expect_ok(result);
+        assert_eq!(elements.len(), 3);
     }
 
     #[test]
@@ -471,14 +482,14 @@ mod tests {
 
     #[test]
     fn test_validated_selector_display() {
-        let sel = validate_selector("#app").unwrap();
+        let sel = expect_ok(validate_selector("#app"));
         assert_eq!(sel.to_string(), "#app");
         assert_eq!(sel.as_str(), "#app");
     }
 
     #[test]
     fn test_validated_html_display() {
-        let html = validate_html("<p>Hello</p>").unwrap();
+        let html = expect_ok(validate_html("<p>Hello</p>"));
         assert_eq!(html.to_string(), "<p>Hello</p>");
         assert_eq!(html.as_str(), "<p>Hello</p>");
     }

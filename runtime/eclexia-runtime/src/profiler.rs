@@ -216,12 +216,19 @@ impl Default for Profiler {
 mod tests {
     use super::*;
 
+    fn expect_some<T>(value: Option<T>, context: &str) -> T {
+        match value {
+            Some(val) => val,
+            None => panic!("Expected Some value: {}", context),
+        }
+    }
+
     #[test]
     fn test_begin_end_span() {
         let mut profiler = Profiler::new();
         profiler.begin_span(SmolStr::new("test_fn"));
         std::thread::sleep(std::time::Duration::from_millis(10));
-        let span = profiler.end_span().expect("should return span");
+        let span = expect_some(profiler.end_span(), "should return span");
 
         assert_eq!(span.name.as_str(), "test_fn");
         assert!(span.wall_time_s >= 0.009); // at least ~10ms
@@ -239,7 +246,7 @@ mod tests {
             profiler.end_span();
         }
 
-        let agg = profiler.get_span_profile("hot_path").expect("should exist");
+        let agg = expect_some(profiler.get_span_profile("hot_path"), "should exist");
         assert_eq!(agg.call_count, 3);
     }
 
@@ -258,10 +265,10 @@ mod tests {
         profiler.begin_span(SmolStr::new("outer"));
         profiler.begin_span(SmolStr::new("inner"));
 
-        let inner = profiler.end_span().expect("inner span");
+        let inner = expect_some(profiler.end_span(), "inner span");
         assert_eq!(inner.name.as_str(), "inner");
 
-        let outer = profiler.end_span().expect("outer span");
+        let outer = expect_some(profiler.end_span(), "outer span");
         assert_eq!(outer.name.as_str(), "outer");
         assert!(outer.wall_time_s >= inner.wall_time_s);
     }

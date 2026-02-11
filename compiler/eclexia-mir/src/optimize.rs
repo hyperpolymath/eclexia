@@ -291,23 +291,22 @@ pub fn optimize_resource_tracking(func: &mut Function) {
                             });
                         } else if !amounts.is_empty() {
                             // Combine multiple tracking operations
-                            let combined = amounts
-                                .into_iter()
-                                .reduce(|acc, val| Value::Binary {
+                            if let Some(combined) =
+                                amounts.into_iter().reduce(|acc, val| Value::Binary {
                                     op: BinaryOp::Add,
                                     lhs: Box::new(acc),
                                     rhs: Box::new(val),
                                 })
-                                .unwrap();
-
-                            new_instructions.push(Instruction {
-                                span: inst.span,
-                                kind: InstructionKind::ResourceTrack {
-                                    resource,
-                                    dimension,
-                                    amount: combined,
-                                },
-                            });
+                            {
+                                new_instructions.push(Instruction {
+                                    span: inst.span,
+                                    kind: InstructionKind::ResourceTrack {
+                                        resource,
+                                        dimension,
+                                        amount: combined,
+                                    },
+                                });
+                            }
                         }
                     }
 
@@ -319,23 +318,20 @@ pub fn optimize_resource_tracking(func: &mut Function) {
         // Flush any remaining resources
         for (resource, (dimension, amounts)) in pending_resources.drain() {
             if !amounts.is_empty() {
-                let combined = amounts
-                    .into_iter()
-                    .reduce(|acc, val| Value::Binary {
-                        op: BinaryOp::Add,
-                        lhs: Box::new(acc),
-                        rhs: Box::new(val),
-                    })
-                    .unwrap();
-
-                new_instructions.push(Instruction {
-                    span: Span::default(),
-                    kind: InstructionKind::ResourceTrack {
-                        resource,
-                        dimension,
-                        amount: combined,
-                    },
-                });
+                if let Some(combined) = amounts.into_iter().reduce(|acc, val| Value::Binary {
+                    op: BinaryOp::Add,
+                    lhs: Box::new(acc),
+                    rhs: Box::new(val),
+                }) {
+                    new_instructions.push(Instruction {
+                        span: Span::default(),
+                        kind: InstructionKind::ResourceTrack {
+                            resource,
+                            dimension,
+                            amount: combined,
+                        },
+                    });
+                }
             }
         }
 

@@ -12,7 +12,7 @@ fn safe_divide(a: int, b: int) -> Option<int> {
 fn main() {
     let result = safe_divide(10, 2);
     assert(result.is_some());
-    assert(result.unwrap() == 5);
+    assert(result == Some(5));
     
     let error = safe_divide(10, 0);
     assert(error.is_none());

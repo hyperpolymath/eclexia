@@ -606,10 +606,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "eclexia-auth"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "eclexia-cache"
+version = "0.1.0"
+
+[[package]]
+name = "eclexia-carbon"
+version = "0.1.0"
+dependencies = [
+ "rustc-hash 1.1.0",
+ "smol_str",
+]
+
+[[package]]
+name = "eclexia-cli"
+version = "0.1.0"
+
+[[package]]
 name = "eclexia-codegen"
 version = "0.1.0"
 dependencies = [
  "eclexia-ast",
+ "eclexia-dom",
  "eclexia-hir",
  "eclexia-lexer",
  "eclexia-mir",
@@ -621,6 +648,10 @@ dependencies = [
  "serde_json",
  "smol_str",
 ]
+
+[[package]]
+name = "eclexia-compression"
+version = "0.1.0"
 
 [[package]]
 name = "eclexia-comptime"
@@ -653,6 +684,10 @@ dependencies = [
  "target-lexicon 0.12.16",
  "thiserror 1.0.69",
 ]
+
+[[package]]
+name = "eclexia-datetime"
+version = "0.1.0"
 
 [[package]]
 name = "eclexia-db"
@@ -717,6 +752,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "eclexia-encoding"
+version = "0.1.0"
+
+[[package]]
+name = "eclexia-env"
+version = "0.1.0"
+
+[[package]]
 name = "eclexia-fmt"
 version = "0.1.0"
 dependencies = [
@@ -724,6 +767,17 @@ dependencies = [
  "eclexia-parser",
  "smol_str",
 ]
+
+[[package]]
+name = "eclexia-graphql"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "eclexia-grpc"
+version = "0.1.0"
 
 [[package]]
 name = "eclexia-hir"
@@ -828,6 +882,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "eclexia-orm"
+version = "0.1.0"
+
+[[package]]
 name = "eclexia-parser"
 version = "0.1.0"
 dependencies = [
@@ -838,16 +896,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "eclexia-process"
+version = "0.1.0"
+
+[[package]]
+name = "eclexia-queue"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "eclexia-rest"
+version = "0.1.0"
+dependencies = [
+ "eclexia-web-server",
+ "serde_json",
+]
+
+[[package]]
 name = "eclexia-runtime"
 version = "0.1.0"
 dependencies = [
  "eclexia-ast",
+ "eclexia-carbon",
+ "eclexia-shadow",
  "proptest",
  "quickcheck",
  "rustc-hash 1.1.0",
  "smol_str",
  "tokio",
 ]
+
+[[package]]
+name = "eclexia-serialisation"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "eclexia-shadow"
+version = "0.1.0"
+dependencies = [
+ "eclexia-ast",
+ "rustc-hash 1.1.0",
+ "smol_str",
+]
+
+[[package]]
+name = "eclexia-signal"
+version = "0.1.0"
 
 [[package]]
 name = "eclexia-specialize"
@@ -873,6 +973,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "eclexia-template"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "eclexia-tiered"
 version = "0.1.0"
 dependencies = [
@@ -895,6 +1002,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "eclexia-uuid"
+version = "0.1.0"
+
+[[package]]
+name = "eclexia-validation"
+version = "0.1.0"
+dependencies = [
+ "eclexia-uuid",
+]
+
+[[package]]
 name = "eclexia-wasm"
 version = "0.1.0"
 dependencies = [
@@ -907,6 +1025,14 @@ dependencies = [
  "thiserror 1.0.69",
  "wasm-encoder",
 ]
+
+[[package]]
+name = "eclexia-web-server"
+version = "0.1.0"
+
+[[package]]
+name = "eclexia-websocket"
+version = "0.1.0"
 
 [[package]]
 name = "either"

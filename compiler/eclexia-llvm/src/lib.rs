@@ -1268,6 +1268,28 @@ mod tests {
     use la_arena::Arena;
     use smol_str::SmolStr;
 
+    trait UnwrapOk<T> {
+        fn unwrap_ok(self) -> T;
+    }
+
+    impl<T, E: std::fmt::Debug> UnwrapOk<T> for Result<T, E> {
+        fn unwrap_ok(self) -> T {
+            match self {
+                Ok(val) => val,
+                Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+            }
+        }
+    }
+
+    impl<T> UnwrapOk<T> for Option<T> {
+        fn unwrap_ok(self) -> T {
+            match self {
+                Some(val) => val,
+                None => panic!("Expected Some, got None"),
+            }
+        }
+    }
+
     fn zero_dim() -> Dimension {
         Dimension {
             mass: 0,
@@ -1723,7 +1745,7 @@ mod tests {
     fn test_llvm_generate() {
         let mut backend = LlvmBackend::new();
         let mir = make_test_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.opt_level, OptLevel::O2);
         assert_eq!(module.lto_mode, LtoMode::None);
@@ -1737,7 +1759,7 @@ mod tests {
     fn test_llvm_release() {
         let mut backend = LlvmBackend::release();
         let mir = make_test_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.opt_level, OptLevel::O3);
         assert_eq!(module.lto_mode, LtoMode::Thin);
@@ -1747,7 +1769,7 @@ mod tests {
     fn test_llvm_with_pgo() {
         let mut backend = LlvmBackend::new().with_pgo("profile.eclprof".to_string());
         let mir = make_test_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert!(module.pgo_used);
     }
@@ -1765,7 +1787,7 @@ mod tests {
             functions: vec![],
             constants: Arena::new(),
         };
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         assert!(module.functions.is_empty());
         // Should still have a valid module header
         assert!(module.ir().contains("ModuleID"));
@@ -1779,7 +1801,7 @@ mod tests {
     fn test_llvm_ir_contains_function_def() {
         let mut backend = LlvmBackend::new();
         let mir = make_test_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         let ir = module.ir();
 
         assert!(ir.contains("define void @main()"));
@@ -1790,7 +1812,7 @@ mod tests {
     fn test_llvm_ir_arithmetic() {
         let mut backend = LlvmBackend::new();
         let mir = make_arithmetic_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         let ir = module.ir();
 
         assert!(ir.contains("define i64 @add_numbers()"));
@@ -1804,7 +1826,7 @@ mod tests {
     fn test_llvm_ir_float_arithmetic() {
         let mut backend = LlvmBackend::new();
         let mir = make_float_arithmetic_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         let ir = module.ir();
 
         assert!(ir.contains("define double @add_floats()"));
@@ -1816,7 +1838,7 @@ mod tests {
     fn test_llvm_ir_branch() {
         let mut backend = LlvmBackend::new();
         let mir = make_branch_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         let ir = module.ir();
 
         assert!(ir.contains("br i1"));
@@ -1828,7 +1850,7 @@ mod tests {
     fn test_llvm_ir_function_params() {
         let mut backend = LlvmBackend::new();
         let mir = make_params_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         let ir = module.ir();
 
         assert!(ir.contains("define i64 @add(i64 %arg.0, i64 %arg.1)"));
@@ -1841,7 +1863,7 @@ mod tests {
     fn test_llvm_ir_string_constant() {
         let mut backend = LlvmBackend::new();
         let mir = make_string_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         let ir = module.ir();
 
         assert!(ir.contains("@.str."));
@@ -1853,7 +1875,7 @@ mod tests {
     fn test_llvm_ir_resource_tracking() {
         let mut backend = LlvmBackend::new();
         let mir = make_resource_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         let ir = module.ir();
 
         assert!(ir.contains("@__eclexia_track_resource"));
@@ -1865,7 +1887,7 @@ mod tests {
     fn test_llvm_ir_module_header() {
         let mut backend = LlvmBackend::new();
         let mir = make_test_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         let ir = module.ir();
 
         assert!(ir.contains("target triple = \"x86_64-unknown-linux-gnu\""));
@@ -1877,7 +1899,7 @@ mod tests {
     fn test_llvm_ir_switch() {
         let mut backend = LlvmBackend::new();
         let mir = make_switch_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         let ir = module.ir();
 
         assert!(ir.contains("switch"));
@@ -1888,7 +1910,7 @@ mod tests {
     fn test_llvm_ir_unreachable() {
         let mut backend = LlvmBackend::new();
         let mir = make_unreachable_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         let ir = module.ir();
 
         assert!(ir.contains("unreachable"));
@@ -1926,7 +1948,7 @@ mod tests {
     fn test_ir_accessor() {
         let mut backend = LlvmBackend::new();
         let mir = make_test_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         // ir() should return the same content as the internal ir_text
         assert!(!module.ir().is_empty());
         assert!(module.estimated_code_size > 0);
@@ -1966,7 +1988,7 @@ mod tests {
         };
 
         let mut backend = LlvmBackend::new();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         let ir = module.ir();
 
         assert!(ir.contains("@__eclexia_query_shadow_price"));

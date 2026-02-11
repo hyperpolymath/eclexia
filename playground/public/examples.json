@@ -1,0 +1,29 @@
+{
+  "examples": [
+    {
+      "id": "hello",
+      "title": "Hello Economics-as-Code",
+      "code": "def main() -> Unit {\n    println(\"Hello, Economics-as-Code!\")\n}"
+    },
+    {
+      "id": "budgeted_cost",
+      "title": "Budgeted Cost Function",
+      "code": "def demand(price: Int) -> Int {\n    if price > 10 {\n        80\n    } else {\n        120\n    }\n}\n\ndef main() -> Unit {\n    let d = demand(12)\n    println(d)\n}"
+    },
+    {
+      "id": "resources",
+      "title": "Resource-oriented Flow",
+      "code": "def optimize(cost: Int, carbon: Int) -> Int {\n    if carbon < 8 {\n        cost - 2\n    } else {\n        cost + 3\n    }\n}\n\ndef main() -> Unit {\n    println(optimize(10, 6))\n}"
+    },
+    {
+      "id": "array_math",
+      "title": "Array + Math",
+      "code": "def total(a: Int, b: Int, c: Int) -> Int {\n    a + b + c\n}\n\ndef main() -> Unit {\n    println(total(3, 7, 9))\n}"
+    },
+    {
+      "id": "decision",
+      "title": "Decision Strategy",
+      "code": "def choose_strategy(load: Int) -> Int {\n    if load > 70 {\n        1\n    } else {\n        0\n    }\n}\n\ndef main() -> Unit {\n    println(choose_strategy(82))\n}"
+    }
+  ]
+}

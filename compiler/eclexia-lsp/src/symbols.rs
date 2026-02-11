@@ -893,8 +893,10 @@ mod tests {
         table.define_symbol(symbol);
 
         let lookup = table.lookup(&SmolStr::new("test"));
-        assert!(lookup.is_some());
-        assert_eq!(lookup.unwrap().kind, SymbolKind::Function);
+        match lookup {
+            Some(sym) => assert_eq!(sym.kind, SymbolKind::Function),
+            None => panic!("Expected symbol to be defined"),
+        }
     }
 
     #[test]

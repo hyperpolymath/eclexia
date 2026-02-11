@@ -154,7 +154,19 @@ impl Runtime {
 
         builder.enable_all();
 
-        let inner = builder.build().expect("Failed to create tokio runtime");
+        let inner = match builder.build() {
+            Ok(rt) => rt,
+            Err(err) => {
+                eprintln!("Failed to create tokio runtime: {}", err);
+                let fallback = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build();
+                match fallback {
+                    Ok(rt) => rt,
+                    Err(err) => panic!("Failed to create fallback tokio runtime: {}", err),
+                }
+            }
+        };
 
         Self {
             inner,

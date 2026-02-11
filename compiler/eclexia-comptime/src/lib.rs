@@ -91,6 +91,13 @@ pub enum ResourceVerification {
 mod tests {
     use super::*;
 
+    fn expect_some<T>(value: Option<T>, context: &str) -> T {
+        match value {
+            Some(val) => val,
+            None => panic!("Expected Some value: {}", context),
+        }
+    }
+
     #[test]
     fn test_comptime_value_known() {
         assert!(ComptimeValue::Int(42).is_known());
@@ -104,7 +111,7 @@ mod tests {
     #[test]
     fn test_comptime_value_roundtrip() {
         let val = ComptimeValue::Int(42);
-        let kind = val.to_constant_kind().unwrap();
+        let kind = expect_some(val.to_constant_kind(), "expected constant kind");
         let back = ComptimeValue::from_constant_kind(&kind);
         assert_eq!(val, back);
     }
@@ -112,7 +119,7 @@ mod tests {
     #[test]
     fn test_comptime_float_roundtrip() {
         let val = ComptimeValue::Float(2.718);
-        let kind = val.to_constant_kind().unwrap();
+        let kind = expect_some(val.to_constant_kind(), "expected constant kind");
         let back = ComptimeValue::from_constant_kind(&kind);
         assert_eq!(val, back);
     }

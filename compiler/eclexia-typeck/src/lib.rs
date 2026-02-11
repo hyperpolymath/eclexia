@@ -655,6 +655,91 @@ impl<'a> TypeChecker<'a> {
         Ty::Var(var)
     }
 
+    /// Resolve an AST type ID to a semantic type.
+    pub fn resolve_type_id(&mut self, ty_id: eclexia_ast::TypeId) -> Ty {
+        self.resolve_ast_type(ty_id)
+    }
+
+    /// Update the active type parameter scope for resolving generic types.
+    pub fn set_type_params(&mut self, params: &[SmolStr]) {
+        self.type_param_scope.clear();
+        for param in params {
+            let var = self.fresh_var();
+            self.type_param_scope.insert(param.clone(), var);
+        }
+    }
+
+    /// Clear any active type parameter scope.
+    pub fn clear_type_params(&mut self) {
+        self.type_param_scope.clear();
+    }
+
+    /// Access the type environment for additional registrations.
+    pub fn env_mut(&mut self) -> &mut TypeEnv {
+        &mut self.env
+    }
+
+    /// Clone a type, replacing any type variables with fresh ones.
+    pub fn freshen_ty(&mut self, ty: &Ty) -> Ty {
+        let mut mapping: FxHashMap<TypeVar, TypeVar> = FxHashMap::default();
+        self.freshen_ty_with_map(ty, &mut mapping)
+    }
+
+    fn freshen_ty_with_map(
+        &mut self,
+        ty: &Ty,
+        mapping: &mut FxHashMap<TypeVar, TypeVar>,
+    ) -> Ty {
+        match ty {
+            Ty::Primitive(p) => Ty::Primitive(*p),
+            Ty::Named { name, args } => Ty::Named {
+                name: name.clone(),
+                args: args
+                    .iter()
+                    .map(|arg| self.freshen_ty_with_map(arg, mapping))
+                    .collect(),
+            },
+            Ty::Function { params, ret } => Ty::Function {
+                params: params
+                    .iter()
+                    .map(|p| self.freshen_ty_with_map(p, mapping))
+                    .collect(),
+                ret: Box::new(self.freshen_ty_with_map(ret, mapping)),
+            },
+            Ty::Tuple(elems) => Ty::Tuple(
+                elems
+                    .iter()
+                    .map(|elem| self.freshen_ty_with_map(elem, mapping))
+                    .collect(),
+            ),
+            Ty::Array { elem, size } => Ty::Array {
+                elem: Box::new(self.freshen_ty_with_map(elem, mapping)),
+                size: *size,
+            },
+            Ty::Resource { base, dimension } => Ty::Resource {
+                base: *base,
+                dimension: dimension.clone(),
+            },
+            Ty::Var(var) => {
+                let entry = mapping.entry(*var).or_insert_with(|| {
+                    let fresh = self.fresh_var();
+                    if let Ty::Var(new_var) = fresh {
+                        new_var
+                    } else {
+                        TypeVar::new(0)
+                    }
+                });
+                Ty::Var(*entry)
+            }
+            Ty::ForAll { vars, body } => Ty::ForAll {
+                vars: vars.clone(),
+                body: Box::new(self.freshen_ty_with_map(body, mapping)),
+            },
+            Ty::Error => Ty::Error,
+            Ty::Never => Ty::Never,
+        }
+    }
+
     /// Check all items in the file.
     pub fn check_all(&mut self) -> Vec<TypeError> {
         // First pass: collect function signatures

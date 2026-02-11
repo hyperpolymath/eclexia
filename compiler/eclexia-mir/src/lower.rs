@@ -90,9 +90,12 @@ impl<'hir> LoweringContext<'hir> {
 
     /// Allocate a new basic block
     fn alloc_block(&mut self, label: SmolStr) -> BlockId {
-        let func = self.current_function.as_mut().expect(
-            "BUG: alloc_block called without current function — this is an internal compiler error",
-        );
+        let func = match self.current_function.as_mut() {
+            Some(func) => func,
+            None => panic!(
+                "BUG: alloc_block called without current function — this is an internal compiler error"
+            ),
+        };
         func.basic_blocks.alloc(BasicBlock {
             label,
             instructions: Vec::new(),
@@ -124,7 +127,10 @@ impl<'hir> LoweringContext<'hir> {
     fn is_current_block_terminated(&self) -> bool {
         if let Some(func) = &self.current_function {
             if let Some(block_id) = self.current_block {
-                return !matches!(func.basic_blocks[block_id].terminator, Terminator::Unreachable);
+                return !matches!(
+                    func.basic_blocks[block_id].terminator,
+                    Terminator::Unreachable
+                );
             }
         }
         false
@@ -257,11 +263,7 @@ impl<'hir> LoweringContext<'hir> {
                         .params
                         .iter()
                         .map(|p| {
-                            let local_id = self
-                                .local_map
-                                .get(&p.local)
-                                .copied()
-                                .unwrap_or(0);
+                            let local_id = self.local_map.get(&p.local).copied().unwrap_or(0);
                             Value::Local(local_id)
                         })
                         .collect();
@@ -343,9 +345,12 @@ impl<'hir> LoweringContext<'hir> {
         self.lower_body(&func.body);
 
         // Extract function
-        self.current_function.take().expect(
-            "BUG: current_function is None after lowering — this is an internal compiler error",
-        )
+        match self.current_function.take() {
+            Some(func) => func,
+            None => panic!(
+                "BUG: current_function is None after lowering — this is an internal compiler error"
+            ),
+        }
     }
 
     /// Lower resource constraints

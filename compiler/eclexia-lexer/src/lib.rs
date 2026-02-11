@@ -717,7 +717,8 @@ fn is_xid_continue(c: char) -> bool {
 /// tokens, as well as checking for EOF.
 pub struct Lexer<'src> {
     inner: logos::Lexer<'src, TokenKind>,
-    peeked: Option<Token>,
+    peeked: Token,
+    has_peeked: bool,
 }
 
 impl<'src> Lexer<'src> {
@@ -726,7 +727,8 @@ impl<'src> Lexer<'src> {
     pub fn new(source: &'src str) -> Self {
         Self {
             inner: TokenKind::lexer(source),
-            peeked: None,
+            peeked: Token::new(TokenKind::Eof, Span::empty(0)),
+            has_peeked: false,
         }
     }
 
@@ -735,8 +737,9 @@ impl<'src> Lexer<'src> {
     ///
     /// This consumes the peeked token if available, otherwise it advances the inner lexer.
     pub fn next(&mut self) -> Token {
-        if let Some(token) = self.peeked.take() {
-            return token;
+        if self.has_peeked {
+            self.has_peeked = false;
+            return self.peeked.clone();
         }
 
         match self.inner.next() {
@@ -760,10 +763,11 @@ impl<'src> Lexer<'src> {
     ///
     /// The peeked token is cached and returned on subsequent calls to `peek`.
     pub fn peek(&mut self) -> &Token {
-        if self.peeked.is_none() {
-            self.peeked = Some(self.next());
+        if !self.has_peeked {
+            self.peeked = self.next();
+            self.has_peeked = true;
         }
-        self.peeked.as_ref().unwrap()
+        &self.peeked
     }
 
     /// Check if we've reached the end of input.

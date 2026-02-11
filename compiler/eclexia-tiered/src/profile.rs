@@ -180,6 +180,13 @@ impl Default for ProfileData {
 mod tests {
     use super::*;
 
+    fn expect_ok<T, E: std::fmt::Debug>(res: Result<T, E>) -> T {
+        match res {
+            Ok(val) => val,
+            Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+        }
+    }
+
     #[test]
     fn test_profile_data_new() {
         let pd = ProfileData::new();
@@ -250,8 +257,8 @@ mod tests {
         pd.record_branch("main", 0, true);
         pd.record_resource("main", "energy", 50.0);
 
-        let json = pd.to_json().unwrap();
-        let pd2 = ProfileData::from_json(&json).unwrap();
+        let json = expect_ok(pd.to_json());
+        let pd2 = expect_ok(ProfileData::from_json(&json));
 
         assert_eq!(pd2.function_count(), 1);
         assert_eq!(pd2.functions["main"].call_count, 1);

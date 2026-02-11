@@ -13,8 +13,69 @@
 //! - :info for symbol lookup
 //! - :env for environment display
 
+use rustyline::completion::{Completer, Pair};
 use rustyline::error::ReadlineError;
-use rustyline::DefaultEditor;
+use rustyline::highlight::Highlighter;
+use rustyline::hint::Hinter;
+use rustyline::history::DefaultHistory;
+use rustyline::validate::{ValidationContext, ValidationResult, Validator};
+use rustyline::{Context as RustylineContext, Editor, Helper};
+use std::borrow::Cow;
+
+#[derive(Clone, Debug, Default)]
+struct ReplHelper;
+
+impl Helper for ReplHelper {}
+
+impl Completer for ReplHelper {
+    type Candidate = Pair;
+
+    fn complete(
+        &self,
+        _line: &str,
+        pos: usize,
+        _ctx: &RustylineContext<'_>,
+    ) -> rustyline::Result<(usize, Vec<Pair>)> {
+        Ok((pos, Vec::new()))
+    }
+}
+
+impl Hinter for ReplHelper {
+    type Hint = String;
+
+    fn hint(&self, _line: &str, _pos: usize, _ctx: &RustylineContext<'_>) -> Option<Self::Hint> {
+        None
+    }
+}
+
+impl Validator for ReplHelper {
+    fn validate(&self, _ctx: &mut ValidationContext<'_>) -> rustyline::Result<ValidationResult> {
+        Ok(ValidationResult::Valid(None))
+    }
+}
+
+impl Highlighter for ReplHelper {
+    fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with(':') {
+            return Cow::Owned(format!("\x1b[1;36m{}\x1b[0m", line));
+        }
+
+        let Some(keyword) = trimmed.split_whitespace().next() else {
+            return Cow::Borrowed(line);
+        };
+        let colorized = match keyword {
+            "def" | "fn" | "type" | "struct" | "const" => {
+                line.replacen(keyword, &format!("\x1b[1;33m{}\x1b[0m", keyword), 1)
+            }
+            "let" | "if" | "else" | "match" | "return" => {
+                line.replacen(keyword, &format!("\x1b[1;34m{}\x1b[0m", keyword), 1)
+            }
+            _ => return Cow::Borrowed(line),
+        };
+        Cow::Owned(colorized)
+    }
+}
 
 /// Run the interactive REPL.
 pub fn run() -> miette::Result<()> {
@@ -23,8 +84,9 @@ pub fn run() -> miette::Result<()> {
     println!("Multi-line input: use {{ to start a block, }} to end");
     println!();
 
-    let mut rl =
-        DefaultEditor::new().map_err(|e| miette::miette!("Failed to create editor: {}", e))?;
+    let mut rl = Editor::<ReplHelper, DefaultHistory>::new()
+        .map_err(|e| miette::miette!("Failed to create editor: {}", e))?;
+    rl.set_helper(Some(ReplHelper));
 
     // Try to load history
     let history_path = dirs::data_dir()
@@ -170,6 +232,7 @@ fn handle_command(cmd: &str, state: &mut ReplState) -> CommandResult {
             println!("  :help, :h, :?       Show this help");
             println!("  :quit, :q           Exit the REPL");
             println!("  :type <expr>        Show the type of an expression");
+            println!("  :info <symbol>      Show symbol definition details");
             println!("  :ast <expr>         Show the AST of an expression");
             println!("  :shadow             Show current shadow prices");
             println!("  :resources          Show resource usage summary");
@@ -249,6 +312,20 @@ fn handle_command(cmd: &str, state: &mut ReplState) -> CommandResult {
             show_ast(expr);
             CommandResult::Continue
         }
+        _ if cmd.starts_with(":info ") => {
+            let symbol = &cmd[6..];
+            show_info(symbol, state);
+            CommandResult::Continue
+        }
+        _ if cmd.starts_with(":i ") => {
+            let symbol = &cmd[3..];
+            show_info(symbol, state);
+            CommandResult::Continue
+        }
+        ":info" | ":i" => {
+            println!("Usage: :info <symbol>");
+            CommandResult::Continue
+        }
         _ => {
             println!("Unknown command: {}. Type :help for help.", cmd);
             CommandResult::Continue
@@ -322,6 +399,69 @@ fn show_ast(expr: &str) {
     }
 
     println!("(no AST produced)");
+}
+
+/// Show information about a symbol currently defined in the REPL or provided by builtins.
+fn show_info(symbol: &str, state: &ReplState) {
+    let symbol = symbol.trim();
+    if symbol.is_empty() {
+        println!("Usage: :info <symbol>");
+        return;
+    }
+
+    let matches: Vec<&String> = state
+        .definitions
+        .iter()
+        .filter(|definition| definition_name(definition).is_some_and(|name| name == symbol))
+        .collect();
+
+    if !matches.is_empty() {
+        println!("Symbol '{}' found in REPL definitions:", symbol);
+        for definition in matches {
+            println!("---");
+            println!("{}", definition);
+        }
+        println!("---");
+        show_type(symbol, state);
+        return;
+    }
+
+    if let Some(info) = builtin_info(symbol) {
+        println!("Builtin '{}': {}", symbol, info);
+        return;
+    }
+
+    println!("Symbol '{}' not found in REPL scope.", symbol);
+}
+
+fn definition_name(definition: &str) -> Option<&str> {
+    let line = definition.trim_start();
+    for kw in ["def", "fn", "type", "struct", "const"] {
+        let Some(rest) = line.strip_prefix(kw) else {
+            continue;
+        };
+        let rest = rest.trim_start();
+        let end = rest
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .unwrap_or(rest.len());
+        if end > 0 {
+            return Some(&rest[..end]);
+        }
+    }
+    None
+}
+
+fn builtin_info(symbol: &str) -> Option<&'static str> {
+    match symbol {
+        "print" => Some("Print values without trailing newline."),
+        "println" => Some("Print values followed by a newline."),
+        "len" => Some("Return length of string/array/tuple/map."),
+        "to_string" => Some("Convert a value to string."),
+        "abs" => Some("Absolute value for numeric types."),
+        "min" => Some("Return smaller of two numeric values."),
+        "max" => Some("Return larger of two numeric values."),
+        _ => None,
+    }
 }
 
 /// Wrap an expression in a function for evaluation, including accumulated definitions.
@@ -406,5 +546,38 @@ mod dirs {
         std::env::var_os("XDG_DATA_HOME")
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn definition_name_extracts_supported_forms() {
+        assert_eq!(
+            definition_name("def demand(x: Int) -> Int { x }"),
+            Some("demand")
+        );
+        assert_eq!(definition_name("fn helper() { }"), Some("helper"));
+        assert_eq!(definition_name("type Price = Float"), Some("Price"));
+        assert_eq!(definition_name("struct Model { x: Int }"), Some("Model"));
+        assert_eq!(definition_name("const RATE = 0.12"), Some("RATE"));
+        assert_eq!(definition_name("let x = 1"), None);
+    }
+
+    #[test]
+    fn builtin_info_exposes_documented_symbols() {
+        assert!(builtin_info("println").is_some());
+        assert!(builtin_info("print").is_some());
+        assert!(builtin_info("len").is_some());
+        assert!(builtin_info("does_not_exist").is_none());
+    }
+
+    #[test]
+    fn highlighter_colors_commands() {
+        let helper = ReplHelper;
+        let highlighted = helper.highlight(":help", 0);
+        assert!(highlighted.as_ref().contains("\x1b[1;36m"));
     }
 }

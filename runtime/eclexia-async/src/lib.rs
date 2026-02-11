@@ -45,6 +45,13 @@ pub use task::{JoinError, Task, TaskHandle, TaskId, TaskState};
 mod tests {
     use super::*;
 
+    fn expect_ok<T, E: std::fmt::Debug>(res: Result<T, E>) -> T {
+        match res {
+            Ok(val) => val,
+            Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+        }
+    }
+
     #[test]
     fn test_runtime_creation() {
         let rt = Runtime::new(RuntimeConfig::default());
@@ -56,8 +63,8 @@ mod tests {
         let rt = Runtime::new(RuntimeConfig::default());
         rt.block_on(async {
             let (tx, mut rx) = mpsc(32);
-            tx.send(42i64).await.unwrap();
-            let val = rx.recv().await.unwrap();
+            expect_ok(tx.send(42i64).await);
+            let val = expect_ok(rx.recv().await);
             assert_eq!(val, 42);
         });
     }
@@ -67,8 +74,8 @@ mod tests {
         let rt = Runtime::new(RuntimeConfig::default());
         rt.block_on(async {
             let (tx, rx) = oneshot();
-            tx.send(99i64).unwrap();
-            let val = rx.await.unwrap();
+            expect_ok(tx.send(99i64));
+            let val = expect_ok(rx.await);
             assert_eq!(val, 99);
         });
     }
@@ -78,7 +85,7 @@ mod tests {
         let rt = Runtime::new(RuntimeConfig::default());
         let result = rt.block_on(async {
             let handle = Task::spawn(async { 1 + 2 });
-            handle.await.unwrap()
+            expect_ok(handle.await)
         });
         assert_eq!(result, 3);
     }
@@ -116,7 +123,7 @@ mod tests {
                 },
                 async { 42 },
             );
-            handle.await.unwrap()
+            expect_ok(handle.await)
         });
         assert_eq!(result, 42);
     }
@@ -128,10 +135,10 @@ mod tests {
             let (tx, mut rx1) = broadcast(16);
             let mut rx2 = tx.subscribe();
 
-            tx.send(7).unwrap();
+            expect_ok(tx.send(7));
 
-            assert_eq!(rx1.recv().await.unwrap(), 7);
-            assert_eq!(rx2.recv().await.unwrap(), 7);
+            assert_eq!(expect_ok(rx1.recv().await), 7);
+            assert_eq!(expect_ok(rx2.recv().await), 7);
         });
     }
 
@@ -145,7 +152,7 @@ mod tests {
             }
             let mut results = Vec::new();
             for h in handles {
-                results.push(h.await.unwrap());
+                results.push(expect_ok(h.await));
             }
             results
         });

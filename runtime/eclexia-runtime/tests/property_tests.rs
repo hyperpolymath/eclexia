@@ -160,23 +160,27 @@ mod adaptive_selection_properties {
             ];
 
             // Select twice with same prices
-            let selected1 = solutions
-                .iter()
-                .min_by(|a, b| {
-                    let cost_a = a.weighted_cost(energy_price, time_price, carbon_price);
-                    let cost_b = b.weighted_cost(energy_price, time_price, carbon_price);
-                    cost_a.partial_cmp(&cost_b).unwrap()
-                })
-                .unwrap();
+            let selected1 = match solutions.iter().min_by(|a, b| {
+                let cost_a = a.weighted_cost(energy_price, time_price, carbon_price);
+                let cost_b = b.weighted_cost(energy_price, time_price, carbon_price);
+                cost_a
+                    .partial_cmp(&cost_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            }) {
+                Some(value) => value,
+                None => return Ok(()),
+            };
 
-            let selected2 = solutions
-                .iter()
-                .min_by(|a, b| {
-                    let cost_a = a.weighted_cost(energy_price, time_price, carbon_price);
-                    let cost_b = b.weighted_cost(energy_price, time_price, carbon_price);
-                    cost_a.partial_cmp(&cost_b).unwrap()
-                })
-                .unwrap();
+            let selected2 = match solutions.iter().min_by(|a, b| {
+                let cost_a = a.weighted_cost(energy_price, time_price, carbon_price);
+                let cost_b = b.weighted_cost(energy_price, time_price, carbon_price);
+                cost_a
+                    .partial_cmp(&cost_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            }) {
+                Some(value) => value,
+                None => return Ok(()),
+            };
 
             prop_assert_eq!(
                 selected1.energy, selected2.energy,
@@ -203,14 +207,16 @@ mod adaptive_selection_properties {
                 return Ok(());
             }
 
-            let selected = solutions
-                .iter()
-                .min_by(|a, b| {
-                    let cost_a = a.weighted_cost(energy_price, time_price, carbon_price);
-                    let cost_b = b.weighted_cost(energy_price, time_price, carbon_price);
-                    cost_a.partial_cmp(&cost_b).unwrap()
-                })
-                .unwrap();
+            let selected = match solutions.iter().min_by(|a, b| {
+                let cost_a = a.weighted_cost(energy_price, time_price, carbon_price);
+                let cost_b = b.weighted_cost(energy_price, time_price, carbon_price);
+                cost_a
+                    .partial_cmp(&cost_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            }) {
+                Some(value) => value,
+                None => return Ok(()),
+            };
 
             let selected_cost = selected.weighted_cost(energy_price, time_price, carbon_price);
 

@@ -415,7 +415,9 @@ impl CraneliftBackend {
         let mut compile_ctx = Context::for_function(clif_func);
         compile_ctx.compile(&*isa, &mut Default::default()).ok()?;
 
-        Some(compile_ctx.compiled_code().unwrap().code_buffer().len())
+        compile_ctx
+            .compiled_code()
+            .map(|code| code.code_buffer().len())
     }
 
     /// Lower a MIR instruction to Cranelift IR.
@@ -550,9 +552,9 @@ impl CraneliftBackend {
                 Some(())
             }
             Terminator::Unreachable => {
-                builder
-                    .ins()
-                    .trap(cranelift_codegen::ir::TrapCode::user(0).unwrap());
+                let trap_code = cranelift_codegen::ir::TrapCode::user(0)
+                    .unwrap_or(cranelift_codegen::ir::TrapCode::STACK_OVERFLOW);
+                builder.ins().trap(trap_code);
                 Some(())
             }
             Terminator::Goto(target) => {
@@ -1017,6 +1019,28 @@ mod tests {
     use eclexia_mir::{BasicBlock, Constant, Function, Instruction, Local, ResourceConstraint};
     use la_arena::Arena;
 
+    trait UnwrapOk<T> {
+        fn unwrap_ok(self) -> T;
+    }
+
+    impl<T, E: std::fmt::Debug> UnwrapOk<T> for Result<T, E> {
+        fn unwrap_ok(self) -> T {
+            match self {
+                Ok(val) => val,
+                Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+            }
+        }
+    }
+
+    impl<T> UnwrapOk<T> for Option<T> {
+        fn unwrap_ok(self) -> T {
+            match self {
+                Some(val) => val,
+                None => panic!("Expected Some, got None"),
+            }
+        }
+    }
+
     fn make_resource_mir() -> MirFile {
         let mut constants: Arena<Constant> = Arena::new();
         let c = constants.alloc(Constant {
@@ -1313,7 +1337,7 @@ mod tests {
     fn test_cranelift_generate_with_resources() {
         let mut backend = CraneliftBackend::host();
         let mir = make_resource_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 1);
         assert_eq!(module.functions[0].name, "main");
@@ -1347,7 +1371,7 @@ mod tests {
             functions: vec![],
             constants: Arena::new(),
         };
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         assert!(module.functions.is_empty());
         assert_eq!(module.total_code_size, 0);
     }
@@ -1364,7 +1388,7 @@ mod tests {
     fn test_cranelift_real_compile_void() {
         let mut backend = CraneliftBackend::host();
         let mir = make_simple_void_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 1);
         assert!(
@@ -1378,7 +1402,7 @@ mod tests {
     fn test_cranelift_real_compile_int_arithmetic() {
         let mut backend = CraneliftBackend::host();
         let mir = make_int_arithmetic_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 1);
         assert!(
@@ -1392,7 +1416,7 @@ mod tests {
     fn test_cranelift_real_compile_float_arithmetic() {
         let mut backend = CraneliftBackend::host();
         let mir = make_float_arithmetic_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 1);
         assert!(
@@ -1406,7 +1430,7 @@ mod tests {
     fn test_cranelift_real_compile_comparison() {
         let mut backend = CraneliftBackend::host();
         let mir = make_comparison_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 1);
         assert!(
@@ -1419,7 +1443,7 @@ mod tests {
     fn test_cranelift_real_compile_with_params() {
         let mut backend = CraneliftBackend::host();
         let mir = make_params_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 1);
         assert!(
@@ -1432,7 +1456,7 @@ mod tests {
     fn test_cranelift_resource_function_uses_real_codegen() {
         let mut backend = CraneliftBackend::host();
         let mir = make_resource_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert!(
             module.functions[0].is_real_codegen,
@@ -1506,7 +1530,7 @@ mod tests {
     fn test_cranelift_call_instruction() {
         let mut backend = CraneliftBackend::host();
         let mir = make_call_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 2);
         // Both callee and caller should use real codegen.
@@ -1566,7 +1590,7 @@ mod tests {
     fn test_cranelift_store_instruction() {
         let mut backend = CraneliftBackend::host();
         let mir = make_store_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 1);
         assert!(
@@ -1581,7 +1605,7 @@ mod tests {
         // instead of falling back to estimation.
         let mut backend = CraneliftBackend::host();
         let mir = make_resource_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert!(module.functions[0].has_resource_tracking);
         assert!(
@@ -1627,7 +1651,7 @@ mod tests {
     fn test_cranelift_shadow_price_hook() {
         let mut backend = CraneliftBackend::host();
         let mir = make_shadow_price_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 1);
         assert!(
@@ -1677,7 +1701,7 @@ mod tests {
     fn test_cranelift_goto_terminator() {
         let mut backend = CraneliftBackend::host();
         let mir = make_goto_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 1);
         assert!(
@@ -1739,7 +1763,7 @@ mod tests {
     fn test_cranelift_branch_terminator() {
         let mut backend = CraneliftBackend::host();
         let mir = make_branch_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 1);
         assert!(
@@ -1807,7 +1831,7 @@ mod tests {
     fn test_cranelift_switch_terminator() {
         let mut backend = CraneliftBackend::host();
         let mir = make_switch_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 1);
         assert!(
@@ -1863,7 +1887,7 @@ mod tests {
     fn test_cranelift_string_constant() {
         let mut backend = CraneliftBackend::host();
         let mir = make_string_constant_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
 
         assert_eq!(module.functions.len(), 1);
         assert!(
@@ -1879,7 +1903,7 @@ mod tests {
 
         // Use the resource MIR (has ResourceTrack).
         let mir = make_resource_mir();
-        let module = backend.generate(&mir).unwrap();
+        let module = backend.generate(&mir).unwrap_ok();
         for f in &module.functions {
             assert!(
                 f.is_real_codegen,
@@ -1890,7 +1914,7 @@ mod tests {
 
         // Use the call MIR (has Call).
         let mir2 = make_call_mir();
-        let module2 = backend.generate(&mir2).unwrap();
+        let module2 = backend.generate(&mir2).unwrap_ok();
         for f in &module2.functions {
             assert!(
                 f.is_real_codegen,
@@ -1901,7 +1925,7 @@ mod tests {
 
         // Use the store MIR (has Store).
         let mir3 = make_store_mir();
-        let module3 = backend.generate(&mir3).unwrap();
+        let module3 = backend.generate(&mir3).unwrap_ok();
         for f in &module3.functions {
             assert!(
                 f.is_real_codegen,

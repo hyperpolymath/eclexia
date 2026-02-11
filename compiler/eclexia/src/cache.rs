@@ -89,6 +89,18 @@ impl Default for Cache {
     fn default() -> Self {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let cache_dir = PathBuf::from(home).join(".eclexia").join("cache");
-        Self::new(cache_dir).expect("Failed to create default cache")
+        match Self::new(cache_dir) {
+            Ok(cache) => cache,
+            Err(err) => {
+                eprintln!("Warning: failed to create default cache: {}", err);
+                let fallback_dir = PathBuf::from(".eclexia-cache");
+                let index_path = fallback_dir.join("cache.json");
+                Self {
+                    cache_dir: fallback_dir,
+                    index_path,
+                    index: CacheIndex::default(),
+                }
+            }
+        }
     }
 }

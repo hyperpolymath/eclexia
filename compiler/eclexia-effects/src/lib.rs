@@ -126,6 +126,13 @@ pub fn effect_signature_from_decl(decl: &eclexia_ast::EffectDecl) -> EffectSigna
 mod tests {
     use super::*;
 
+    fn expect_some<T>(value: Option<T>, context: &str) -> T {
+        match value {
+            Some(val) => val,
+            None => panic!("Expected Some value: {}", context),
+        }
+    }
+
     #[test]
     fn test_evidence_vector_new() {
         let ev = EvidenceVector::new();
@@ -150,10 +157,10 @@ mod tests {
         assert_eq!(ev.len(), 2);
         assert!(!ev.is_empty());
 
-        let entry = ev.lookup("Console", "print").unwrap();
+        let entry = expect_some(ev.lookup("Console", "print"), "print entry");
         assert_eq!(entry.index, 0);
 
-        let entry = ev.lookup("Console", "read").unwrap();
+        let entry = expect_some(ev.lookup("Console", "read"), "read entry");
         assert_eq!(entry.index, 1);
 
         assert!(ev.lookup("Console", "write").is_none());

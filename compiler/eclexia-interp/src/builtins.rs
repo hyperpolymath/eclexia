@@ -740,29 +740,33 @@ pub fn register(env: &Environment) {
 }
 
 fn builtin_println(args: &[Value]) -> RuntimeResult<Value> {
+    let mut out = String::new();
     for (i, arg) in args.iter().enumerate() {
         if i > 0 {
-            print!(" ");
+            out.push(' ');
         }
         match arg {
-            Value::String(s) => print!("{}", s),
-            other => print!("{}", other),
+            Value::String(s) => out.push_str(s),
+            other => out.push_str(&other.to_string()),
         }
     }
-    println!();
+    out.push('\n');
+    crate::emit_output(&out);
     Ok(Value::Unit)
 }
 
 fn builtin_print(args: &[Value]) -> RuntimeResult<Value> {
+    let mut out = String::new();
     for (i, arg) in args.iter().enumerate() {
         if i > 0 {
-            print!(" ");
+            out.push(' ');
         }
         match arg {
-            Value::String(s) => print!("{}", s),
-            other => print!("{}", other),
+            Value::String(s) => out.push_str(s),
+            other => out.push_str(&other.to_string()),
         }
     }
+    crate::emit_output(&out);
     Ok(Value::Unit)
 }
 
@@ -2576,6 +2580,28 @@ mod tests {
     use super::*;
     use crate::value::Value;
 
+    trait UnwrapOk<T> {
+        fn unwrap_ok(self) -> T;
+    }
+
+    impl<T, E: std::fmt::Debug> UnwrapOk<T> for Result<T, E> {
+        fn unwrap_ok(self) -> T {
+            match self {
+                Ok(val) => val,
+                Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+            }
+        }
+    }
+
+    impl<T> UnwrapOk<T> for Option<T> {
+        fn unwrap_ok(self) -> T {
+            match self {
+                Some(val) => val,
+                None => panic!("Expected Some, got None"),
+            }
+        }
+    }
+
     fn make_array(vals: Vec<Value>) -> Value {
         Value::Array(std::rc::Rc::new(std::cell::RefCell::new(vals)))
     }
@@ -2584,16 +2610,16 @@ mod tests {
 
     #[test]
     fn test_hashmap_new_is_empty() {
-        let map = builtin_hashmap_new(&[]).unwrap();
+        let map = builtin_hashmap_new(&[]).unwrap_ok();
         assert!(matches!(map, Value::HashMap(_)));
 
-        let len = builtin_hashmap_len(&[map]).unwrap();
+        let len = builtin_hashmap_len(&[map]).unwrap_ok();
         assert_eq!(len, Value::Int(0));
     }
 
     #[test]
     fn test_hashmap_insert_and_get() {
-        let map = builtin_hashmap_new(&[]).unwrap();
+        let map = builtin_hashmap_new(&[]).unwrap_ok();
 
         // Insert ("GDP", 21.0)
         builtin_hashmap_insert(&[
@@ -2601,95 +2627,97 @@ mod tests {
             Value::String(SmolStr::new("GDP")),
             Value::Float(21.0),
         ])
-        .unwrap();
+        .unwrap_ok();
 
         // Get
-        let val = builtin_hashmap_get(&[map.clone(), Value::String(SmolStr::new("GDP"))]).unwrap();
+        let val =
+            builtin_hashmap_get(&[map.clone(), Value::String(SmolStr::new("GDP"))]).unwrap_ok();
         assert_eq!(val, Value::Float(21.0));
 
         // Len should be 1
-        let len = builtin_hashmap_len(&[map.clone()]).unwrap();
+        let len = builtin_hashmap_len(&[map.clone()]).unwrap_ok();
         assert_eq!(len, Value::Int(1));
 
         // Contains
-        let has =
-            builtin_hashmap_contains(&[map.clone(), Value::String(SmolStr::new("GDP"))]).unwrap();
+        let has = builtin_hashmap_contains(&[map.clone(), Value::String(SmolStr::new("GDP"))])
+            .unwrap_ok();
         assert_eq!(has, Value::Bool(true));
 
-        let no =
-            builtin_hashmap_contains(&[map.clone(), Value::String(SmolStr::new("CPI"))]).unwrap();
+        let no = builtin_hashmap_contains(&[map.clone(), Value::String(SmolStr::new("CPI"))])
+            .unwrap_ok();
         assert_eq!(no, Value::Bool(false));
     }
 
     #[test]
     fn test_hashmap_overwrite() {
-        let map = builtin_hashmap_new(&[]).unwrap();
+        let map = builtin_hashmap_new(&[]).unwrap_ok();
 
         builtin_hashmap_insert(&[
             map.clone(),
             Value::String(SmolStr::new("rate")),
             Value::Float(5.25),
         ])
-        .unwrap();
+        .unwrap_ok();
 
         builtin_hashmap_insert(&[
             map.clone(),
             Value::String(SmolStr::new("rate")),
             Value::Float(5.50),
         ])
-        .unwrap();
+        .unwrap_ok();
 
-        let val = builtin_hashmap_get(&[map.clone(), Value::String(SmolStr::new("rate"))]).unwrap();
+        let val =
+            builtin_hashmap_get(&[map.clone(), Value::String(SmolStr::new("rate"))]).unwrap_ok();
         assert_eq!(val, Value::Float(5.50));
 
         // Len should still be 1 (overwrite, not new entry)
-        let len = builtin_hashmap_len(&[map]).unwrap();
+        let len = builtin_hashmap_len(&[map]).unwrap_ok();
         assert_eq!(len, Value::Int(1));
     }
 
     #[test]
     fn test_hashmap_remove() {
-        let map = builtin_hashmap_new(&[]).unwrap();
+        let map = builtin_hashmap_new(&[]).unwrap_ok();
 
         builtin_hashmap_insert(&[
             map.clone(),
             Value::String(SmolStr::new("x")),
             Value::Int(42),
         ])
-        .unwrap();
+        .unwrap_ok();
 
         let removed =
-            builtin_hashmap_remove(&[map.clone(), Value::String(SmolStr::new("x"))]).unwrap();
+            builtin_hashmap_remove(&[map.clone(), Value::String(SmolStr::new("x"))]).unwrap_ok();
         assert_eq!(removed, Value::Int(42));
 
-        let len = builtin_hashmap_len(&[map]).unwrap();
+        let len = builtin_hashmap_len(&[map]).unwrap_ok();
         assert_eq!(len, Value::Int(0));
     }
 
     #[test]
     fn test_hashmap_keys_and_values() {
-        let map = builtin_hashmap_new(&[]).unwrap();
+        let map = builtin_hashmap_new(&[]).unwrap_ok();
 
         builtin_hashmap_insert(&[map.clone(), Value::String(SmolStr::new("a")), Value::Int(1)])
-            .unwrap();
+            .unwrap_ok();
         builtin_hashmap_insert(&[map.clone(), Value::String(SmolStr::new("b")), Value::Int(2)])
-            .unwrap();
+            .unwrap_ok();
 
-        let keys = builtin_hashmap_keys(&[map.clone()]).unwrap();
+        let keys = builtin_hashmap_keys(&[map.clone()]).unwrap_ok();
         if let Value::Array(arr) = keys {
             assert_eq!(arr.borrow().len(), 2);
         } else {
             panic!("Expected array of keys");
         }
 
-        let values = builtin_hashmap_values(&[map.clone()]).unwrap();
+        let values = builtin_hashmap_values(&[map.clone()]).unwrap_ok();
         if let Value::Array(arr) = values {
             assert_eq!(arr.borrow().len(), 2);
         } else {
             panic!("Expected array of values");
         }
 
-        let entries = builtin_hashmap_entries(&[map]).unwrap();
+        let entries = builtin_hashmap_entries(&[map]).unwrap_ok();
         if let Value::Array(arr) = entries {
             assert_eq!(arr.borrow().len(), 2);
         } else {
@@ -2699,11 +2727,11 @@ mod tests {
 
     #[test]
     fn test_hashmap_integer_keys() {
-        let map = builtin_hashmap_new(&[]).unwrap();
+        let map = builtin_hashmap_new(&[]).unwrap_ok();
 
-        builtin_hashmap_insert(&[map.clone(), Value::Int(2024), Value::Float(3.2)]).unwrap();
+        builtin_hashmap_insert(&[map.clone(), Value::Int(2024), Value::Float(3.2)]).unwrap_ok();
 
-        let val = builtin_hashmap_get(&[map, Value::Int(2024)]).unwrap();
+        let val = builtin_hashmap_get(&[map, Value::Int(2024)]).unwrap_ok();
         assert_eq!(val, Value::Float(3.2));
     }
 
@@ -2711,52 +2739,52 @@ mod tests {
 
     #[test]
     fn test_sortedmap_new_is_empty() {
-        let map = builtin_sortedmap_new(&[]).unwrap();
+        let map = builtin_sortedmap_new(&[]).unwrap_ok();
         assert!(matches!(map, Value::SortedMap(_)));
 
-        let len = builtin_sortedmap_len(&[map]).unwrap();
+        let len = builtin_sortedmap_len(&[map]).unwrap_ok();
         assert_eq!(len, Value::Int(0));
     }
 
     #[test]
     fn test_sortedmap_insert_and_get() {
-        let map = builtin_sortedmap_new(&[]).unwrap();
+        let map = builtin_sortedmap_new(&[]).unwrap_ok();
 
         builtin_sortedmap_insert(&[
             map.clone(),
             Value::String(SmolStr::new("2024-Q1")),
             Value::Float(3.2),
         ])
-        .unwrap();
+        .unwrap_ok();
 
         builtin_sortedmap_insert(&[
             map.clone(),
             Value::String(SmolStr::new("2024-Q2")),
             Value::Float(3.5),
         ])
-        .unwrap();
+        .unwrap_ok();
 
-        let val =
-            builtin_sortedmap_get(&[map.clone(), Value::String(SmolStr::new("2024-Q1"))]).unwrap();
+        let val = builtin_sortedmap_get(&[map.clone(), Value::String(SmolStr::new("2024-Q1"))])
+            .unwrap_ok();
         assert_eq!(val, Value::Float(3.2));
 
-        let len = builtin_sortedmap_len(&[map]).unwrap();
+        let len = builtin_sortedmap_len(&[map]).unwrap_ok();
         assert_eq!(len, Value::Int(2));
     }
 
     #[test]
     fn test_sortedmap_keys_are_sorted() {
-        let map = builtin_sortedmap_new(&[]).unwrap();
+        let map = builtin_sortedmap_new(&[]).unwrap_ok();
 
         // Insert out of order
         builtin_sortedmap_insert(&[map.clone(), Value::String(SmolStr::new("c")), Value::Int(3)])
-            .unwrap();
+            .unwrap_ok();
         builtin_sortedmap_insert(&[map.clone(), Value::String(SmolStr::new("a")), Value::Int(1)])
-            .unwrap();
+            .unwrap_ok();
         builtin_sortedmap_insert(&[map.clone(), Value::String(SmolStr::new("b")), Value::Int(2)])
-            .unwrap();
+            .unwrap_ok();
 
-        let keys = builtin_sortedmap_keys(&[map]).unwrap();
+        let keys = builtin_sortedmap_keys(&[map]).unwrap_ok();
         if let Value::Array(arr) = keys {
             let borrowed = arr.borrow();
             assert_eq!(borrowed.len(), 3);
@@ -2770,28 +2798,28 @@ mod tests {
 
     #[test]
     fn test_sortedmap_min_max() {
-        let map = builtin_sortedmap_new(&[]).unwrap();
+        let map = builtin_sortedmap_new(&[]).unwrap_ok();
 
         builtin_sortedmap_insert(&[
             map.clone(),
             Value::String(SmolStr::new("2023")),
             Value::Float(1.5),
         ])
-        .unwrap();
+        .unwrap_ok();
         builtin_sortedmap_insert(&[
             map.clone(),
             Value::String(SmolStr::new("2025")),
             Value::Float(3.5),
         ])
-        .unwrap();
+        .unwrap_ok();
         builtin_sortedmap_insert(&[
             map.clone(),
             Value::String(SmolStr::new("2024")),
             Value::Float(2.5),
         ])
-        .unwrap();
+        .unwrap_ok();
 
-        let min = builtin_sortedmap_min_key(&[map.clone()]).unwrap();
+        let min = builtin_sortedmap_min_key(&[map.clone()]).unwrap_ok();
         if let Value::Tuple(elems) = min {
             assert_eq!(elems[0], Value::String(SmolStr::new("2023")));
             assert_eq!(elems[1], Value::Float(1.5));
@@ -2799,7 +2827,7 @@ mod tests {
             panic!("Expected tuple (key, value)");
         }
 
-        let max = builtin_sortedmap_max_key(&[map]).unwrap();
+        let max = builtin_sortedmap_max_key(&[map]).unwrap_ok();
         if let Value::Tuple(elems) = max {
             assert_eq!(elems[0], Value::String(SmolStr::new("2025")));
             assert_eq!(elems[1], Value::Float(3.5));
@@ -2810,15 +2838,15 @@ mod tests {
 
     #[test]
     fn test_sortedmap_range_query() {
-        let map = builtin_sortedmap_new(&[]).unwrap();
+        let map = builtin_sortedmap_new(&[]).unwrap_ok();
 
         for year in ["2020", "2021", "2022", "2023", "2024", "2025"] {
             builtin_sortedmap_insert(&[
                 map.clone(),
                 Value::String(SmolStr::new(year)),
-                Value::Int(year.parse::<i64>().unwrap()),
+                Value::Int(year.parse::<i64>().unwrap_ok()),
             ])
-            .unwrap();
+            .unwrap_ok();
         }
 
         let range = builtin_sortedmap_range(&[
@@ -2826,7 +2854,7 @@ mod tests {
             Value::String(SmolStr::new("2022")),
             Value::String(SmolStr::new("2024")),
         ])
-        .unwrap();
+        .unwrap_ok();
 
         if let Value::Array(arr) = range {
             let borrowed = arr.borrow();
@@ -2838,20 +2866,20 @@ mod tests {
 
     #[test]
     fn test_sortedmap_remove() {
-        let map = builtin_sortedmap_new(&[]).unwrap();
+        let map = builtin_sortedmap_new(&[]).unwrap_ok();
 
         builtin_sortedmap_insert(&[
             map.clone(),
             Value::String(SmolStr::new("key")),
             Value::Int(99),
         ])
-        .unwrap();
+        .unwrap_ok();
 
-        let removed =
-            builtin_sortedmap_remove(&[map.clone(), Value::String(SmolStr::new("key"))]).unwrap();
+        let removed = builtin_sortedmap_remove(&[map.clone(), Value::String(SmolStr::new("key"))])
+            .unwrap_ok();
         assert_eq!(removed, Value::Int(99));
 
-        let len = builtin_sortedmap_len(&[map]).unwrap();
+        let len = builtin_sortedmap_len(&[map]).unwrap_ok();
         assert_eq!(len, Value::Int(0));
     }
 
@@ -2859,46 +2887,46 @@ mod tests {
 
     #[test]
     fn test_queue_fifo() {
-        let queue = builtin_queue_new(&[]).unwrap();
+        let queue = builtin_queue_new(&[]).unwrap_ok();
 
-        builtin_queue_enqueue(&[queue.clone(), Value::Int(1)]).unwrap();
-        builtin_queue_enqueue(&[queue.clone(), Value::Int(2)]).unwrap();
-        builtin_queue_enqueue(&[queue.clone(), Value::Int(3)]).unwrap();
+        builtin_queue_enqueue(&[queue.clone(), Value::Int(1)]).unwrap_ok();
+        builtin_queue_enqueue(&[queue.clone(), Value::Int(2)]).unwrap_ok();
+        builtin_queue_enqueue(&[queue.clone(), Value::Int(3)]).unwrap_ok();
 
-        let len = builtin_queue_len(&[queue.clone()]).unwrap();
+        let len = builtin_queue_len(&[queue.clone()]).unwrap_ok();
         assert_eq!(len, Value::Int(3));
 
         // FIFO: first in, first out
-        let first = builtin_queue_dequeue(&[queue.clone()]).unwrap();
+        let first = builtin_queue_dequeue(&[queue.clone()]).unwrap_ok();
         assert_eq!(first, Value::Int(1));
 
-        let second = builtin_queue_dequeue(&[queue.clone()]).unwrap();
+        let second = builtin_queue_dequeue(&[queue.clone()]).unwrap_ok();
         assert_eq!(second, Value::Int(2));
 
-        let third = builtin_queue_dequeue(&[queue.clone()]).unwrap();
+        let third = builtin_queue_dequeue(&[queue.clone()]).unwrap_ok();
         assert_eq!(third, Value::Int(3));
 
-        let is_empty = builtin_queue_is_empty(&[queue]).unwrap();
+        let is_empty = builtin_queue_is_empty(&[queue]).unwrap_ok();
         assert_eq!(is_empty, Value::Bool(true));
     }
 
     #[test]
     fn test_queue_peek() {
-        let queue = builtin_queue_new(&[]).unwrap();
+        let queue = builtin_queue_new(&[]).unwrap_ok();
 
-        builtin_queue_enqueue(&[queue.clone(), Value::String(SmolStr::new("event_a"))]).unwrap();
+        builtin_queue_enqueue(&[queue.clone(), Value::String(SmolStr::new("event_a"))]).unwrap_ok();
 
-        let peeked = builtin_queue_peek(&[queue.clone()]).unwrap();
+        let peeked = builtin_queue_peek(&[queue.clone()]).unwrap_ok();
         assert_eq!(peeked, Value::String(SmolStr::new("event_a")));
 
         // Peek should not remove
-        let len = builtin_queue_len(&[queue]).unwrap();
+        let len = builtin_queue_len(&[queue]).unwrap_ok();
         assert_eq!(len, Value::Int(1));
     }
 
     #[test]
     fn test_queue_dequeue_empty_errors() {
-        let queue = builtin_queue_new(&[]).unwrap();
+        let queue = builtin_queue_new(&[]).unwrap_ok();
         let result = builtin_queue_dequeue(&[queue]);
         assert!(result.is_err());
     }
@@ -2907,7 +2935,7 @@ mod tests {
 
     #[test]
     fn test_priority_queue_min_first() {
-        let pq = builtin_priority_queue_new(&[]).unwrap();
+        let pq = builtin_priority_queue_new(&[]).unwrap_ok();
 
         // Push with different priorities (lower = higher urgency)
         builtin_priority_queue_push(&[
@@ -2915,51 +2943,51 @@ mod tests {
             Value::Int(5),
             Value::String(SmolStr::new("low")),
         ])
-        .unwrap();
+        .unwrap_ok();
         builtin_priority_queue_push(&[
             pq.clone(),
             Value::Int(1),
             Value::String(SmolStr::new("high")),
         ])
-        .unwrap();
+        .unwrap_ok();
         builtin_priority_queue_push(&[
             pq.clone(),
             Value::Int(3),
             Value::String(SmolStr::new("medium")),
         ])
-        .unwrap();
+        .unwrap_ok();
 
-        let len = builtin_priority_queue_len(&[pq.clone()]).unwrap();
+        let len = builtin_priority_queue_len(&[pq.clone()]).unwrap_ok();
         assert_eq!(len, Value::Int(3));
 
         // Should pop in priority order: high(1), medium(3), low(5)
-        let first = builtin_priority_queue_pop(&[pq.clone()]).unwrap();
+        let first = builtin_priority_queue_pop(&[pq.clone()]).unwrap_ok();
         assert_eq!(first, Value::String(SmolStr::new("high")));
 
-        let second = builtin_priority_queue_pop(&[pq.clone()]).unwrap();
+        let second = builtin_priority_queue_pop(&[pq.clone()]).unwrap_ok();
         assert_eq!(second, Value::String(SmolStr::new("medium")));
 
-        let third = builtin_priority_queue_pop(&[pq]).unwrap();
+        let third = builtin_priority_queue_pop(&[pq]).unwrap_ok();
         assert_eq!(third, Value::String(SmolStr::new("low")));
     }
 
     #[test]
     fn test_priority_queue_peek() {
-        let pq = builtin_priority_queue_new(&[]).unwrap();
+        let pq = builtin_priority_queue_new(&[]).unwrap_ok();
 
-        builtin_priority_queue_push(&[pq.clone(), Value::Int(10), Value::Int(42)]).unwrap();
+        builtin_priority_queue_push(&[pq.clone(), Value::Int(10), Value::Int(42)]).unwrap_ok();
 
-        let peeked = builtin_priority_queue_peek(&[pq.clone()]).unwrap();
+        let peeked = builtin_priority_queue_peek(&[pq.clone()]).unwrap_ok();
         assert_eq!(peeked, Value::Int(42));
 
         // Peek should not remove
-        let len = builtin_priority_queue_len(&[pq]).unwrap();
+        let len = builtin_priority_queue_len(&[pq]).unwrap_ok();
         assert_eq!(len, Value::Int(1));
     }
 
     #[test]
     fn test_priority_queue_pop_empty_errors() {
-        let pq = builtin_priority_queue_new(&[]).unwrap();
+        let pq = builtin_priority_queue_new(&[]).unwrap_ok();
         let result = builtin_priority_queue_pop(&[pq]);
         assert!(result.is_err());
     }
@@ -2971,7 +2999,7 @@ mod tests {
         let a = make_array(vec![Value::Int(1), Value::Int(2), Value::Int(3)]);
         let b = make_array(vec![Value::Int(3), Value::Int(4), Value::Int(5)]);
 
-        let result = builtin_set_union(&[a, b]).unwrap();
+        let result = builtin_set_union(&[a, b]).unwrap_ok();
         if let Value::Array(arr) = result {
             assert_eq!(arr.borrow().len(), 5); // {1,2,3,4,5}
         } else {
@@ -2984,7 +3012,7 @@ mod tests {
         let a = make_array(vec![Value::Int(1), Value::Int(2), Value::Int(3)]);
         let b = make_array(vec![Value::Int(2), Value::Int(3), Value::Int(4)]);
 
-        let result = builtin_set_intersection(&[a, b]).unwrap();
+        let result = builtin_set_intersection(&[a, b]).unwrap_ok();
         if let Value::Array(arr) = result {
             assert_eq!(arr.borrow().len(), 2); // {2, 3}
         } else {
@@ -2997,7 +3025,7 @@ mod tests {
         let a = make_array(vec![Value::Int(1), Value::Int(2), Value::Int(3)]);
         let b = make_array(vec![Value::Int(2), Value::Int(4)]);
 
-        let result = builtin_set_difference(&[a, b]).unwrap();
+        let result = builtin_set_difference(&[a, b]).unwrap_ok();
         if let Value::Array(arr) = result {
             assert_eq!(arr.borrow().len(), 2); // {1, 3}
         } else {
@@ -3010,7 +3038,7 @@ mod tests {
         let a = make_array(vec![Value::Int(1), Value::Int(2), Value::Int(3)]);
         let b = make_array(vec![Value::Int(2), Value::Int(3), Value::Int(4)]);
 
-        let result = builtin_set_symmetric_difference(&[a, b]).unwrap();
+        let result = builtin_set_symmetric_difference(&[a, b]).unwrap_ok();
         if let Value::Array(arr) = result {
             assert_eq!(arr.borrow().len(), 2); // {1, 4}
         } else {
@@ -3023,10 +3051,10 @@ mod tests {
         let a = make_array(vec![Value::Int(1), Value::Int(2)]);
         let b = make_array(vec![Value::Int(1), Value::Int(2), Value::Int(3)]);
 
-        let result = builtin_set_is_subset(&[a.clone(), b.clone()]).unwrap();
+        let result = builtin_set_is_subset(&[a.clone(), b.clone()]).unwrap_ok();
         assert_eq!(result, Value::Bool(true));
 
-        let result_reverse = builtin_set_is_subset(&[b, a]).unwrap();
+        let result_reverse = builtin_set_is_subset(&[b, a]).unwrap_ok();
         assert_eq!(result_reverse, Value::Bool(false));
     }
 
@@ -3040,7 +3068,7 @@ mod tests {
             Value::Int(2),
         ]);
 
-        let result = builtin_set_from_array(&[arr]).unwrap();
+        let result = builtin_set_from_array(&[arr]).unwrap_ok();
         if let Value::Array(deduped) = result {
             assert_eq!(deduped.borrow().len(), 3); // {1, 2, 3}
         } else {
@@ -3060,7 +3088,7 @@ mod tests {
             Value::String(SmolStr::new("TSE")),
         ]);
 
-        let both = builtin_set_intersection(&[markets.clone(), tech_exchanges.clone()]).unwrap();
+        let both = builtin_set_intersection(&[markets.clone(), tech_exchanges.clone()]).unwrap_ok();
         if let Value::Array(arr) = both {
             assert_eq!(arr.borrow().len(), 1); // {"NASDAQ"}
             assert_eq!(arr.borrow()[0], Value::String(SmolStr::new("NASDAQ")));
@@ -3073,21 +3101,21 @@ mod tests {
 
     #[test]
     fn test_len_works_on_hashmap() {
-        let map = builtin_hashmap_new(&[]).unwrap();
+        let map = builtin_hashmap_new(&[]).unwrap_ok();
         builtin_hashmap_insert(&[map.clone(), Value::String(SmolStr::new("k")), Value::Int(1)])
-            .unwrap();
+            .unwrap_ok();
 
-        let len = builtin_len(&[map]).unwrap();
+        let len = builtin_len(&[map]).unwrap_ok();
         assert_eq!(len, Value::Int(1));
     }
 
     #[test]
     fn test_len_works_on_sortedmap() {
-        let map = builtin_sortedmap_new(&[]).unwrap();
+        let map = builtin_sortedmap_new(&[]).unwrap_ok();
         builtin_sortedmap_insert(&[map.clone(), Value::String(SmolStr::new("k")), Value::Int(1)])
-            .unwrap();
+            .unwrap_ok();
 
-        let len = builtin_len(&[map]).unwrap();
+        let len = builtin_len(&[map]).unwrap_ok();
         assert_eq!(len, Value::Int(1));
     }
 
@@ -3096,12 +3124,15 @@ mod tests {
     #[test]
     fn test_value_to_key_conversions() {
         assert_eq!(
-            value_to_key(&Value::String(SmolStr::new("hello"))).unwrap(),
+            value_to_key(&Value::String(SmolStr::new("hello"))).unwrap_ok(),
             SmolStr::new("hello")
         );
-        assert_eq!(value_to_key(&Value::Int(42)).unwrap(), SmolStr::new("42"));
         assert_eq!(
-            value_to_key(&Value::Bool(true)).unwrap(),
+            value_to_key(&Value::Int(42)).unwrap_ok(),
+            SmolStr::new("42")
+        );
+        assert_eq!(
+            value_to_key(&Value::Bool(true)).unwrap_ok(),
             SmolStr::new("true")
         );
     }
