@@ -6,7 +6,7 @@
      (version "1.0")
      (schema-version "1.0")
      (created "2026-02-04")
-     (updated "2026-02-06T2")
+     (updated "2026-02-12")
      (project "eclexia")
      (repo "hyperpolymath/eclexia"))
 
@@ -17,7 +17,7 @@
 
     (current-position
      (phase "verification & honesty audit")
-     (overall-completion 67)
+     (overall-completion 60)
      (components
        (("lexer" "Tokenization with dimensional literals" 100)
         ("parser" "Recursive descent with error recovery" 95)
@@ -37,20 +37,20 @@
         ("formatter" "AST pretty printer" 95)
         ("linter" "Six rule baseline" 90)
         ("debugger" "Breakpoints, step, partial resource inspection" 75)
-        ("runtime-scheduler" "Shadow-price-aware defer/reject/run" 70)
-        ("runtime-profiler" "Wall-clock + energy/carbon estimation" 70)
-        ("runtime-carbon" "Grid intensity monitor" 70)
-        ("runtime-shadow" "Shadow-price LP pricing + EMA" 70)
+        ("runtime-scheduler" "Shadow-price-aware defer/reject/run" 85)
+        ("runtime-profiler" "Wall-clock + energy/carbon + RSS memory tracking" 80)
+        ("runtime-carbon" "Grid intensity monitor" 90)
+        ("runtime-shadow" "Shadow-price LP pricing + EMA" 85)
         ("runtime-adaptive" "Adaptive decision engine skeleton" 60)
         ("runtime-resource-tracker" "Instruction-level tracking" 50)
-        ("shadow-prices" "Formal definitions pending integration" 40)
+        ("shadow-prices" "Real defaults, trend analysis, EMA forecasting" 80)
         ("stdlib" "Core, collections, math, async placeholders" 65)
-        ("wasm-backend" "MIR→WASM lowering for arithmetic/control flow" 60)
+        ("wasm-backend" "MIR→WASM lowering for arithmetic/control flow" 65)
         ("docker" "Builds with mostly-stub runtime" 70)
         ("kubernetes" "Config references non-existent endpoints" 30)
         ("package-registry" "Not implemented" 0)
-        ("cranelift-backend" "Simple int JIT + estimation fallback" 15)
-        ("llvm-backend" "Planning stub" 0)
+        ("cranelift-backend" "Real Cranelift JIT for simple int functions" 70)
+        ("llvm-backend" "Generates textual .ll IR, 21 tests" 50)
         ("vscode-extension" "Syntax highlighting + LSP" 85)))
      (working-features
        ("Full compiler pipeline: lexer -> parser -> AST -> type checker -> HIR -> MIR -> bytecode VM"
