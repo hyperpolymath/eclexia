@@ -37,6 +37,7 @@ pub struct ProfileSpan {
 struct ActiveSpan {
     name: SmolStr,
     start: Instant,
+    memory_before: f64, // RSS in bytes at span start
 }
 
 /// Aggregated profile data per function/block.
@@ -65,6 +66,31 @@ pub struct Profiler {
 
     /// Whether profiling is enabled.
     enabled: bool,
+}
+
+/// Read current RSS (Resident Set Size) in bytes on Linux.
+/// Returns 0.0 on non-Linux platforms or if reading fails.
+#[cfg(target_os = "linux")]
+fn get_rss_bytes() -> f64 {
+    // Read /proc/self/statm which contains memory stats in pages
+    // Format: size resident shared text lib data dt
+    // We want field 1 (resident) which is RSS in pages
+    if let Ok(contents) = std::fs::read_to_string("/proc/self/statm") {
+        let fields: Vec<&str> = contents.split_whitespace().collect();
+        if fields.len() > 1 {
+            if let Ok(rss_pages) = fields[1].parse::<usize>() {
+                // Convert pages to bytes (typically 4096 bytes per page)
+                let page_size = 4096.0;
+                return (rss_pages as f64) * page_size;
+            }
+        }
+    }
+    0.0
+}
+
+#[cfg(not(target_os = "linux"))]
+fn get_rss_bytes() -> f64 {
+    0.0 // Not supported on non-Linux platforms
 }
 
 impl Profiler {
@@ -102,6 +128,7 @@ impl Profiler {
         self.active.push(ActiveSpan {
             name,
             start: Instant::now(),
+            memory_before: get_rss_bytes(),
         });
     }
 
@@ -121,11 +148,15 @@ impl Profiler {
         let energy_kwh = energy_j / 3_600_000.0;
         let carbon_gco2e = energy_kwh * self.carbon_intensity_gco2e_per_kwh;
 
+        // Memory delta = RSS after - RSS before (on Linux; 0 on other platforms)
+        let memory_after = get_rss_bytes();
+        let memory_bytes = (memory_after - span.memory_before).max(0.0);
+
         let result = ProfileSpan {
             name: span.name.clone(),
             wall_time_s,
             energy_j,
-            memory_bytes: 0.0, // memory tracking requires OS integration
+            memory_bytes,
             carbon_gco2e,
             call_count: 1,
         };
@@ -140,6 +171,7 @@ impl Profiler {
         });
         agg.total_wall_time_s += wall_time_s;
         agg.total_energy_j += energy_j;
+        agg.total_memory_bytes += memory_bytes;
         agg.total_carbon_gco2e += carbon_gco2e;
         agg.call_count += 1;
 
