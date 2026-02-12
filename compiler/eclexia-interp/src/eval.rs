@@ -69,13 +69,10 @@ impl Interpreter {
 
     /// Get or create the tokio runtime for async operations
     fn runtime(&mut self) -> &tokio::runtime::Runtime {
-        if self.runtime.is_none() {
-            self.runtime = Some(
-                tokio::runtime::Runtime::new()
-                    .expect("Failed to create tokio runtime"),
-            );
-        }
-        self.runtime.as_ref().unwrap()
+        self.runtime.get_or_insert_with(|| {
+            tokio::runtime::Runtime::new()
+                .expect("Failed to create tokio runtime")
+        })
     }
 
     /// Set the energy budget.
