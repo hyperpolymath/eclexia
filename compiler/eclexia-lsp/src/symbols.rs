@@ -673,16 +673,17 @@ impl SymbolTable {
                     self.collect_block_references(&handler.body, file);
                 }
             }
-            ExprKind::ReturnExpr(opt_expr) => {
-                if let Some(expr_id) = opt_expr {
-                    self.collect_expr_references(*expr_id, file);
-                }
+            ExprKind::ReturnExpr(Some(expr_id)) => {
+                self.collect_expr_references(*expr_id, file);
             }
-            ExprKind::BreakExpr { value, .. } => {
-                if let Some(expr_id) = value {
-                    self.collect_expr_references(*expr_id, file);
-                }
+            ExprKind::ReturnExpr(None) => {}
+            ExprKind::BreakExpr {
+                value: Some(expr_id),
+                ..
+            } => {
+                self.collect_expr_references(*expr_id, file);
             }
+            ExprKind::BreakExpr { value: None, .. } => {}
             ExprKind::ContinueExpr { .. } => {}
             ExprKind::PathExpr(segments) => {
                 // Add references for each path segment

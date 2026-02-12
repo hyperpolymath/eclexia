@@ -1154,12 +1154,12 @@ impl VirtualMachine {
                         Ok(ExecutionResult::Continue)
                     }
                     Value::Range(start, end) if field.as_str() == "len" => {
-                        let len = end.saturating_sub(start).max(0) as i64;
+                        let len = end.saturating_sub(start).max(0);
                         self.push(Value::Int(len))?;
                         Ok(ExecutionResult::Continue)
                     }
                     Value::RangeInclusive(start, end) if field.as_str() == "len" => {
-                        let len = end.saturating_sub(start).max(0) as i64 + 1;
+                        let len = end.saturating_sub(start).max(0) + 1;
                         self.push(Value::Int(len))?;
                         Ok(ExecutionResult::Continue)
                     }

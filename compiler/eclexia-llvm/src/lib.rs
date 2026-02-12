@@ -79,7 +79,7 @@ fn ty_to_llvm(ty: &Ty, ctx: &mut ModuleContext) -> String {
             if let Some(len) = size {
                 format!("[{} x {}]", len, elem_ty)
             } else {
-                format!("ptr")
+                "ptr".to_string()
             }
         }
         Ty::Named { name, .. } => {
@@ -132,7 +132,7 @@ enum InferredValueType<'a> {
     Ptr,
 }
 
-fn local_ty_ref<'a>(id: u32, func: &'a Function) -> Option<&'a Ty> {
+fn local_ty_ref(id: u32, func: &Function) -> Option<&Ty> {
     func.params
         .iter()
         .chain(func.locals.iter())
@@ -235,7 +235,7 @@ fn inferred_to_llvm(inferred: InferredValueType<'_>, ctx: &mut ModuleContext) ->
 }
 
 /// Determine the LLVM type for a Value by tracing through to constants/locals.
-fn infer_value_llvm_type<'a>(
+fn infer_value_llvm_type(
     value: &Value,
     func: &Function,
     mir: &MirFile,
@@ -447,7 +447,7 @@ fn escape_llvm_string(s: &str) -> String {
             out.push_str("\\09");
         } else if b == 0 {
             out.push_str("\\00");
-        } else if b >= 0x20 && b < 0x7F {
+        } else if (0x20..0x7F).contains(&b) {
             out.push(b as char);
         } else {
             out.push_str(&format!("\\{:02X}", b));

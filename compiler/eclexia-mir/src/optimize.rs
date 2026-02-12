@@ -104,10 +104,12 @@ fn constant_propagation(func: &mut Function, _constants: &Arena<Constant>) {
     // Analyze instructions to find locals assigned to constants
     for block in func.basic_blocks.iter() {
         for inst in &block.1.instructions {
-            if let InstructionKind::Assign { target, value } = &inst.kind {
-                if let Value::Constant(const_id) = value {
-                    const_locals.insert(*target, *const_id);
-                }
+            if let InstructionKind::Assign {
+                target,
+                value: Value::Constant(const_id),
+            } = &inst.kind
+            {
+                const_locals.insert(*target, *const_id);
             }
         }
     }

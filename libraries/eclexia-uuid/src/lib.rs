@@ -39,10 +39,10 @@ impl Uuid {
             return Err("invalid uuid length".to_string());
         }
         let mut bytes = [0u8; 16];
-        for i in 0..16 {
+        for (i, byte) in bytes.iter_mut().enumerate() {
             let idx = i * 2;
             let pair = &compact[idx..idx + 2];
-            bytes[i] = u8::from_str_radix(pair, 16).map_err(|_| "invalid hex digit in uuid")?;
+            *byte = u8::from_str_radix(pair, 16).map_err(|_| "invalid hex digit in uuid")?;
         }
         Ok(Self(bytes))
     }

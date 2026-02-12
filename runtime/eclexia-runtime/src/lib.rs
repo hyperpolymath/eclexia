@@ -289,12 +289,12 @@ impl Runtime {
             .config
             .max_resource_budget
             .energy
-            .map_or(true, |limit| stats.total_energy <= limit);
+            .is_none_or(|limit| stats.total_energy <= limit);
         let carbon_ok = self
             .config
             .max_resource_budget
             .carbon
-            .map_or(true, |limit| stats.total_carbon <= limit);
+            .is_none_or(|limit| stats.total_carbon <= limit);
         energy_ok && carbon_ok
     }
 

@@ -9,7 +9,7 @@ pub fn hex_encode(bytes: &[u8]) -> String {
 }
 
 pub fn hex_decode(input: &str) -> Result<Vec<u8>, String> {
-    if input.len() % 2 != 0 {
+    if !input.len().is_multiple_of(2) {
         return Err("hex string length must be even".to_string());
     }
     let mut out = Vec::with_capacity(input.len() / 2);
@@ -51,7 +51,7 @@ pub fn base64_encode(bytes: &[u8]) -> String {
 
 pub fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
     let clean = input.trim();
-    if clean.len() % 4 != 0 {
+    if !clean.len().is_multiple_of(4) {
         return Err("invalid base64 length".to_string());
     }
 

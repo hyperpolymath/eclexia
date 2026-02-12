@@ -1077,7 +1077,7 @@ impl<'a> LoweringContext<'a> {
             }
             ast::ExprKind::Select { arms } => {
                 let hir_arms = arms
-                    .into_iter()
+                    .iter()
                     .map(|arm| crate::SelectArm {
                         span: arm.span,
                         channel: self.lower_expr(arm.channel),
@@ -1092,7 +1092,7 @@ impl<'a> LoweringContext<'a> {
                 ExprKind::Yield { value }
             }
             ast::ExprKind::MacroCall { name, args } => {
-                let hir_args = args.into_iter().map(|a| self.lower_expr(*a)).collect();
+                let hir_args = args.iter().map(|a| self.lower_expr(*a)).collect();
                 ExprKind::MacroCall {
                     name: name.clone(),
                     args: hir_args,

@@ -333,7 +333,7 @@ impl ModuleInterface {
 
     /// Write the interface to a `.ecli` file.
     pub fn write_to_file(&self, path: &Path) -> std::io::Result<()> {
-        let json = self.to_json().map_err(|e| std::io::Error::other(e))?;
+        let json = self.to_json().map_err(std::io::Error::other)?;
         std::fs::write(path, json)
     }
 

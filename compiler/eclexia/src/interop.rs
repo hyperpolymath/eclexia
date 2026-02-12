@@ -12,6 +12,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct BridgeConfig {
     pub language: LanguageInfo,
     pub existing_ffi: Option<ExistingFFI>,
@@ -51,6 +52,7 @@ pub struct EclexiaExports {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct BridgeInfo {
     pub target_file: Option<String>,
     pub header: Option<String>,
@@ -59,6 +61,7 @@ pub struct BridgeInfo {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct UseCases {
     pub description: String,
 }

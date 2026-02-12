@@ -157,7 +157,7 @@ fn lookup<'a>(path: &str, context: &'a Value, this_value: Option<&'a Value>) -> 
 fn is_truthy(value: Option<&Value>) -> bool {
     match value {
         Some(Value::Bool(v)) => *v,
-        Some(Value::Number(n)) => n.as_i64().map_or(true, |x| x != 0),
+        Some(Value::Number(n)) => n.as_i64() != Some(0),
         Some(Value::String(s)) => !s.is_empty(),
         Some(Value::Array(a)) => !a.is_empty(),
         Some(Value::Object(o)) => !o.is_empty(),

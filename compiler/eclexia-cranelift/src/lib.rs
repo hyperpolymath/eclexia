@@ -595,6 +595,7 @@ impl CraneliftBackend {
     }
 
     /// Lower a MIR Value to a Cranelift IR value.
+    #[allow(clippy::only_used_in_recursion)]
     fn lower_value_cranelift(
         &self,
         value: &Value,

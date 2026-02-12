@@ -718,7 +718,7 @@ impl<'a> TypeChecker<'a> {
             },
             Ty::Resource { base, dimension } => Ty::Resource {
                 base: *base,
-                dimension: dimension.clone(),
+                dimension: *dimension,
             },
             Ty::Var(var) => {
                 let entry = mapping.entry(*var).or_insert_with(|| {
@@ -1946,6 +1946,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Recursively bind pattern variables to types in the environment.
+    #[allow(clippy::only_used_in_recursion)]
     fn bind_pattern(&mut self, pattern: &Pattern, ty: &Ty, span: eclexia_ast::span::Span) {
         match pattern {
             Pattern::Var(name) => {
@@ -2485,6 +2486,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Unify two types.
+    #[allow(clippy::result_large_err)]
     fn unify(&mut self, t1: &Ty, t2: &Ty, span: eclexia_ast::span::Span) -> Result<(), TypeError> {
         // Delegate to unify_with_occurs_check for proper infinite type detection
         self.unify_with_occurs_check(t1, t2, span)

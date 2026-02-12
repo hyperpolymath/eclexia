@@ -84,7 +84,7 @@ fn rle_compress(input: &[u8]) -> Vec<u8> {
 }
 
 fn rle_decompress(input: &[u8]) -> Result<Vec<u8>, String> {
-    if input.len() % 2 != 0 {
+    if !input.len().is_multiple_of(2) {
         return Err("invalid rle payload".to_string());
     }
     let mut out = Vec::new();

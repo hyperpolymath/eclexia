@@ -1352,11 +1352,10 @@ impl Interpreter {
                                                 resource.clone(),
                                                 Value::String(resource.clone()),
                                             );
-                                            if matches!(op, CompareOp::Lt | CompareOp::Le) {
-                                                if resource.as_str() == "energy" {
+                                            if matches!(op, CompareOp::Lt | CompareOp::Le)
+                                                && resource.as_str() == "energy" {
                                                     fn_energy_limit = Some(amount.value)
                                                 }
-                                            }
                                         }
                                     }
 

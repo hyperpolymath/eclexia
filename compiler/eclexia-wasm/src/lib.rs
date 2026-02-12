@@ -175,6 +175,7 @@ fn ty_to_wasm(ty: &Ty) -> Option<WasmType> {
 }
 
 /// Calculate the byte size of a type in linear memory.
+#[allow(dead_code)]
 fn ty_byte_size(ty: &Ty) -> u32 {
     match ty {
         Ty::Primitive(p) | Ty::Resource { base: p, .. } => match p {
@@ -196,6 +197,7 @@ fn ty_byte_size(ty: &Ty) -> u32 {
 }
 
 /// Calculate the byte offset of a tuple field.
+#[allow(dead_code)]
 fn tuple_field_offset(fields: &[Ty], index: usize) -> u32 {
     fields[..index].iter().map(ty_byte_size).sum()
 }
@@ -252,10 +254,12 @@ struct ImportIndices {
 ///
 /// Tracks the next free offset in linear memory. Strings from the data
 /// section occupy the beginning of memory; the heap starts after them.
+#[allow(dead_code)]
 struct BumpAllocator {
     next_offset: u32,
 }
 
+#[allow(dead_code)]
 impl BumpAllocator {
     fn new(initial_offset: u32) -> Self {
         Self {
@@ -469,6 +473,7 @@ impl WasmBackend {
     }
 
     /// Lower a MIR Value to WASM instructions, appending to the function body.
+    #[allow(clippy::too_many_arguments, clippy::only_used_in_recursion)]
     fn lower_value(
         &self,
         value: &Value,
@@ -1155,7 +1160,7 @@ impl WasmBackend {
         // === Function section ===
         let mut func_section = FunctionSection::new();
         for i in 0..compiled_funcs.len() {
-            func_section.function((import_count + i as u32) as u32);
+            func_section.function(import_count + i as u32);
         }
         module.section(&func_section);
 
@@ -1214,6 +1219,7 @@ impl WasmBackend {
     }
 
     /// Emit a single block's instructions (not terminator) into a WASM function body.
+    #[allow(clippy::too_many_arguments)]
     fn emit_instructions(
         &self,
         block: &eclexia_mir::BasicBlock,

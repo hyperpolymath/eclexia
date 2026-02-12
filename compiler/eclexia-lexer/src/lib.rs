@@ -733,9 +733,9 @@ impl<'src> Lexer<'src> {
     }
 
     /// Get the next token.
-    /// Get the next token.
     ///
     /// This consumes the peeked token if available, otherwise it advances the inner lexer.
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Token {
         if self.has_peeked {
             self.has_peeked = false;

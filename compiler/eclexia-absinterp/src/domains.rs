@@ -109,6 +109,7 @@ impl Interval {
     }
 
     /// Abstract addition.
+    #[allow(clippy::should_implement_trait)]
     pub fn add(self, other: Self) -> Self {
         match (self, other) {
             (Self::Bottom, _) | (_, Self::Bottom) => Self::Bottom,
@@ -121,6 +122,7 @@ impl Interval {
     }
 
     /// Abstract subtraction.
+    #[allow(clippy::should_implement_trait)]
     pub fn sub(self, other: Self) -> Self {
         match (self, other) {
             (Self::Bottom, _) | (_, Self::Bottom) => Self::Bottom,
@@ -133,6 +135,7 @@ impl Interval {
     }
 
     /// Abstract multiplication (handles sign combinations).
+    #[allow(clippy::should_implement_trait)]
     pub fn mul(self, other: Self) -> Self {
         match (self, other) {
             (Self::Bottom, _) | (_, Self::Bottom) => Self::Bottom,
@@ -147,6 +150,7 @@ impl Interval {
     }
 
     /// Abstract negation.
+    #[allow(clippy::should_implement_trait)]
     pub fn neg(self) -> Self {
         match self {
             Self::Bottom => Self::Bottom,

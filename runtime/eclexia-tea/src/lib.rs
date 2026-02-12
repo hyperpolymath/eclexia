@@ -7,9 +7,14 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+/// Callback type for HTTP response handlers.
+type ResponseCallback<Msg> = Option<Box<dyn Fn(Result<String, String>) -> Msg + Send + Sync>>;
+
 /// A command represents a side effect to be performed
+#[derive(Default)]
 pub enum Cmd<Msg> {
     /// No effect
+    #[default]
     None,
     /// Batch multiple commands
     Batch(Vec<Cmd<Msg>>),
@@ -18,7 +23,7 @@ pub enum Cmd<Msg> {
         method: String,
         url: String,
         body: Option<String>,
-        on_response: Option<Box<dyn Fn(Result<String, String>) -> Msg + Send + Sync>>,
+        on_response: ResponseCallback<Msg>,
     },
     /// Timer that fires after delay_ms milliseconds
     Timer {
@@ -55,15 +60,12 @@ impl<Msg> fmt::Debug for Cmd<Msg> {
     }
 }
 
-impl<Msg> Default for Cmd<Msg> {
-    fn default() -> Self {
-        Cmd::None
-    }
-}
 
 /// A subscription represents an ongoing event source
+#[derive(Default)]
 pub enum Sub<Msg> {
     /// No subscription
+    #[default]
     None,
     /// Batch multiple subscriptions
     Batch(Vec<Sub<Msg>>),
@@ -102,11 +104,6 @@ impl<Msg> fmt::Debug for Sub<Msg> {
     }
 }
 
-impl<Msg> Default for Sub<Msg> {
-    fn default() -> Self {
-        Sub::None
-    }
-}
 
 /// Virtual DOM node representation
 #[derive(Debug, Clone, Serialize, Deserialize)]

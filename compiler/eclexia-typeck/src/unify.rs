@@ -29,6 +29,7 @@ impl TypeChecker<'_> {
     }
 
     /// Unify two types with occurs check
+    #[allow(clippy::result_large_err)]
     pub fn unify_with_occurs_check(
         &mut self,
         t1: &Ty,

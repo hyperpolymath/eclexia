@@ -65,8 +65,8 @@ pub struct Range {
 #[no_mangle]
 pub extern "C" fn __eclexia_runtime_start_tracking() -> *mut c_void {
     let ctx = Box::new(TrackingContext::new());
-    let ptr = Box::into_raw(ctx) as *mut c_void;
-    ptr
+    
+    Box::into_raw(ctx) as *mut c_void
 }
 
 /// Finalize resource tracking and print summary.

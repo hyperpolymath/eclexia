@@ -33,11 +33,12 @@ impl LintRule for UnusedVariableRule {
                 // Collect defined variables from let statements
                 for &stmt_id in &func.body.stmts {
                     let stmt = &ctx.file.stmts[stmt_id];
-                    if let StmtKind::Let { pattern, .. } = &stmt.kind {
-                        // Extract variable name from pattern
-                        if let Pattern::Var(name) = pattern {
-                            defined_vars.insert((name.clone(), stmt.span));
-                        }
+                    if let StmtKind::Let {
+                        pattern: Pattern::Var(name),
+                        ..
+                    } = &stmt.kind
+                    {
+                        defined_vars.insert((name.clone(), stmt.span));
                     }
                 }
 

@@ -35,6 +35,12 @@ pub struct PowerMetrics {
     carbon_factor: f64,
 }
 
+impl Default for PowerMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PowerMetrics {
     /// Create a new metrics tracker.
     pub fn new() -> Self {

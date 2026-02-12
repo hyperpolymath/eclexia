@@ -78,14 +78,10 @@ impl<'src> Parser<'src> {
             // Check for pub(crate), pub(super), pub(self)
             if self.check(TokenKind::LParen) {
                 self.advance();
-                if self.check_ident("crate") {
+                if self.check_ident("crate") || self.check(TokenKind::Super) {
                     self.advance();
                     let _ = self.expect(TokenKind::RParen);
-                    Visibility::PubCrate
-                } else if self.check(TokenKind::Super) {
-                    self.advance();
-                    let _ = self.expect(TokenKind::RParen);
-                    Visibility::PubCrate // treat pub(super) as restricted
+                    Visibility::PubCrate // pub(crate) and pub(super) both = restricted
                 } else if self.check(TokenKind::SelfLower) {
                     self.advance();
                     let _ = self.expect(TokenKind::RParen);

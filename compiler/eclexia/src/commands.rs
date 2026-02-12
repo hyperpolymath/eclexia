@@ -756,7 +756,7 @@ fn freshen_type_with_map(
         },
         Ty::Resource { base, dimension } => Ty::Resource {
             base: *base,
-            dimension: dimension.clone(),
+            dimension: *dimension,
         },
         Ty::Var(var) => {
             let entry = mapping.entry(*var).or_insert_with(|| {

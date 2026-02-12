@@ -91,6 +91,7 @@ impl Scheduler {
     }
 
     /// Submit a task and get a scheduling decision.
+    #[allow(clippy::too_many_arguments)]
     pub fn submit(
         &mut self,
         name: SmolStr,

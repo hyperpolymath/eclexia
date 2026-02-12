@@ -170,7 +170,9 @@ pub fn validate_html(html: &str) -> Result<ValidatedHtml, String> {
 
             if tag_content.starts_with('/') {
                 // Closing tag
-                let tag_name = tag_content[1..]
+                let tag_name = tag_content
+                    .strip_prefix('/')
+                    .unwrap_or("")
                     .split_whitespace()
                     .next()
                     .unwrap_or("")
