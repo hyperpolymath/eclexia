@@ -33,6 +33,7 @@ members = [
     "runtime/eclexia-carbon",
     "runtime/eclexia-web-server",
     "runtime/eclexia-rest",
+    "runtime/eclexia-registry-server",
     "runtime/eclexia-graphql",
     "runtime/eclexia-grpc",
     "runtime/eclexia-websocket",

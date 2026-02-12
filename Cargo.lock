@@ -910,6 +910,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "eclexia-registry-server"
+version = "0.1.0"
+dependencies = [
+ "eclexia-web-server",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "eclexia-rest"
 version = "0.1.0"
 dependencies = [
