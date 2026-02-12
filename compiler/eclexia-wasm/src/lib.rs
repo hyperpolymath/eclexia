@@ -28,7 +28,7 @@
 //!
 //! - Strings stored in data section with fixed offsets (no GC/malloc)
 //! - Complex types (tuples, arrays, structs) not yet supported
-//! - No WASI integration yet
+//! - WASI preview1 integration available (enable with `with_wasi(true)`)
 //! - Indirect calls via basic function table only
 
 use eclexia_ast::types::{PrimitiveTy, Ty};
@@ -202,12 +202,19 @@ struct ImportIndices {
     track_resource: Option<u32>,
     query_shadow_price: Option<u32>,
     pow: Option<u32>,
+    // WASI imports (preview1)
+    fd_write: Option<u32>,
+    clock_time_get: Option<u32>,
+    args_get: Option<u32>,
+    args_sizes_get: Option<u32>,
 }
 
 /// WASM backend for Eclexia.
 pub struct WasmBackend {
     initial_memory_pages: u32,
     max_memory_pages: u32,
+    /// Enable WASI preview1 integration.
+    wasi_enabled: bool,
 }
 
 impl WasmBackend {
@@ -216,6 +223,7 @@ impl WasmBackend {
         Self {
             initial_memory_pages: 16, // 1MB initial
             max_memory_pages: 256,    // 16MB max
+            wasi_enabled: false,
         }
     }
 
@@ -228,6 +236,12 @@ impl WasmBackend {
     /// Set maximum memory pages.
     pub fn with_max_memory(mut self, pages: u32) -> Self {
         self.max_memory_pages = pages;
+        self
+    }
+
+    /// Enable WASI preview1 integration.
+    pub fn with_wasi(mut self, enabled: bool) -> Self {
+        self.wasi_enabled = enabled;
         self
     }
 
@@ -288,6 +302,10 @@ impl WasmBackend {
             track_resource: None,
             query_shadow_price: None,
             pow: None,
+            fd_write: None,
+            clock_time_get: None,
+            args_get: None,
+            args_sizes_get: None,
         };
 
         if needs_resource_tracking {
@@ -317,6 +335,49 @@ impl WasmBackend {
                 name: SmolStr::new("pow"),
                 params: vec![WasmType::F64, WasmType::F64],
                 result: Some(WasmType::F64),
+            });
+        }
+
+        // WASI preview1 imports (if enabled)
+        if self.wasi_enabled {
+            // fd_write: for stdout/stderr output
+            // signature: (fd: i32, iovs: i32, iovs_len: i32, nwritten: i32) -> i32
+            indices.fd_write = Some(imports.len() as u32);
+            imports.push(WasmImport {
+                module: SmolStr::new("wasi_snapshot_preview1"),
+                name: SmolStr::new("fd_write"),
+                params: vec![WasmType::I32, WasmType::I32, WasmType::I32, WasmType::I32],
+                result: Some(WasmType::I32),
+            });
+
+            // clock_time_get: for timing operations
+            // signature: (clock_id: i32, precision: i64, timestamp: i32) -> i32
+            indices.clock_time_get = Some(imports.len() as u32);
+            imports.push(WasmImport {
+                module: SmolStr::new("wasi_snapshot_preview1"),
+                name: SmolStr::new("clock_time_get"),
+                params: vec![WasmType::I32, WasmType::I64, WasmType::I32],
+                result: Some(WasmType::I32),
+            });
+
+            // args_get: retrieve command-line arguments
+            // signature: (argv: i32, argv_buf: i32) -> i32
+            indices.args_get = Some(imports.len() as u32);
+            imports.push(WasmImport {
+                module: SmolStr::new("wasi_snapshot_preview1"),
+                name: SmolStr::new("args_get"),
+                params: vec![WasmType::I32, WasmType::I32],
+                result: Some(WasmType::I32),
+            });
+
+            // args_sizes_get: get argument count and buffer size
+            // signature: (argc: i32, argv_buf_size: i32) -> i32
+            indices.args_sizes_get = Some(imports.len() as u32);
+            imports.push(WasmImport {
+                module: SmolStr::new("wasi_snapshot_preview1"),
+                name: SmolStr::new("args_sizes_get"),
+                params: vec![WasmType::I32, WasmType::I32],
+                result: Some(WasmType::I32),
             });
         }
 
