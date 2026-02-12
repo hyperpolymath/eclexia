@@ -1056,30 +1056,47 @@ impl<'a> LoweringContext<'a> {
             }
             ast::ExprKind::Error => ExprKind::Literal(Literal::Unit),
 
-            // Concurrency primitives (lowering pending in HIR)
+            // Concurrency primitives
             ast::ExprKind::Spawn(inner) => {
-                let _inner_id = self.lower_expr(*inner);
-                ExprKind::Literal(Literal::Unit) // NOTE: spawn support in HIR pending.
+                let body = self.lower_expr(*inner);
+                ExprKind::Spawn { body }
             }
-            ast::ExprKind::Channel { .. } => {
-                ExprKind::Literal(Literal::Unit) // NOTE: channel support in HIR pending.
+            ast::ExprKind::Channel { elem_ty, capacity } => {
+                let elem_ty = elem_ty.map(|id| self.convert_type(&self.source.types[id]));
+                let capacity = capacity.map(|c| self.lower_expr(c));
+                ExprKind::Channel { elem_ty, capacity }
             }
-            ast::ExprKind::Send { .. } => {
-                ExprKind::Literal(Literal::Unit) // NOTE: send support in HIR pending.
+            ast::ExprKind::Send { channel, value } => {
+                let channel = self.lower_expr(*channel);
+                let value = self.lower_expr(*value);
+                ExprKind::Send { channel, value }
             }
             ast::ExprKind::Recv(inner) => {
-                let _inner_id = self.lower_expr(*inner);
-                ExprKind::Literal(Literal::Unit) // NOTE: recv support in HIR pending.
+                let channel = self.lower_expr(*inner);
+                ExprKind::Recv { channel }
             }
-            ast::ExprKind::Select { .. } => {
-                ExprKind::Literal(Literal::Unit) // NOTE: select support in HIR pending.
+            ast::ExprKind::Select { arms } => {
+                let hir_arms = arms
+                    .into_iter()
+                    .map(|arm| crate::SelectArm {
+                        span: arm.span,
+                        channel: self.lower_expr(arm.channel),
+                        binding: arm.binding.clone(),
+                        body: self.lower_expr(arm.body),
+                    })
+                    .collect();
+                ExprKind::Select { arms: hir_arms }
             }
             ast::ExprKind::YieldExpr(val) => {
-                let _val_id = val.map(|v| self.lower_expr(v));
-                ExprKind::Literal(Literal::Unit) // NOTE: yield support in HIR pending.
+                let value = val.map(|v| self.lower_expr(v));
+                ExprKind::Yield { value }
             }
-            ast::ExprKind::MacroCall { .. } => {
-                ExprKind::Literal(Literal::Unit) // NOTE: macro expansion in HIR pending.
+            ast::ExprKind::MacroCall { name, args } => {
+                let hir_args = args.into_iter().map(|a| self.lower_expr(*a)).collect();
+                ExprKind::MacroCall {
+                    name: name.clone(),
+                    args: hir_args,
+                }
             }
         };
 

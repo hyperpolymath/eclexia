@@ -363,6 +363,19 @@ pub struct Expr {
     pub kind: ExprKind,
 }
 
+/// Select arm for channel select expressions
+#[derive(Debug, Clone)]
+pub struct SelectArm {
+    /// Source location
+    pub span: Span,
+    /// Channel expression to receive from
+    pub channel: ExprId,
+    /// Variable to bind the received value
+    pub binding: Option<SmolStr>,
+    /// Body expression to evaluate when this arm fires
+    pub body: ExprId,
+}
+
 #[derive(Debug, Clone)]
 pub enum ExprKind {
     /// Literal value
@@ -450,6 +463,30 @@ pub enum ExprKind {
 
     /// Continue as expression
     ContinueExpr { label: Option<SmolStr> },
+
+    /// Spawn expression (concurrency primitive)
+    Spawn { body: ExprId },
+
+    /// Channel creation (concurrency primitive)
+    Channel {
+        elem_ty: Option<Ty>,
+        capacity: Option<ExprId>,
+    },
+
+    /// Send on channel (concurrency primitive)
+    Send { channel: ExprId, value: ExprId },
+
+    /// Receive from channel (concurrency primitive)
+    Recv { channel: ExprId },
+
+    /// Select expression (concurrency primitive)
+    Select { arms: Vec<SelectArm> },
+
+    /// Yield expression (concurrency primitive)
+    Yield { value: Option<ExprId> },
+
+    /// Macro call
+    MacroCall { name: SmolStr, args: Vec<ExprId> },
 }
 
 /// Literal value

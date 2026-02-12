@@ -112,13 +112,52 @@ pub fn build(
             }
         }
         "llvm" => {
-            // LLVM backend (estimation-only — reports estimated sizes)
             let mut llvm_backend = eclexia_llvm::LlvmBackend::new();
             let llvm_module = llvm_backend
                 .generate(&mir_file)
                 .map_err(|e| miette::miette!("LLVM code generation failed: {}", e))?;
 
-            println!("✓ Build analysis (target: llvm — estimation-only, no real codegen yet)");
+            let output_base = _output
+                .map(|path| path.with_extension(""))
+                .unwrap_or_else(|| input.with_extension(""));
+            let ll_path = output_base.with_extension("ll");
+            let obj_path = output_base.with_extension("o");
+
+            if let Some(parent) = ll_path.parent() {
+                std::fs::create_dir_all(parent)
+                    .into_diagnostic()
+                    .wrap_err_with(|| format!("Failed to create directory {}", parent.display()))?;
+            }
+
+            llvm_module
+                .write_to_file(&ll_path)
+                .into_diagnostic()
+                .wrap_err_with(|| format!("Failed to write LLVM IR to {}", ll_path.display()))?;
+            println!("  LLVM IR written to {}", ll_path.display());
+
+            let compile_start = Instant::now();
+            let llc_result =
+                llvm_module.compile_with_llc(&ll_path, &obj_path, llvm_module.opt_level);
+            let compile_duration = compile_start.elapsed();
+
+            match llc_result {
+                Ok(()) => println!(
+                    "  Object file written to {} (llc took {} ms)",
+                    obj_path.display(),
+                    compile_duration.as_millis()
+                ),
+                Err(err) => {
+                    return Err(miette::miette!(
+                        "llc failed ({}) after {} ms. LLVM IR is at {}. Install LLVM 17 or run `llc {}` manually.",
+                        err,
+                        compile_duration.as_millis(),
+                        ll_path.display(),
+                        ll_path.display()
+                    ));
+                }
+            }
+
+            println!("✓ Build successful (target: llvm)");
             println!("  {} items parsed", file.items.len());
             println!("  {} functions analyzed", llvm_module.functions.len());
             println!("  Optimization: {}", llvm_module.opt_level);
@@ -382,12 +421,27 @@ fn compile_module_graph(input: &Path) -> miette::Result<()> {
         let interface = ModuleInterface::from_ast(module_id, &file);
         if errors.is_empty() {
             let iface_path = ModuleInterface::interface_path(module_id, &build_dir);
-            if let Err(err) = interface.write_to_file(&iface_path) {
-                errors.push(CompilationError {
-                    module_id: module_id.clone(),
-                    message: format!("failed to write {}: {}", iface_path.display(), err),
-                    severity: ErrorSeverity::Error,
-                });
+            if let Some(parent) = iface_path.parent() {
+                if let Err(err) = std::fs::create_dir_all(parent) {
+                    errors.push(CompilationError {
+                        module_id: module_id.clone(),
+                        message: format!(
+                            "failed to create module interface directory {}: {}",
+                            parent.display(),
+                            err
+                        ),
+                        severity: ErrorSeverity::Error,
+                    });
+                }
+            }
+            if errors.is_empty() {
+                if let Err(err) = interface.write_to_file(&iface_path) {
+                    errors.push(CompilationError {
+                        module_id: module_id.clone(),
+                        message: format!("failed to write {}: {}", iface_path.display(), err),
+                        severity: ErrorSeverity::Error,
+                    });
+                }
             }
         }
 
@@ -470,14 +524,13 @@ fn apply_module_interfaces(
 
     for iface in interfaces {
         let mut mapping: FxHashMap<TypeVar, TypeVar> = FxHashMap::default();
-        let mut freshen = |ty: &Ty| freshen_type_with_map(checker, ty, &mut mapping);
 
         for func in &iface.functions {
             let raw_ty = Ty::Function {
                 params: func.params.iter().map(|p| p.ty.clone()).collect(),
                 ret: Box::new(func.return_type.clone()),
             };
-            let func_ty = freshen(&raw_ty);
+            let func_ty = freshen_type_with_map(checker, &raw_ty, &mut mapping);
             checker
                 .env_mut()
                 .insert_mono(smol_str::SmolStr::new(func.name.clone()), func_ty);
@@ -488,7 +541,12 @@ fn apply_module_interfaces(
                 eclexia_modules::interface::TypeDefKind::Struct { fields } => {
                     let field_info = fields
                         .iter()
-                        .map(|f| (smol_str::SmolStr::new(f.name.clone()), freshen(&f.ty)))
+                        .map(|f| {
+                            (
+                                smol_str::SmolStr::new(f.name.clone()),
+                                freshen_type_with_map(checker, &f.ty, &mut mapping),
+                            )
+                        })
                         .collect();
                     checker
                         .env_mut()
@@ -509,7 +567,7 @@ fn apply_module_interfaces(
                             let params = variant
                                 .fields
                                 .iter()
-                                .map(|f| freshen(&f.ty))
+                                .map(|f| freshen_type_with_map(checker, &f.ty, &mut mapping))
                                 .collect();
                             let ctor_ty = Ty::Function {
                                 params,
@@ -518,15 +576,14 @@ fn apply_module_interfaces(
                                     args: vec![],
                                 }),
                             };
-                            checker.env_mut().insert_mono(
-                                smol_str::SmolStr::new(variant.name.clone()),
-                                ctor_ty,
-                            );
+                            checker
+                                .env_mut()
+                                .insert_mono(smol_str::SmolStr::new(variant.name.clone()), ctor_ty);
                         }
                     }
                 }
                 eclexia_modules::interface::TypeDefKind::Alias { target } => {
-                    let alias_ty = freshen(target);
+                    let alias_ty = freshen_type_with_map(checker, target, &mut mapping);
                     checker
                         .env_mut()
                         .insert_mono(smol_str::SmolStr::new(typedef.name.clone()), alias_ty);
@@ -543,7 +600,7 @@ fn apply_module_interfaces(
                         params: m.params.iter().map(|p| p.ty.clone()).collect(),
                         ret: Box::new(m.return_type.clone()),
                     };
-                    let method_ty = freshen(&raw_ty);
+                    let method_ty = freshen_type_with_map(checker, &raw_ty, &mut mapping);
                     (smol_str::SmolStr::new(m.name.clone()), method_ty)
                 })
                 .collect();
@@ -553,7 +610,7 @@ fn apply_module_interfaces(
         }
 
         for constant in &iface.constants {
-            let const_ty = freshen(&constant.ty);
+            let const_ty = freshen_type_with_map(checker, &constant.ty, &mut mapping);
             checker
                 .env_mut()
                 .insert_mono(smol_str::SmolStr::new(constant.name.clone()), const_ty);
@@ -996,7 +1053,7 @@ pub fn check(input: &Path) -> miette::Result<()> {
         .into_diagnostic()
         .wrap_err_with(|| format!("Failed to read {}", input.display()))?;
 
-    let (file, parse_errors) = eclexia_parser::parse(&source);
+    let (_file, parse_errors) = eclexia_parser::parse(&source);
 
     if !parse_errors.is_empty() {
         eprintln!("Parse errors:");

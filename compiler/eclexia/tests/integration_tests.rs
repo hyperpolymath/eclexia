@@ -58,6 +58,28 @@ fn run_eclexia_program(code: &str) -> Result<String, String> {
     }
 }
 
+fn eclexia_build_command(example: &PathBuf, output_base: &PathBuf) -> Command {
+    if let Ok(exe_path) = std::env::var("CARGO_BIN_EXE_eclexia") {
+        let mut cmd = Command::new(exe_path);
+        cmd.arg("build");
+        cmd.arg(example);
+        cmd.arg("--target");
+        cmd.arg("llvm");
+        cmd.arg("--output");
+        cmd.arg(output_base);
+        cmd
+    } else {
+        let mut cmd = Command::new("cargo");
+        cmd.args(["run", "--", "build"]);
+        cmd.arg(example);
+        cmd.arg("--target");
+        cmd.arg("llvm");
+        cmd.arg("--output");
+        cmd.arg(output_base);
+        cmd
+    }
+}
+
 #[test]
 fn integration_hello_world() {
     let code = r#"
@@ -322,4 +344,97 @@ fn main() {
     if result.is_ok() {
         println!("✓ Carbon-aware scheduling works!");
     }
+}
+
+#[test]
+fn integration_llvm_native_target() {
+    let source_path = unique_temp_path();
+    let code = r#"
+fn main() -> Int {
+    42
+}
+"#;
+    std::fs::write(&source_path, code).expect("Failed to write temp Eclexia source");
+
+    let output_base = unique_temp_path().with_extension("");
+    let mut command = eclexia_build_command(&source_path, &output_base);
+    let output = command
+        .output()
+        .expect("Failed to run `eclexia build --target llvm`");
+
+    assert!(
+        output.status.success(),
+        "LLVM build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let ll_path = output_base.with_extension("ll");
+    let obj_path = output_base.with_extension("o");
+
+    assert!(
+        ll_path.is_file(),
+        "LLVM IR not created; check output: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        obj_path.is_file(),
+        "Object file missing; check llc output: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let _ = std::fs::remove_file(&ll_path);
+    let _ = std::fs::remove_file(&obj_path);
+    let _ = std::fs::remove_file(&source_path);
+}
+
+#[test]
+fn integration_llvm_native_target_fails_when_llc_missing() {
+    let exe_path = match std::env::var("CARGO_BIN_EXE_eclexia") {
+        Ok(path) => path,
+        Err(_) => return,
+    };
+
+    let source_path = unique_temp_path();
+    let code = r#"
+fn main() -> Int {
+    7
+}
+"#;
+    std::fs::write(&source_path, code).expect("Failed to write temp Eclexia source");
+
+    let output_base = unique_temp_path().with_extension("");
+    let mut command = Command::new(exe_path);
+    command.arg("build");
+    command.arg(&source_path);
+    command.arg("--target");
+    command.arg("llvm");
+    command.arg("--output");
+    command.arg(&output_base);
+    command.env("PATH", "/nonexistent");
+
+    let output = command
+        .output()
+        .expect("Failed to run LLVM build command for llc-missing test");
+
+    assert!(
+        !output.status.success(),
+        "LLVM build should fail when llc is missing"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("llc failed"),
+        "Expected llc failure message, got stderr: {}",
+        stderr
+    );
+
+    let ll_path = output_base.with_extension("ll");
+    assert!(
+        ll_path.is_file(),
+        "LLVM IR should still be emitted even when llc is missing"
+    );
+
+    let _ = std::fs::remove_file(&ll_path);
+    let _ = std::fs::remove_file(output_base.with_extension("o"));
+    let _ = std::fs::remove_file(&source_path);
 }

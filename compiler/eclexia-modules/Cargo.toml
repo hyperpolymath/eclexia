@@ -11,7 +11,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-eclexia-ast = { path = "../eclexia-ast", features = ["serde"] }
+eclexia-ast = { path = "../eclexia-ast", features = ["serde-types"] }
 eclexia-parser = { path = "../eclexia-parser" }
 eclexia-typeck = { path = "../eclexia-typeck" }
 

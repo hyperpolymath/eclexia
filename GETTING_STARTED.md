@@ -2,12 +2,14 @@
 
 Eclexia is an "Economics-as-Code" programming language that brings resource-aware computing to software development. This guide will help you get up and running quickly.
 
-> **Status (2026-02-09):** Eclexia is under active development (~55% complete).
+> **Status (2026-02-11):** Eclexia is under active development (~55% complete).
 > The compiler pipeline (lexer, parser, type checker, HIR/MIR, bytecode VM) works
-> for core language features. Adaptive functions, domain-specific libraries, and
-> native code backends (LLVM, Cranelift, WASM) are **not yet implemented**.
-> The `run` command uses a tree-walking interpreter; `build` emits bytecode (JSON
-> or `.eclb` binary) for the stack-based VM.
+> for core language features. The LLVM native backend is now producing LLVM IR
+> (`.ll`) and invoking `llc` to emit an object file (`.o`), while adaptive
+> functions, domain-specific libraries, and the remaining native backends (Cranelift,
+> WASM) are still in progress. The `run` command uses the tree-walking interpreter;
+> `build` with no `--target` flag still emits bytecode (JSON or `.eclb`) for the
+> stack-based VM.
 
 ## Installation
 
@@ -120,6 +122,7 @@ via the `Resource` type in the type checker.
 |---------|-------------|
 | `eclexia run <file>` | Execute via tree-walking interpreter |
 | `eclexia build <file> -o <out>` | Compile to bytecode (JSON or `.eclb`) |
+| `eclexia build <file> --target llvm` | Emit LLVM IR (`.ll`) and run `llc` to produce a native object (`.o`). Requires LLVM 17+ on the PATH; the CLI reports artifact paths and exits non-zero if `llc` fails. |
 | `eclexia check <file>` | Type-check without running |
 | `eclexia init [name]` | Create a new project |
 | `eclexia fmt <files>` | Format source files |
@@ -152,6 +155,13 @@ eclexia build examples/minimal.ecl -o /tmp/out.eclb
 # Execute via the stack-based VM
 eclexia run /tmp/out.eclb
 ```
+
+### LLVM Target Workflow
+
+1. Install LLVM 17 (`brew install llvm@17`, `sudo apt install llvm-17`, or `sudo dnf install llvm-17`).
+2. Run `eclexia build examples/hello_world.ecl --target llvm` to emit `examples/hello_world.ll`.
+3. The CLI will automatically run `llc` and write `examples/hello_world.o`; if `llc` is missing or fails, the command exits non-zero but keeps the `.ll` file and prints how to run `llc` manually.
+4. Link the `.o` file with `runtime/eclexia-runtime` (via `clang` or `gcc`) to produce a runnable binary, then execute it directly.
 
 > **Note:** The `build` command compiles through the full pipeline (parse →
 > typecheck → HIR → MIR → bytecode). Currently only pure-function programs

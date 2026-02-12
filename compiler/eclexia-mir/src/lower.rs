@@ -573,6 +573,38 @@ impl<'hir> LoweringContext<'hir> {
                 }
             }
             hir::ExprKind::ContinueExpr { .. } | hir::ExprKind::Literal(_) => {}
+            // Concurrency primitives
+            hir::ExprKind::Spawn { body } => {
+                self.collect_locals_in_expr(*body, used, seen);
+            }
+            hir::ExprKind::Channel { capacity, .. } => {
+                if let Some(cap) = capacity {
+                    self.collect_locals_in_expr(*cap, used, seen);
+                }
+            }
+            hir::ExprKind::Send { channel, value } => {
+                self.collect_locals_in_expr(*channel, used, seen);
+                self.collect_locals_in_expr(*value, used, seen);
+            }
+            hir::ExprKind::Recv { channel } => {
+                self.collect_locals_in_expr(*channel, used, seen);
+            }
+            hir::ExprKind::Select { arms } => {
+                for arm in arms {
+                    self.collect_locals_in_expr(arm.channel, used, seen);
+                    self.collect_locals_in_expr(arm.body, used, seen);
+                }
+            }
+            hir::ExprKind::Yield { value } => {
+                if let Some(val) = value {
+                    self.collect_locals_in_expr(*val, used, seen);
+                }
+            }
+            hir::ExprKind::MacroCall { args, .. } => {
+                for arg in args {
+                    self.collect_locals_in_expr(*arg, used, seen);
+                }
+            }
         }
     }
 
@@ -1422,6 +1454,80 @@ impl<'hir> LoweringContext<'hir> {
                         kind: ConstantKind::Unit,
                     }))
                 }
+            }
+
+            // Concurrency primitives - for now, emit Nop and return unit
+            // TODO: Implement proper runtime intrinsic calls
+            hir::ExprKind::Spawn { body } => {
+                // Evaluate body for side effects, then emit Nop
+                let _ = self.lower_expr(*body);
+                self.emit(expr.span, InstructionKind::Nop);
+                Value::Constant(self.mir.constants.alloc(Constant {
+                    ty: Ty::Primitive(PrimitiveTy::Unit),
+                    kind: ConstantKind::Unit,
+                }))
+            }
+            hir::ExprKind::Channel { capacity, .. } => {
+                // Evaluate capacity for side effects if present
+                if let Some(cap) = capacity {
+                    let _ = self.lower_expr(*cap);
+                }
+                self.emit(expr.span, InstructionKind::Nop);
+                Value::Constant(self.mir.constants.alloc(Constant {
+                    ty: Ty::Primitive(PrimitiveTy::Unit),
+                    kind: ConstantKind::Unit,
+                }))
+            }
+            hir::ExprKind::Send { channel, value } => {
+                // Evaluate both operands for side effects
+                let _ = self.lower_expr(*channel);
+                let _ = self.lower_expr(*value);
+                self.emit(expr.span, InstructionKind::Nop);
+                Value::Constant(self.mir.constants.alloc(Constant {
+                    ty: Ty::Primitive(PrimitiveTy::Unit),
+                    kind: ConstantKind::Unit,
+                }))
+            }
+            hir::ExprKind::Recv { channel } => {
+                let _ = self.lower_expr(*channel);
+                self.emit(expr.span, InstructionKind::Nop);
+                Value::Constant(self.mir.constants.alloc(Constant {
+                    ty: Ty::Primitive(PrimitiveTy::Unit),
+                    kind: ConstantKind::Unit,
+                }))
+            }
+            hir::ExprKind::Select { arms } => {
+                // Evaluate all arms for side effects
+                for arm in arms {
+                    let _ = self.lower_expr(arm.channel);
+                    let _ = self.lower_expr(arm.body);
+                }
+                self.emit(expr.span, InstructionKind::Nop);
+                Value::Constant(self.mir.constants.alloc(Constant {
+                    ty: Ty::Primitive(PrimitiveTy::Unit),
+                    kind: ConstantKind::Unit,
+                }))
+            }
+            hir::ExprKind::Yield { value } => {
+                if let Some(val) = value {
+                    let _ = self.lower_expr(*val);
+                }
+                self.emit(expr.span, InstructionKind::Nop);
+                Value::Constant(self.mir.constants.alloc(Constant {
+                    ty: Ty::Primitive(PrimitiveTy::Unit),
+                    kind: ConstantKind::Unit,
+                }))
+            }
+            hir::ExprKind::MacroCall { args, .. } => {
+                // Evaluate all arguments for side effects
+                for arg in args {
+                    let _ = self.lower_expr(*arg);
+                }
+                self.emit(expr.span, InstructionKind::Nop);
+                Value::Constant(self.mir.constants.alloc(Constant {
+                    ty: Ty::Primitive(PrimitiveTy::Unit),
+                    kind: ConstantKind::Unit,
+                }))
             }
         }
     }

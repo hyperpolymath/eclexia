@@ -26,10 +26,10 @@
 use eclexia_ast::types::{PrimitiveTy, Ty};
 use eclexia_codegen::{Backend, CodegenError};
 use eclexia_mir::{
-    BasicBlock, BinaryOp, BlockId, ConstantKind, Function, InstructionKind, MirFile, Terminator,
-    UnaryOp, Value,
+    BasicBlock, BinaryOp, BlockId, ConstantKind, ConstraintOp, Function, InstructionKind, MirFile,
+    Terminator, UnaryOp, Value,
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
 // ---------------------------------------------------------------------------
@@ -37,18 +37,41 @@ use smol_str::SmolStr;
 // ---------------------------------------------------------------------------
 
 /// Map an Eclexia `Ty` to its LLVM IR type string.
-fn ty_to_llvm(ty: &Ty) -> &'static str {
+fn sanitize_struct_name(name: &SmolStr) -> String {
+    let sanitized: String = name
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect();
+    if sanitized.is_empty() {
+        "unnamed".to_string()
+    } else {
+        sanitized
+    }
+}
+
+fn ty_to_llvm(ty: &Ty, ctx: &mut ModuleContext) -> String {
     match ty {
-        Ty::Primitive(p) => prim_to_llvm(*p),
-        Ty::Resource { base, .. } => prim_to_llvm(*base),
-        Ty::Named { .. }
-        | Ty::Function { .. }
-        | Ty::Tuple(_)
-        | Ty::Array { .. }
-        | Ty::ForAll { .. }
-        | Ty::Var(_)
-        | Ty::Error
-        | Ty::Never => "ptr",
+        Ty::Primitive(p) => prim_to_llvm(*p).to_string(),
+        Ty::Resource { base, .. } => prim_to_llvm(*base).to_string(),
+        Ty::Tuple(elems) => {
+            let parts: Vec<String> = elems.iter().map(|elem| ty_to_llvm(elem, ctx)).collect();
+            format!("{{{}}}", parts.join(", "))
+        }
+        Ty::Array { elem, size } => {
+            let elem_ty = ty_to_llvm(elem, ctx);
+            if let Some(len) = size {
+                format!("[{} x {}]", len, elem_ty)
+            } else {
+                format!("ptr")
+            }
+        }
+        Ty::Named { name, .. } => {
+            let struct_name = ctx.declare_struct(name);
+            format!("ptr %struct.{}", struct_name)
+        }
+        Ty::Function { .. } | Ty::ForAll { .. } | Ty::Var(_) | Ty::Error | Ty::Never => {
+            "ptr".to_string()
+        }
     }
 }
 
@@ -84,87 +107,153 @@ fn format_float_hex(f: f64) -> String {
     format!("0x{:016X}", bits)
 }
 
-/// Determine the LLVM type for a Value by tracing through to constants/locals.
-fn infer_value_llvm_type<'a>(value: &Value, func: &Function, mir: &MirFile) -> &'static str {
+#[derive(Clone, Copy)]
+enum InferredValueType<'a> {
+    Ty(&'a Ty),
+    Primitive(PrimitiveTy),
+    Bool,
+    Ptr,
+}
+
+fn local_ty_ref<'a>(id: u32, func: &'a Function) -> Option<&'a Ty> {
+    func.params
+        .iter()
+        .chain(func.locals.iter())
+        .find(|l| l.id == id)
+        .map(|l| &l.ty)
+}
+
+fn tuple_field_index(field: &SmolStr) -> Option<usize> {
+    field.parse::<usize>().ok()
+}
+
+fn const_index(value: &Value, mir: &MirFile) -> Option<usize> {
     match value {
-        Value::Constant(id) => ty_to_llvm(&mir.constants[*id].ty),
-        Value::Local(id) => {
-            let all_locals = func.params.iter().chain(func.locals.iter());
-            all_locals
-                .into_iter()
-                .find(|l| l.id == *id)
-                .map(|l| ty_to_llvm(&l.ty))
-                .unwrap_or("i64")
-        }
-        Value::Binary { op, lhs, .. } => {
-            // Comparison ops always return i1
-            match op {
-                BinaryOp::Eq
-                | BinaryOp::Ne
-                | BinaryOp::Lt
-                | BinaryOp::Le
-                | BinaryOp::Gt
-                | BinaryOp::Ge => "i1",
-                BinaryOp::And | BinaryOp::Or => "i1",
-                _ => infer_value_llvm_type(lhs, func, mir),
-            }
-        }
-        Value::Unary { op, operand } => match op {
-            UnaryOp::Not => "i1",
-            _ => infer_value_llvm_type(operand, func, mir),
+        Value::Constant(id) => match mir.constants[*id].kind {
+            ConstantKind::Int(idx) if idx >= 0 => Some(idx as usize),
+            _ => None,
         },
-        Value::Cast { target_ty, .. } => ty_to_llvm(target_ty),
-        Value::Load { .. } | Value::Field { .. } | Value::Index { .. } => "i64",
+        _ => None,
+    }
+}
+
+fn infer_value_type<'a>(
+    value: &'a Value,
+    func: &'a Function,
+    mir: &'a MirFile,
+) -> Option<InferredValueType<'a>> {
+    match value {
+        Value::Constant(id) => Some(InferredValueType::Ty(&mir.constants[*id].ty)),
+        Value::Local(id) => local_ty_ref(*id, func).map(InferredValueType::Ty),
+        Value::Binary { op, lhs, .. } => match op {
+            BinaryOp::Eq
+            | BinaryOp::Ne
+            | BinaryOp::Lt
+            | BinaryOp::Le
+            | BinaryOp::Gt
+            | BinaryOp::Ge
+            | BinaryOp::And
+            | BinaryOp::Or => Some(InferredValueType::Bool),
+            _ => infer_value_type(lhs, func, mir),
+        },
+        Value::Unary { op, operand } => match op {
+            UnaryOp::Not => Some(InferredValueType::Bool),
+            _ => infer_value_type(operand, func, mir),
+        },
+        Value::Cast { target_ty, .. } => Some(InferredValueType::Ty(target_ty)),
+        Value::Load { ptr } => match infer_value_type(ptr, func, mir) {
+            Some(InferredValueType::Ty(Ty::Array { elem, .. })) => {
+                Some(InferredValueType::Ty(elem.as_ref()))
+            }
+            Some(InferredValueType::Ty(Ty::Primitive(PrimitiveTy::String))) => {
+                Some(InferredValueType::Primitive(PrimitiveTy::Char))
+            }
+            Some(InferredValueType::Ty(ty)) => Some(InferredValueType::Ty(ty)),
+            Some(InferredValueType::Primitive(p)) => Some(InferredValueType::Primitive(p)),
+            Some(InferredValueType::Bool) => Some(InferredValueType::Bool),
+            Some(InferredValueType::Ptr) => Some(InferredValueType::Ptr),
+            None => None,
+        },
+        Value::Field { base, field } => match infer_value_type(base, func, mir) {
+            Some(InferredValueType::Ty(Ty::Tuple(elems))) => tuple_field_index(field)
+                .and_then(|idx| elems.get(idx))
+                .map(InferredValueType::Ty),
+            Some(InferredValueType::Ty(Ty::Array { .. }))
+                if field.as_str() == "len" || field.as_str() == "length" =>
+            {
+                Some(InferredValueType::Primitive(PrimitiveTy::Int))
+            }
+            Some(InferredValueType::Ty(Ty::Primitive(PrimitiveTy::String)))
+                if field.as_str() == "len" || field.as_str() == "length" =>
+            {
+                Some(InferredValueType::Primitive(PrimitiveTy::Int))
+            }
+            Some(InferredValueType::Ty(Ty::Named { .. })) => Some(InferredValueType::Ptr),
+            Some(InferredValueType::Ptr) => Some(InferredValueType::Ptr),
+            _ => None,
+        },
+        Value::Index { base, index } => match infer_value_type(base, func, mir) {
+            Some(InferredValueType::Ty(Ty::Array { elem, .. })) => {
+                Some(InferredValueType::Ty(elem.as_ref()))
+            }
+            Some(InferredValueType::Ty(Ty::Tuple(elems))) => const_index(index, mir)
+                .and_then(|idx| elems.get(idx))
+                .map(InferredValueType::Ty),
+            Some(InferredValueType::Ty(Ty::Primitive(PrimitiveTy::String))) => {
+                Some(InferredValueType::Primitive(PrimitiveTy::Char))
+            }
+            Some(InferredValueType::Ptr) => Some(InferredValueType::Ptr),
+            _ => None,
+        },
+    }
+}
+
+fn inferred_to_llvm(inferred: InferredValueType<'_>, ctx: &mut ModuleContext) -> String {
+    match inferred {
+        InferredValueType::Ty(ty) => ty_to_llvm(ty, ctx),
+        InferredValueType::Primitive(p) => prim_to_llvm(p).to_string(),
+        InferredValueType::Bool => "i1".to_string(),
+        InferredValueType::Ptr => "ptr".to_string(),
+    }
+}
+
+/// Determine the LLVM type for a Value by tracing through to constants/locals.
+fn infer_value_llvm_type<'a>(
+    value: &Value,
+    func: &Function,
+    mir: &MirFile,
+    ctx: &mut ModuleContext,
+) -> String {
+    match infer_value_type(value, func, mir) {
+        Some(inferred) => inferred_to_llvm(inferred, ctx),
+        None => "i64".to_string(),
     }
 }
 
 /// Check if a Value produces a float type.
 fn value_is_float(value: &Value, func: &Function, mir: &MirFile) -> bool {
-    match value {
-        Value::Constant(id) => match &mir.constants[*id].ty {
+    match infer_value_type(value, func, mir) {
+        Some(InferredValueType::Ty(ty)) => match ty {
             Ty::Primitive(p) => is_float_prim(*p),
             Ty::Resource { base, .. } => is_float_prim(*base),
             _ => false,
         },
-        Value::Local(id) => {
-            let all_locals = func.params.iter().chain(func.locals.iter());
-            all_locals
-                .into_iter()
-                .find(|l| l.id == *id)
-                .map(|l| match &l.ty {
-                    Ty::Primitive(p) => is_float_prim(*p),
-                    Ty::Resource { base, .. } => is_float_prim(*base),
-                    _ => false,
-                })
-                .unwrap_or(false)
-        }
-        Value::Binary { lhs, .. } => value_is_float(lhs, func, mir),
-        Value::Unary { operand, .. } => value_is_float(operand, func, mir),
-        Value::Cast { target_ty, .. } => match target_ty {
-            Ty::Primitive(p) => is_float_prim(*p),
-            _ => false,
-        },
+        Some(InferredValueType::Primitive(p)) => is_float_prim(p),
         _ => false,
     }
 }
 
 /// Check if a Value produces an f32 specifically.
 fn value_is_f32(value: &Value, func: &Function, mir: &MirFile) -> bool {
-    match value {
-        Value::Constant(id) => matches!(&mir.constants[*id].ty, Ty::Primitive(PrimitiveTy::F32)),
-        Value::Local(id) => {
-            let all_locals = func.params.iter().chain(func.locals.iter());
-            all_locals
-                .into_iter()
-                .find(|l| l.id == *id)
-                .map(|l| matches!(&l.ty, Ty::Primitive(PrimitiveTy::F32)))
-                .unwrap_or(false)
-        }
-        Value::Binary { lhs, .. } => value_is_f32(lhs, func, mir),
-        Value::Unary { operand, .. } => value_is_f32(operand, func, mir),
-        Value::Cast { target_ty, .. } => matches!(target_ty, Ty::Primitive(PrimitiveTy::F32)),
-        _ => false,
-    }
+    matches!(
+        infer_value_type(value, func, mir),
+        Some(InferredValueType::Ty(Ty::Primitive(PrimitiveTy::F32)))
+            | Some(InferredValueType::Ty(Ty::Resource {
+                base: PrimitiveTy::F32,
+                ..
+            }))
+            | Some(InferredValueType::Primitive(PrimitiveTy::F32))
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +268,16 @@ struct ModuleContext {
     /// Function name → LLVM function index (for call resolution).
     function_indices: FxHashMap<SmolStr, usize>,
     next_str_id: usize,
+    struct_defs: FxHashSet<String>,
+    resource_metadata: Vec<ResourceMetadataEntry>,
+    next_metadata_id: usize,
+}
+
+struct ResourceMetadataEntry {
+    id: usize,
+    resource: SmolStr,
+    op: ConstraintOp,
+    bound: f64,
 }
 
 impl ModuleContext {
@@ -188,6 +287,9 @@ impl ModuleContext {
             extern_decls: Vec::new(),
             function_indices: FxHashMap::default(),
             next_str_id: 0,
+            struct_defs: FxHashSet::default(),
+            resource_metadata: Vec::new(),
+            next_metadata_id: 0,
         }
     }
 
@@ -215,6 +317,60 @@ impl ModuleContext {
     /// Register a function by name with its index.
     fn register_function(&mut self, name: SmolStr, index: usize) {
         self.function_indices.insert(name, index);
+    }
+
+    /// Declare a named struct type and return its LLVM identifier (without `%`).
+    fn declare_struct(&mut self, name: &SmolStr) -> String {
+        let sanitized = sanitize_struct_name(name);
+        self.struct_defs.insert(sanitized.clone());
+        sanitized
+    }
+
+    /// Emit opaque struct declarations for all named types we reported.
+    fn emit_struct_decls(&self) -> String {
+        if self.struct_defs.is_empty() {
+            return String::new();
+        }
+
+        let mut out = String::from("; Named struct declarations\n");
+        for struct_name in &self.struct_defs {
+            out.push_str(&format!("%struct.{} = type opaque\n", struct_name));
+        }
+        out
+    }
+
+    fn register_resource_metadata(
+        &mut self,
+        resource: SmolStr,
+        op: ConstraintOp,
+        bound: f64,
+    ) -> usize {
+        let id = self.next_metadata_id;
+        self.next_metadata_id += 1;
+        self.resource_metadata.push(ResourceMetadataEntry {
+            id,
+            resource,
+            op,
+            bound,
+        });
+        id
+    }
+
+    fn emit_resource_metadata(&self) -> String {
+        if self.resource_metadata.is_empty() {
+            return String::new();
+        }
+        let mut out = String::from("\n; Resource metadata\n");
+        for entry in &self.resource_metadata {
+            out.push_str(&format!(
+                "!{} = !{{!\"{}\", !\"{}\", double {}}}\n",
+                entry.id,
+                entry.resource,
+                constraint_op_string(entry.op),
+                entry.bound
+            ));
+        }
+        out
     }
 
     /// Emit the module header.
@@ -344,7 +500,7 @@ fn lower_value(
                 .get(id)
                 .cloned()
                 .unwrap_or_else(|| format!("%local.{}", id));
-            let ty = local_ty(*id, func);
+            let ty = local_ty(*id, func, ctx);
             if ty == "void" {
                 // Unit locals have no loadable value
                 return Ok("0".to_string());
@@ -386,7 +542,7 @@ fn lower_value(
             let rhs_val = lower_value(builder, rhs, func, mir, ctx)?;
             let is_float = value_is_float(lhs, func, mir);
             let is_f32 = value_is_f32(lhs, func, mir);
-            let operand_ty = infer_value_llvm_type(lhs, func, mir);
+            let operand_ty = infer_value_llvm_type(lhs, func, mir, ctx);
 
             // Float type string for this operation
             let fty = if is_f32 { "float" } else { "double" };
@@ -556,7 +712,7 @@ fn lower_value(
             let operand_val = lower_value(builder, operand, func, mir, ctx)?;
             let is_float = value_is_float(operand, func, mir);
             let is_f32 = value_is_f32(operand, func, mir);
-            let operand_ty = infer_value_llvm_type(operand, func, mir);
+            let operand_ty = infer_value_llvm_type(operand, func, mir, ctx);
             let fty = if is_f32 { "float" } else { "double" };
 
             let reg = builder.fresh_reg();
@@ -580,8 +736,9 @@ fn lower_value(
 
         Value::Load { ptr } => {
             let ptr_val = lower_value(builder, ptr, func, mir, ctx)?;
+            let load_ty = normalize_void_owned(&infer_value_llvm_type(value, func, mir, ctx));
             let reg = builder.fresh_reg();
-            builder.emit(&format!("{} = load i64, ptr {}", reg, ptr_val));
+            builder.emit(&format!("{} = load {}, ptr {}", reg, load_ty, ptr_val));
             Ok(reg)
         }
 
@@ -592,8 +749,8 @@ fn lower_value(
 
         Value::Cast { value, target_ty } => {
             let src_val = lower_value(builder, value, func, mir, ctx)?;
-            let src_ty = infer_value_llvm_type(value, func, mir);
-            let dst_ty = ty_to_llvm(target_ty);
+            let src_ty = infer_value_llvm_type(value, func, mir, ctx);
+            let dst_ty = ty_to_llvm(target_ty, ctx);
 
             if src_ty == dst_ty {
                 return Ok(src_val);
@@ -601,7 +758,7 @@ fn lower_value(
 
             let reg = builder.fresh_reg();
             let src_is_float = value_is_float(value, func, mir);
-            let dst_is_float = matches!(dst_ty, "float" | "double");
+            let dst_is_float = dst_ty == "float" || dst_ty == "double";
 
             if src_is_float && dst_is_float {
                 // Float-to-float conversion
@@ -624,8 +781,8 @@ fn lower_value(
                 ));
             } else {
                 // Int-to-int — pick sext, trunc, or bitcast based on size
-                let src_bits = int_bits(src_ty);
-                let dst_bits = int_bits(dst_ty);
+                let src_bits = int_bits(src_ty.as_str());
+                let dst_bits = int_bits(dst_ty.as_str());
                 if src_bits < dst_bits {
                     builder.emit(&format!(
                         "{} = sext {} {}, {}",
@@ -662,14 +819,114 @@ fn int_bits(ty: &str) -> u32 {
     }
 }
 
+fn is_integer_ty(ty: &str) -> bool {
+    ty.starts_with('i') && ty[1..].chars().all(|c| c.is_ascii_digit())
+}
+
+fn constraint_op_string(op: ConstraintOp) -> &'static str {
+    match op {
+        ConstraintOp::Lt => "<",
+        ConstraintOp::Le => "<=",
+        ConstraintOp::Gt => ">",
+        ConstraintOp::Ge => ">=",
+        ConstraintOp::Eq => "==",
+        ConstraintOp::Ne => "!=",
+    }
+}
+
+fn coerce_condition_to_i1(
+    builder: &mut IrBuilder,
+    condition: &Value,
+    cond_val: String,
+    func: &Function,
+    mir: &MirFile,
+    ctx: &mut ModuleContext,
+) -> String {
+    let cond_ty = normalize_void_owned(&infer_value_llvm_type(condition, func, mir, ctx));
+    if cond_ty == "i1" {
+        return cond_val;
+    }
+
+    let reg = builder.fresh_reg();
+    if is_integer_ty(&cond_ty) {
+        builder.emit(&format!(
+            "{} = icmp ne {} {}, 0",
+            reg, cond_ty, cond_val
+        ));
+        return reg;
+    }
+
+    if cond_ty == "float" || cond_ty == "double" {
+        builder.emit(&format!(
+            "{} = fcmp one {} {}, 0.0",
+            reg, cond_ty, cond_val
+        ));
+        return reg;
+    }
+
+    if cond_ty.starts_with("ptr") {
+        builder.emit(&format!("{} = icmp ne ptr {}, null", reg, cond_val));
+        return reg;
+    }
+
+    builder.emit(&format!(
+        "; unsupported branch condition type {}, forcing false",
+        cond_ty
+    ));
+    "false".to_string()
+}
+
+fn coerce_switch_value(
+    builder: &mut IrBuilder,
+    value: &Value,
+    raw_val: String,
+    func: &Function,
+    mir: &MirFile,
+    ctx: &mut ModuleContext,
+) -> (String, String) {
+    let switch_ty = normalize_void_owned(&infer_value_llvm_type(value, func, mir, ctx));
+    if is_integer_ty(&switch_ty) {
+        return (raw_val, switch_ty);
+    }
+
+    let reg = builder.fresh_reg();
+    if switch_ty == "float" || switch_ty == "double" {
+        builder.emit(&format!("{} = fptosi {} {} to i64", reg, switch_ty, raw_val));
+        return (reg, "i64".to_string());
+    }
+
+    if switch_ty.starts_with("ptr") {
+        builder.emit(&format!("{} = ptrtoint ptr {} to i64", reg, raw_val));
+        return (reg, "i64".to_string());
+    }
+
+    builder.emit(&format!(
+        "; unsupported switch type {}, using zero fallback",
+        switch_ty
+    ));
+    ("0".to_string(), "i64".to_string())
+}
+
+fn normalize_void_type(ty: &str) -> &str {
+    if ty == "void" {
+        "i64"
+    } else {
+        ty
+    }
+}
+
+fn normalize_void_owned(ty: &str) -> String {
+    normalize_void_type(ty).to_string()
+}
+
 /// Look up the LLVM type for a local variable by ID.
-fn local_ty(id: u32, func: &Function) -> &'static str {
+fn local_ty(id: u32, func: &Function, ctx: &mut ModuleContext) -> String {
     let all_locals = func.params.iter().chain(func.locals.iter());
     all_locals
         .into_iter()
         .find(|l| l.id == id)
-        .map(|l| ty_to_llvm(&l.ty))
-        .unwrap_or("i64")
+        .map(|l| ty_to_llvm(&l.ty, ctx))
+        .unwrap_or_else(|| "i64".to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -716,30 +973,39 @@ fn compile_function(
     mir: &MirFile,
     ctx: &mut ModuleContext,
 ) -> Result<String, CodegenError> {
-    let ret_ty = ty_to_llvm(&func.return_ty);
+    let ret_ty = ty_to_llvm(&func.return_ty, ctx);
     let block_labels = build_block_labels(func);
+    let mut metadata_attachments = Vec::new();
+    for constraint in &func.resource_constraints {
+        let id = ctx.register_resource_metadata(
+            constraint.resource.clone(),
+            constraint.op,
+            constraint.bound,
+        );
+        metadata_attachments.push(format!("!eclexia.resource.{} !{}", constraint.resource, id));
+    }
+    let metadata_suffix = if metadata_attachments.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", metadata_attachments.join(" "))
+    };
 
     // Build parameter list
-    let params: Vec<String> = func
-        .params
-        .iter()
-        .enumerate()
-        .map(|(i, local)| {
-            let ty = ty_to_llvm(&local.ty);
-            if ty == "void" {
-                format!("i64 %arg.{}", i)
-            } else {
-                format!("{} %arg.{}", ty, i)
-            }
-        })
-        .collect();
+    let mut params = Vec::new();
+    for (i, local) in func.params.iter().enumerate() {
+        let ty = ty_to_llvm(&local.ty, ctx);
+        let ty_ref = ty.as_str();
+        let param_type = normalize_void_type(ty_ref);
+        params.push(format!("{} %arg.{}", param_type, i));
+    }
 
     let mut out = String::new();
     out.push_str(&format!(
-        "define {} @{}({}) {{\n",
+        "define {} @{}({}){} {{\n",
         ret_ty,
         func.name,
-        params.join(", ")
+        params.join(", "),
+        metadata_suffix
     ));
 
     // Entry label
@@ -749,21 +1015,40 @@ fn compile_function(
 
     // Emit alloca for each parameter and local
     for (i, param) in func.params.iter().enumerate() {
-        let ty = ty_to_llvm(&param.ty);
-        let alloca_ty = if ty == "void" { "i64" } else { ty };
+        let ty = ty_to_llvm(&param.ty, ctx);
+        let ty_ref = ty.as_str();
+        let alloca_ty = normalize_void_type(ty_ref);
         let alloca_name = format!("%local.{}", param.id);
         builder.emit(&format!("{} = alloca {}", alloca_name, alloca_ty));
-        let arg_ty = if ty == "void" { "i64" } else { ty };
-        builder.emit(&format!("store {} %arg.{}, ptr {}", arg_ty, i, alloca_name));
+        builder.emit(&format!(
+            "store {} %arg.{}, ptr {}",
+            alloca_ty, i, alloca_name
+        ));
         builder.local_alloca.insert(param.id, alloca_name);
     }
     for local in &func.locals {
-        let ty = ty_to_llvm(&local.ty);
-        let alloca_ty = if ty == "void" { "i64" } else { ty };
+        let ty = ty_to_llvm(&local.ty, ctx);
+        let ty_ref = ty.as_str();
+        let alloca_ty = normalize_void_type(ty_ref);
         let alloca_name = format!("%local.{}", local.id);
         builder.emit(&format!("{} = alloca {}", alloca_name, alloca_ty));
         builder.local_alloca.insert(local.id, alloca_name);
     }
+
+    // Resource tracking: start timer for LLVM functions
+    ctx.declare_extern("declare ptr @__eclexia_runtime_start_tracking()");
+    ctx.declare_extern("declare void @__eclexia_runtime_stop_tracking(ptr)");
+    let tracking_alloca = format!("%tracking.{}", func.name);
+    builder.emit(&format!("{} = alloca ptr", tracking_alloca));
+    let tracking_reg = builder.fresh_reg();
+    builder.emit(&format!(
+        "{} = call ptr @__eclexia_runtime_start_tracking()",
+        tracking_reg
+    ));
+    builder.emit(&format!(
+        "store ptr {}, ptr {}",
+        tracking_reg, tracking_alloca
+    ));
 
     // Branch from entry to the first real block
     let entry_label = block_labels
@@ -804,8 +1089,8 @@ fn compile_function(
             match &instr.kind {
                 InstructionKind::Assign { target, value } => {
                     let val = lower_value(&mut bb_builder, value, func, mir, ctx)?;
-                    let ty = local_ty(*target, func);
-                    let store_ty = if ty == "void" { "i64" } else { ty };
+                    let ty = local_ty(*target, func, ctx);
+                    let store_ty = normalize_void_owned(&ty);
                     let alloca_name = bb_builder
                         .local_alloca
                         .get(target)
@@ -817,8 +1102,8 @@ fn compile_function(
                 InstructionKind::Store { ptr, value } => {
                     let ptr_val = lower_value(&mut bb_builder, ptr, func, mir, ctx)?;
                     let val = lower_value(&mut bb_builder, value, func, mir, ctx)?;
-                    let val_ty = infer_value_llvm_type(value, func, mir);
-                    let store_ty = if val_ty == "void" { "i64" } else { val_ty };
+                    let val_ty = infer_value_llvm_type(value, func, mir, ctx);
+                    let store_ty = normalize_void_owned(&val_ty);
                     bb_builder.emit(&format!("store {} {}, ptr {}", store_ty, val, ptr_val));
                 }
 
@@ -832,8 +1117,8 @@ fn compile_function(
                     let mut arg_strs: Vec<String> = Vec::new();
                     for arg in args.iter() {
                         let arg_val = lower_value(&mut bb_builder, arg, func, mir, ctx)?;
-                        let arg_ty = infer_value_llvm_type(arg, func, mir);
-                        let emit_ty = if arg_ty == "void" { "i64" } else { arg_ty };
+                        let arg_ty = infer_value_llvm_type(arg, func, mir, ctx);
+                        let emit_ty = normalize_void_owned(&arg_ty);
                         arg_strs.push(format!("{} {}", emit_ty, arg_val));
                     }
 
@@ -852,14 +1137,10 @@ fn compile_function(
 
                     // Determine return type from target local (if any)
                     let call_ret_ty = if let Some(target_id) = target {
-                        let ty = local_ty(*target_id, func);
-                        if ty == "void" {
-                            "i64"
-                        } else {
-                            ty
-                        }
+                        let ty = local_ty(*target_id, func, ctx);
+                        normalize_void_owned(&ty)
                     } else {
-                        "void"
+                        "void".to_string()
                     };
 
                     if let Some(target_id) = target {
@@ -933,6 +1214,7 @@ fn compile_function(
         // Lower terminator
         match &block.terminator {
             Terminator::Return(None) => {
+                emit_tracking_stop(&mut bb_builder, ctx, &tracking_alloca);
                 if ret_ty == "void" {
                     bb_builder.emit("ret void");
                 } else {
@@ -941,6 +1223,7 @@ fn compile_function(
                 }
             }
             Terminator::Return(Some(value)) => {
+                emit_tracking_stop(&mut bb_builder, ctx, &tracking_alloca);
                 let val = lower_value(&mut bb_builder, value, func, mir, ctx)?;
                 if ret_ty == "void" {
                     bb_builder.emit("ret void");
@@ -961,6 +1244,8 @@ fn compile_function(
                 else_block,
             } => {
                 let cond_val = lower_value(&mut bb_builder, condition, func, mir, ctx)?;
+                let cond_i1 =
+                    coerce_condition_to_i1(&mut bb_builder, condition, cond_val, func, mir, ctx);
                 let then_label = block_labels
                     .get(then_block)
                     .cloned()
@@ -971,7 +1256,7 @@ fn compile_function(
                     .unwrap_or_else(|| "bb_else".to_string());
                 bb_builder.emit(&format!(
                     "br i1 {}, label %{}, label %{}",
-                    cond_val, then_label, else_label
+                    cond_i1, then_label, else_label
                 ));
             }
             Terminator::Switch {
@@ -980,8 +1265,8 @@ fn compile_function(
                 default,
             } => {
                 let val = lower_value(&mut bb_builder, value, func, mir, ctx)?;
-                let val_ty = infer_value_llvm_type(value, func, mir);
-                let switch_ty = if val_ty == "void" { "i64" } else { val_ty };
+                let (switch_val, switch_ty) =
+                    coerce_switch_value(&mut bb_builder, value, val, func, mir, ctx);
                 let default_label = block_labels
                     .get(default)
                     .cloned()
@@ -999,7 +1284,7 @@ fn compile_function(
                 }
                 bb_builder.emit(&format!(
                     "switch {} {}, label %{} [{}",
-                    switch_ty, val, default_label, cases
+                    switch_ty, switch_val, default_label, cases
                 ));
                 bb_builder.emit("]");
             }
@@ -1015,6 +1300,16 @@ fn compile_function(
 
     out.push_str("}\n");
     Ok(out)
+}
+
+fn emit_tracking_stop(builder: &mut IrBuilder, ctx: &mut ModuleContext, tracking_alloca: &str) {
+    ctx.declare_extern("declare void @__eclexia_runtime_stop_tracking(ptr)");
+    let load_reg = builder.fresh_reg();
+    builder.emit(&format!("{} = load ptr, ptr {}", load_reg, tracking_alloca));
+    builder.emit(&format!(
+        "call void @__eclexia_runtime_stop_tracking(ptr {})",
+        load_reg
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -1210,6 +1505,7 @@ impl Backend for LlvmBackend {
         let mut module_ir = ctx.emit_header();
         module_ir.push_str(&ctx.emit_string_constants());
         module_ir.push_str(&ctx.emit_extern_decls());
+        module_ir.push_str(&ctx.emit_struct_decls());
         module_ir.push('\n');
 
         let mut functions = Vec::new();
@@ -1233,6 +1529,7 @@ impl Backend for LlvmBackend {
             module_ir.push_str(ir);
             module_ir.push('\n');
         }
+        module_ir.push_str(&ctx.emit_resource_metadata());
 
         let total_size = module_ir.len();
 
@@ -1570,6 +1867,47 @@ mod tests {
         }
     }
 
+    fn make_loop_mir() -> MirFile {
+        let mut basic_blocks: Arena<BasicBlock> = Arena::new();
+        let entry = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("loop_entry"),
+            instructions: vec![],
+            terminator: Terminator::Return(None),
+        });
+
+        let body = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("loop_body"),
+            instructions: vec![Instruction {
+                span: Span::new(0, 0),
+                kind: InstructionKind::Nop,
+            }],
+            terminator: Terminator::Goto(entry),
+        });
+
+        basic_blocks[entry] = BasicBlock {
+            label: SmolStr::new("loop_entry"),
+            instructions: vec![],
+            terminator: Terminator::Goto(body),
+        };
+
+        let func = Function {
+            span: Span::new(0, 0),
+            name: SmolStr::new("loop_test"),
+            params: vec![],
+            return_ty: Ty::Primitive(PrimitiveTy::Unit),
+            locals: vec![],
+            basic_blocks,
+            entry_block: entry,
+            resource_constraints: vec![],
+            is_adaptive: false,
+        };
+
+        MirFile {
+            functions: vec![func],
+            constants: Arena::new(),
+        }
+    }
+
     fn make_string_mir() -> MirFile {
         let mut constants: Arena<Constant> = Arena::new();
         let c_hello = constants.alloc(Constant {
@@ -1705,6 +2043,225 @@ mod tests {
         }
     }
 
+    fn make_merge_branch_int_cond_mir() -> MirFile {
+        let mut constants: Arena<Constant> = Arena::new();
+        let c_cond = constants.alloc(Constant {
+            ty: Ty::Primitive(PrimitiveTy::Int),
+            kind: ConstantKind::Int(1),
+        });
+        let c_then = constants.alloc(Constant {
+            ty: Ty::Primitive(PrimitiveTy::Int),
+            kind: ConstantKind::Int(10),
+        });
+        let c_else = constants.alloc(Constant {
+            ty: Ty::Primitive(PrimitiveTy::Int),
+            kind: ConstantKind::Int(20),
+        });
+
+        let mut basic_blocks: Arena<BasicBlock> = Arena::new();
+        let merge_block = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("merge"),
+            instructions: vec![],
+            terminator: Terminator::Return(Some(Value::Local(0))),
+        });
+        let then_block = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("then"),
+            instructions: vec![Instruction {
+                span: Span::new(0, 0),
+                kind: InstructionKind::Assign {
+                    target: 0,
+                    value: Value::Constant(c_then),
+                },
+            }],
+            terminator: Terminator::Goto(merge_block),
+        });
+        let else_block = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("else"),
+            instructions: vec![Instruction {
+                span: Span::new(0, 0),
+                kind: InstructionKind::Assign {
+                    target: 0,
+                    value: Value::Constant(c_else),
+                },
+            }],
+            terminator: Terminator::Goto(merge_block),
+        });
+        let entry = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("entry"),
+            instructions: vec![],
+            terminator: Terminator::Branch {
+                condition: Value::Constant(c_cond),
+                then_block,
+                else_block,
+            },
+        });
+
+        let func = Function {
+            span: Span::new(0, 0),
+            name: SmolStr::new("merge_branch"),
+            params: vec![],
+            return_ty: Ty::Primitive(PrimitiveTy::Int),
+            locals: vec![Local {
+                id: 0,
+                name: SmolStr::new("result"),
+                ty: Ty::Primitive(PrimitiveTy::Int),
+                mutable: true,
+            }],
+            basic_blocks,
+            entry_block: entry,
+            resource_constraints: vec![],
+            is_adaptive: false,
+        };
+
+        MirFile {
+            functions: vec![func],
+            constants,
+        }
+    }
+
+    fn make_branch_unreachable_mir() -> MirFile {
+        let mut constants: Arena<Constant> = Arena::new();
+        let c_true = constants.alloc(Constant {
+            ty: Ty::Primitive(PrimitiveTy::Bool),
+            kind: ConstantKind::Bool(true),
+        });
+        let c_ret = constants.alloc(Constant {
+            ty: Ty::Primitive(PrimitiveTy::Int),
+            kind: ConstantKind::Int(1),
+        });
+
+        let mut basic_blocks: Arena<BasicBlock> = Arena::new();
+        let then_block = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("then"),
+            instructions: vec![],
+            terminator: Terminator::Return(Some(Value::Constant(c_ret))),
+        });
+        let else_block = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("else"),
+            instructions: vec![],
+            terminator: Terminator::Unreachable,
+        });
+        let entry = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("entry"),
+            instructions: vec![],
+            terminator: Terminator::Branch {
+                condition: Value::Constant(c_true),
+                then_block,
+                else_block,
+            },
+        });
+
+        let func = Function {
+            span: Span::new(0, 0),
+            name: SmolStr::new("branch_unreachable"),
+            params: vec![],
+            return_ty: Ty::Primitive(PrimitiveTy::Int),
+            locals: vec![],
+            basic_blocks,
+            entry_block: entry,
+            resource_constraints: vec![],
+            is_adaptive: false,
+        };
+
+        MirFile {
+            functions: vec![func],
+            constants,
+        }
+    }
+
+    fn make_switch_float_mir() -> MirFile {
+        let mut constants: Arena<Constant> = Arena::new();
+        let c_switch = constants.alloc(Constant {
+            ty: Ty::Primitive(PrimitiveTy::Float),
+            kind: ConstantKind::Float(2.0),
+        });
+        let c_hit = constants.alloc(Constant {
+            ty: Ty::Primitive(PrimitiveTy::Int),
+            kind: ConstantKind::Int(99),
+        });
+        let c_miss = constants.alloc(Constant {
+            ty: Ty::Primitive(PrimitiveTy::Int),
+            kind: ConstantKind::Int(0),
+        });
+
+        let mut basic_blocks: Arena<BasicBlock> = Arena::new();
+        let hit_block = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("hit"),
+            instructions: vec![],
+            terminator: Terminator::Return(Some(Value::Constant(c_hit))),
+        });
+        let default_block = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("default"),
+            instructions: vec![],
+            terminator: Terminator::Return(Some(Value::Constant(c_miss))),
+        });
+        let entry = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("entry"),
+            instructions: vec![],
+            terminator: Terminator::Switch {
+                value: Value::Constant(c_switch),
+                targets: vec![(2, hit_block)],
+                default: default_block,
+            },
+        });
+
+        let func = Function {
+            span: Span::new(0, 0),
+            name: SmolStr::new("switch_float"),
+            params: vec![],
+            return_ty: Ty::Primitive(PrimitiveTy::Int),
+            locals: vec![],
+            basic_blocks,
+            entry_block: entry,
+            resource_constraints: vec![],
+            is_adaptive: false,
+        };
+
+        MirFile {
+            functions: vec![func],
+            constants,
+        }
+    }
+
+    fn make_resource_metadata_mir() -> MirFile {
+        let mut basic_blocks: Arena<BasicBlock> = Arena::new();
+        let entry = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("entry"),
+            instructions: vec![],
+            terminator: Terminator::Return(None),
+        });
+
+        let func = Function {
+            span: Span::new(0, 0),
+            name: SmolStr::new("with_budget"),
+            params: vec![],
+            return_ty: Ty::Primitive(PrimitiveTy::Unit),
+            locals: vec![],
+            basic_blocks,
+            entry_block: entry,
+            resource_constraints: vec![
+                eclexia_mir::ResourceConstraint {
+                    resource: SmolStr::new("energy"),
+                    dimension: zero_dim(),
+                    op: ConstraintOp::Le,
+                    bound: 10.0,
+                },
+                eclexia_mir::ResourceConstraint {
+                    resource: SmolStr::new("carbon"),
+                    dimension: zero_dim(),
+                    op: ConstraintOp::Lt,
+                    bound: 2.5,
+                },
+            ],
+            is_adaptive: false,
+        };
+
+        MirFile {
+            functions: vec![func],
+            constants: Arena::new(),
+        }
+    }
+
     fn make_unreachable_mir() -> MirFile {
         let mut basic_blocks: Arena<BasicBlock> = Arena::new();
         let entry = basic_blocks.alloc(BasicBlock {
@@ -1728,6 +2285,86 @@ mod tests {
         MirFile {
             functions: vec![func],
             constants: Arena::new(),
+        }
+    }
+
+    fn make_probe_function(locals: Vec<Local>) -> Function {
+        let mut basic_blocks: Arena<BasicBlock> = Arena::new();
+        let entry = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("entry"),
+            instructions: vec![],
+            terminator: Terminator::Return(None),
+        });
+
+        Function {
+            span: Span::new(0, 0),
+            name: SmolStr::new("probe"),
+            params: vec![],
+            return_ty: Ty::Primitive(PrimitiveTy::Unit),
+            locals,
+            basic_blocks,
+            entry_block: entry,
+            resource_constraints: vec![],
+            is_adaptive: false,
+        }
+    }
+
+    fn make_typed_load_mir() -> MirFile {
+        let mut constants: Arena<Constant> = Arena::new();
+        let c_idx = constants.alloc(Constant {
+            ty: Ty::Primitive(PrimitiveTy::Int),
+            kind: ConstantKind::Int(0),
+        });
+
+        let mut basic_blocks: Arena<BasicBlock> = Arena::new();
+        let entry = basic_blocks.alloc(BasicBlock {
+            label: SmolStr::new("entry"),
+            instructions: vec![Instruction {
+                span: Span::new(0, 0),
+                kind: InstructionKind::Assign {
+                    target: 1,
+                    value: Value::Load {
+                        ptr: Box::new(Value::Index {
+                            base: Box::new(Value::Local(0)),
+                            index: Box::new(Value::Constant(c_idx)),
+                        }),
+                    },
+                },
+            }],
+            terminator: Terminator::Return(Some(Value::Local(1))),
+        });
+
+        let func = Function {
+            span: Span::new(0, 0),
+            name: SmolStr::new("typed_load"),
+            params: vec![],
+            return_ty: Ty::Primitive(PrimitiveTy::F32),
+            locals: vec![
+                Local {
+                    id: 0,
+                    name: SmolStr::new("arr"),
+                    ty: Ty::Array {
+                        elem: Box::new(Ty::Primitive(PrimitiveTy::F32)),
+                        size: Some(4),
+                    },
+                    mutable: true,
+                },
+                Local {
+                    id: 1,
+                    name: SmolStr::new("out"),
+                    ty: Ty::Primitive(PrimitiveTy::F32),
+                    mutable: true,
+                },
+            ],
+            basic_blocks,
+            entry_block: entry,
+            resource_constraints: vec![],
+            is_adaptive: false,
+        };
+
+        MirFile {
+            functions: vec![func],
+            constants,
         }
     }
 
@@ -1847,6 +2484,41 @@ mod tests {
     }
 
     #[test]
+    fn test_llvm_ir_branch_condition_is_coerced_to_i1() {
+        let mut backend = LlvmBackend::new();
+        let mir = make_merge_branch_int_cond_mir();
+        let module = backend.generate(&mir).unwrap_ok();
+        let ir = module.ir();
+
+        assert!(ir.contains("icmp ne i64 1, 0"));
+        assert!(ir.contains("merge_"));
+        assert!(ir.contains("ret i64"));
+    }
+
+    #[test]
+    fn test_llvm_ir_branch_with_unreachable_edge() {
+        let mut backend = LlvmBackend::new();
+        let mir = make_branch_unreachable_mir();
+        let module = backend.generate(&mir).unwrap_ok();
+        let ir = module.ir();
+
+        assert!(ir.contains("br i1"));
+        assert!(ir.contains("unreachable"));
+    }
+
+    #[test]
+    fn test_llvm_ir_goto_loop() {
+        let mut backend = LlvmBackend::new();
+        let mir = make_loop_mir();
+        let module = backend.generate(&mir).unwrap_ok();
+        let ir = module.ir();
+
+        assert!(ir.contains("br label %loop_entry"));
+        assert!(ir.contains("br label %loop_body"));
+        assert!(ir.contains("define void @loop_test()"));
+    }
+
+    #[test]
     fn test_llvm_ir_function_params() {
         let mut backend = LlvmBackend::new();
         let mir = make_params_mir();
@@ -1884,6 +2556,32 @@ mod tests {
     }
 
     #[test]
+    fn test_llvm_ir_runtime_tracking_hooks() {
+        let mut backend = LlvmBackend::new();
+        let mir = make_test_mir();
+        let module = backend.generate(&mir).unwrap_ok();
+        let ir = module.ir();
+
+        assert!(ir.contains("declare ptr @__eclexia_runtime_start_tracking()"));
+        assert!(ir.contains("declare void @__eclexia_runtime_stop_tracking(ptr)"));
+        assert!(ir.contains("call ptr @__eclexia_runtime_start_tracking()"));
+        assert!(ir.contains("call void @__eclexia_runtime_stop_tracking(ptr"));
+    }
+
+    #[test]
+    fn test_llvm_ir_function_resource_metadata() {
+        let mut backend = LlvmBackend::new();
+        let mir = make_resource_metadata_mir();
+        let module = backend.generate(&mir).unwrap_ok();
+        let ir = module.ir();
+
+        assert!(ir.contains("define void @with_budget() !eclexia.resource.energy !"));
+        assert!(ir.contains("!eclexia.resource.carbon !"));
+        assert!(ir.contains("!\"energy\", !\"<=\", double 10"));
+        assert!(ir.contains("!\"carbon\", !\"<\", double 2.5"));
+    }
+
+    #[test]
     fn test_llvm_ir_module_header() {
         let mut backend = LlvmBackend::new();
         let mir = make_test_mir();
@@ -1904,6 +2602,17 @@ mod tests {
 
         assert!(ir.contains("switch"));
         assert!(ir.contains("label %"));
+    }
+
+    #[test]
+    fn test_llvm_ir_switch_value_coercion() {
+        let mut backend = LlvmBackend::new();
+        let mir = make_switch_float_mir();
+        let module = backend.generate(&mir).unwrap_ok();
+        let ir = module.ir();
+
+        assert!(ir.contains("fptosi double"));
+        assert!(ir.contains("switch i64"));
     }
 
     #[test]
@@ -1942,6 +2651,249 @@ mod tests {
         assert_eq!(prim_to_llvm(PrimitiveTy::Unit), "void");
         assert_eq!(prim_to_llvm(PrimitiveTy::I8), "i8");
         assert_eq!(prim_to_llvm(PrimitiveTy::I16), "i16");
+    }
+
+    #[test]
+    fn test_ty_to_llvm_tuple_type() {
+        let mut ctx = ModuleContext::new();
+        let ty = Ty::Tuple(vec![
+            Ty::Primitive(PrimitiveTy::Int),
+            Ty::Primitive(PrimitiveTy::Float),
+        ]);
+        assert_eq!(ty_to_llvm(&ty, &mut ctx), "{i64, double}");
+    }
+
+    #[test]
+    fn test_ty_to_llvm_array_type() {
+        let mut ctx = ModuleContext::new();
+        let ty = Ty::Array {
+            elem: Box::new(Ty::Primitive(PrimitiveTy::I32)),
+            size: Some(4),
+        };
+        assert_eq!(ty_to_llvm(&ty, &mut ctx), "[4 x i32]");
+    }
+
+    #[test]
+    fn test_ty_to_llvm_named_type() {
+        let mut ctx = ModuleContext::new();
+        let ty = Ty::Named {
+            name: SmolStr::new("MyStruct"),
+            args: Vec::new(),
+        };
+        assert_eq!(ty_to_llvm(&ty, &mut ctx), "ptr %struct.MyStruct");
+        assert!(ctx.struct_defs.contains("MyStruct"));
+    }
+
+    #[test]
+    fn test_infer_value_llvm_type_tuple_field() {
+        let func = make_probe_function(vec![Local {
+            id: 0,
+            name: SmolStr::new("pair"),
+            ty: Ty::Tuple(vec![
+                Ty::Primitive(PrimitiveTy::Int),
+                Ty::Primitive(PrimitiveTy::Float),
+            ]),
+            mutable: true,
+        }]);
+        let mir = MirFile {
+            functions: vec![func],
+            constants: Arena::new(),
+        };
+        let func = &mir.functions[0];
+        let mut ctx = ModuleContext::new();
+
+        let first = Value::Field {
+            base: Box::new(Value::Local(0)),
+            field: SmolStr::new("0"),
+        };
+        let second = Value::Field {
+            base: Box::new(Value::Local(0)),
+            field: SmolStr::new("1"),
+        };
+
+        assert_eq!(infer_value_llvm_type(&first, func, &mir, &mut ctx), "i64");
+        assert_eq!(infer_value_llvm_type(&second, func, &mir, &mut ctx), "double");
+        assert!(value_is_float(&second, func, &mir));
+    }
+
+    #[test]
+    fn test_infer_value_llvm_type_index_and_load_from_array() {
+        let mut constants: Arena<Constant> = Arena::new();
+        let c_idx = constants.alloc(Constant {
+            ty: Ty::Primitive(PrimitiveTy::Int),
+            kind: ConstantKind::Int(0),
+        });
+        let func = make_probe_function(vec![Local {
+            id: 0,
+            name: SmolStr::new("arr"),
+            ty: Ty::Array {
+                elem: Box::new(Ty::Primitive(PrimitiveTy::F32)),
+                size: Some(4),
+            },
+            mutable: true,
+        }]);
+        let mir = MirFile {
+            functions: vec![func],
+            constants,
+        };
+        let func = &mir.functions[0];
+        let mut ctx = ModuleContext::new();
+
+        let indexed = Value::Index {
+            base: Box::new(Value::Local(0)),
+            index: Box::new(Value::Constant(c_idx)),
+        };
+        let loaded = Value::Load {
+            ptr: Box::new(indexed.clone()),
+        };
+
+        assert_eq!(infer_value_llvm_type(&indexed, func, &mir, &mut ctx), "float");
+        assert_eq!(infer_value_llvm_type(&loaded, func, &mir, &mut ctx), "float");
+        assert!(value_is_float(&loaded, func, &mir));
+        assert!(value_is_f32(&loaded, func, &mir));
+    }
+
+    #[test]
+    fn test_infer_value_llvm_type_string_index_char() {
+        let mut constants: Arena<Constant> = Arena::new();
+        let c_idx = constants.alloc(Constant {
+            ty: Ty::Primitive(PrimitiveTy::Int),
+            kind: ConstantKind::Int(1),
+        });
+        let func = make_probe_function(vec![Local {
+            id: 0,
+            name: SmolStr::new("text"),
+            ty: Ty::Primitive(PrimitiveTy::String),
+            mutable: true,
+        }]);
+        let mir = MirFile {
+            functions: vec![func],
+            constants,
+        };
+        let func = &mir.functions[0];
+        let mut ctx = ModuleContext::new();
+
+        let index = Value::Index {
+            base: Box::new(Value::Local(0)),
+            index: Box::new(Value::Constant(c_idx)),
+        };
+
+        assert_eq!(infer_value_llvm_type(&index, func, &mir, &mut ctx), "i32");
+        assert!(!value_is_float(&index, func, &mir));
+    }
+
+    #[test]
+    fn test_infer_value_llvm_type_array_and_string_len_field() {
+        let func = make_probe_function(vec![
+            Local {
+                id: 0,
+                name: SmolStr::new("arr"),
+                ty: Ty::Array {
+                    elem: Box::new(Ty::Primitive(PrimitiveTy::I16)),
+                    size: Some(8),
+                },
+                mutable: true,
+            },
+            Local {
+                id: 1,
+                name: SmolStr::new("text"),
+                ty: Ty::Primitive(PrimitiveTy::String),
+                mutable: true,
+            },
+        ]);
+        let mir = MirFile {
+            functions: vec![func],
+            constants: Arena::new(),
+        };
+        let func = &mir.functions[0];
+        let mut ctx = ModuleContext::new();
+
+        let arr_len = Value::Field {
+            base: Box::new(Value::Local(0)),
+            field: SmolStr::new("len"),
+        };
+        let text_len = Value::Field {
+            base: Box::new(Value::Local(1)),
+            field: SmolStr::new("length"),
+        };
+
+        assert_eq!(infer_value_llvm_type(&arr_len, func, &mir, &mut ctx), "i64");
+        assert_eq!(infer_value_llvm_type(&text_len, func, &mir, &mut ctx), "i64");
+        assert!(!value_is_float(&arr_len, func, &mir));
+        assert!(!value_is_float(&text_len, func, &mir));
+    }
+
+    #[test]
+    fn test_infer_value_llvm_type_tuple_index_with_const() {
+        let mut constants: Arena<Constant> = Arena::new();
+        let c_idx = constants.alloc(Constant {
+            ty: Ty::Primitive(PrimitiveTy::Int),
+            kind: ConstantKind::Int(1),
+        });
+        let func = make_probe_function(vec![Local {
+            id: 0,
+            name: SmolStr::new("pair"),
+            ty: Ty::Tuple(vec![
+                Ty::Primitive(PrimitiveTy::I8),
+                Ty::Primitive(PrimitiveTy::F64),
+            ]),
+            mutable: true,
+        }]);
+        let mir = MirFile {
+            functions: vec![func],
+            constants,
+        };
+        let func = &mir.functions[0];
+        let mut ctx = ModuleContext::new();
+
+        let tuple_index = Value::Index {
+            base: Box::new(Value::Local(0)),
+            index: Box::new(Value::Constant(c_idx)),
+        };
+
+        assert_eq!(
+            infer_value_llvm_type(&tuple_index, func, &mir, &mut ctx),
+            "double"
+        );
+        assert!(value_is_float(&tuple_index, func, &mir));
+    }
+
+    #[test]
+    fn test_value_is_float_resource_and_cast() {
+        let func = make_probe_function(vec![Local {
+            id: 0,
+            name: SmolStr::new("energy"),
+            ty: Ty::Resource {
+                base: PrimitiveTy::Float,
+                dimension: zero_dim(),
+            },
+            mutable: true,
+        }]);
+        let mir = MirFile {
+            functions: vec![func],
+            constants: Arena::new(),
+        };
+        let func = &mir.functions[0];
+
+        let resource_local = Value::Local(0);
+        let cast_to_f32 = Value::Cast {
+            value: Box::new(resource_local.clone()),
+            target_ty: Ty::Primitive(PrimitiveTy::F32),
+        };
+
+        assert!(value_is_float(&resource_local, func, &mir));
+        assert!(value_is_float(&cast_to_f32, func, &mir));
+        assert!(value_is_f32(&cast_to_f32, func, &mir));
+    }
+
+    #[test]
+    fn test_llvm_ir_load_uses_inferred_type() {
+        let mut backend = LlvmBackend::new();
+        let mir = make_typed_load_mir();
+        let module = backend.generate(&mir).unwrap_ok();
+        let ir = module.ir();
+
+        assert!(ir.contains("load float, ptr"));
     }
 
     #[test]

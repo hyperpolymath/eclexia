@@ -1,6 +1,6 @@
 # Eclexia - Quick Status Reference
 
-**Last Updated:** 2026-02-09
+**Last Updated:** 2026-02-12
 **Completion:** Alpha — Core compiler functional, many subsystems stubbed
 **Build:** Passing (25 crates, zero warnings)
 **Tests:** 271 library tests + 32/32 valid + 19/19 invalid conformance (0 skips)
@@ -68,7 +68,7 @@
 
 ## What Does NOT Work Yet
 
-- **Native backends:** Cranelift, LLVM, WASM crates exist but only estimate sizes — no real codegen
+- **Native backends:** Cranelift has a JIT skeleton for simple integer functions; the LLVM target now emits `.ll`, runs `llc` to produce `.o`, and exits non-zero if `llc` fails (while preserving `.ll`); IR now includes runtime start/stop tracking hooks and function resource metadata attachments (`!eclexia.resource.*`); linking to runtime is still manual. WASM backend already generates real `.wasm` binaries.
 - **Runtime integration:** scheduler/profiler/carbon/shadow implemented but not wired to real system metrics
 - **Reactive compilation:** 4/7 crates wired into `build --analyze` (absinterp, comptime, specialize, effects); remaining 3 not yet wired (db, modules, tiered)
 - **Shadow prices:** ShadowPriceRegistry real defaults (energy=0.000033, time=0.001, carbon=0.00005); dynamic prices computed from VM resource usage via ShadowPriceEngine

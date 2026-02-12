@@ -1,380 +1,87 @@
-# Eclexia Implementation Plan: LLVM Backend First
+# Eclexia Implementation Plan: LLVM Backend & Production (Updated Feb 12, 2026)
 
-**Date:** 2026-02-07
-**Goal:** Ship production-ready LLVM backend in 3-4 months
-**Status:** 🟡 Starting implementation
-
----
-
-## Priority 1: LLVM Backend (Weeks 1-12)
-
-**Why this matters:** Without native code generation, Eclexia is a research toy. LLVM unlocks production deployment.
-
-### Week 1-2: Foundation & Setup
-
-**Immediate Actions (TODAY):**
-
-1. ✅ Install LLVM dependencies
-2. ✅ Set up `eclexia-codegen-llvm` crate
-3. ✅ Write minimal "Hello, World" LLVM IR generator
-4. ✅ Verify: Compile simple Eclexia program → native binary
-5. ✅ Benchmark: Compare to bytecode VM
-
-**Deliverable:** Proof-of-concept that generates working native code
+**Date:** 2026-02-12
+**Goal:** Deliver a real LLVM-native backend that emits `.ll`/`.o`, plugs into Eclexia's runtime for resource tracking, and cross-compiles cleanly on the major platforms.
+**Status:** Bytecode tooling, the CLI, runtime instrumentation (scheduler, profiler, carbon, shadow price engine) and most of the compiler pipeline already work; the `llvm` target now emits `.ll`, invokes `llc`, surfaces artifacts/duration feedback, and records runtime tracking hooks. Reactive crates (`modules`, `tiered`, `db`) remain partially wired, and the documentation/infra audit (Quick Status, IMPLEMENTATION_ROADMAP updates) has already corrected overstatements from earlier milestones.
 
 ---
 
-### Week 3-4: Type Lowering
-
-**Tasks:**
-- [ ] Map Eclexia types → LLVM types
-  - `Int` → `i64`
-  - `Float` → `f64`
-  - `Bool` → `i1`
-  - `String` → `ptr + len` (fat pointer)
-  - `Option<T>` → tagged union
-  - Structs → LLVM structs
-  - Functions → LLVM function types
-- [ ] Handle dimensional types (Energy, Carbon, Duration)
-  - Compile-time: Validate units
-  - Runtime: Store as f64 (same as Float)
-- [ ] Implement memory layout calculation
-- [ ] Add alignment/padding for structs
-
-**Deliverable:** Type-safe code generation for all Eclexia types
+## Reality check
+- Bytecode path, parser/typeck/MIR lowering, CLI/REPL, runtime subsystem (scheduler/profiler/carbon/shadow price), and the test suite (271 unit tests + 51 conformance tests) are verified and documented in `QUICK_STATUS.md` and `ECLEXIA-COMPLETE-STATUS-2026-02-09.md`.
+- The current `eclexia build --target llvm` branch runs `LlvmBackend::generate`, writes `.ll`, invokes `llc` to produce `.o`, and prints artifact sizes/durations; `llc` failures now return a non-zero CLI exit and point to the generated `.ll` path with install guidance.
+- Runtime instrumentation hooks are now emitted around native functions (`start_tracking`/`stop_tracking` declarations and calls are present), and preliminary `!eclexia.resource.*` metadata attachment for function resource constraints is in place; adaptive dispatch tables are still conceptual.
+- Reactive compiler crates are partially wired into `build --analyze` (comptime/absinterp/specialize/effects boxed, while modules, db, tiered still need integration) and cross-platform packaging/infrastructure (PanLL, gitbot fleet, OPSM trust) remains TODO.
 
 ---
 
-### Week 5-6: Function Codegen
+## Revised timeline
+### Phase 0 — Foundations (Feb 7-10) [Complete]
+- LLVM dependencies installed (`LLVM 17`, `inkwell`, `good_lp`, runtime libs) and `eclexia-llvm` crate scaffolded.
+- Basic textual IR generator exists (`LlvmBackend::generate`, string interning, type mapping) and is wired into the CLI `llvm` target for reporting.
+- Documentation and status dashboards (README, QUICK_STATUS, implementation roadmaps) were updated to reflect the honest completion state.
 
-**Tasks:**
-- [ ] Regular function codegen
-  - Parameters, return values
-  - Local variables (stack allocation)
-  - Function calls
-  - Return statements
-- [ ] Control flow
-  - If/else → LLVM br/switch
-  - While loops → LLVM br + phi nodes
-  - For loops → desugared to while
-- [ ] Pattern matching → switch + destructuring
-- [ ] Closures → function pointers + environment capture
+### Phase 1 — IR emission & CLI integration (Feb 11-18) [Completed]
+- `commands::build --target llvm` now writes the full `LlvmModule::ir()` to `<input>.ll`, produces `<input>.o` via `llc`, captures opt level/durations, and surfaces artifact paths (`compiler/eclexia/src/commands.rs`).
+- LLVM build now exits non-zero when `llc` fails, while still leaving `.ll` on disk with actionable diagnostics; integration test coverage includes the missing-`llc` failure path.
+- Regression test `integration_llvm_native_target` builds `examples/hello_world.ecl`, runs `llc`, and asserts `.ll`/`.o` emission, preventing regression (`compiler/eclexia/tests/integration_tests.rs`).
+- Documentation (`GETTING_STARTED.md`, `QUICK_STATUS.md`) now describes the LLVM workflow, install instructions for LLVM 17, and how to rerun `llc` manually when missing.
+- **Phase 1 verification:** CLI smoke run `eclexia build examples/hello_world.ecl --target llvm` produces `.ll`/`.o`, prints opt level, and logs `llc` duration (`compiler/eclexia/src/commands.rs`); regression integration test `integration_llvm_native_target` confirms the workflow in CI (`compiler/eclexia/tests/integration_tests.rs`); docs referencing `GETTING_STARTED.md`/`QUICK_STATUS.md` allow anyone to reproduce the path manually and describe LLVM requirements/fallbacks so Phase 1 work stays traceable.
 
-**Deliverable:** Full function compilation, control flow works
+### Phase 2 — Type lowering & control-flow correctness (Feb 19-26)
+- Ensure every MIR type (primitives, strings, resources, structs, adaptive metadata) lowers to a correct LLVM type, with padding/alignment and fat-pointer conventions for strings.
+- Ensure locals/params are `alloca` + `load`/`store` with correct calling convention, including closures and `@adaptive` solutions that allocate captured env structs.
+- Emit control flow primitives (`br`, `switch`, `phi`) that respect dominators and updates to `block_labels`, covering `if/else`, `while`, `for`, `match`, and `panic` paths.
+- Add unit tests around `value_is_float`, `infer_value_llvm_type`, and `compile_function` for complex MIR fragments (loops + pattern matches).
+- **Progress (2026-02-12):** `compiler/eclexia-llvm/src/lib.rs` now infers types for `Load`/`Field`/`Index` via MIR-aware helpers, avoids defaulting those paths to `i64`, emits typed loads (e.g., `load float, ptr ...`), and coerces non-boolean branch conditions / non-integer switch values into valid LLVM control-flow operands. Added regression tests for tuple field/index inference, array/string length field handling, resource float detection, typed loads, branch coercion, switch coercion, and unreachable branch edges.
 
----
+### Phase 3 — Adaptive functions & runtime instrumentation (Mar 1-14)
+- Emit one LLVM function per `@solution`, then build a dispatch wrapper that calls the scheduler/profiler runtime (shadow price scheduler selects solution, `start_tracking`/`stop_tracking` recorded).
+- Attach metadata nodes for energy/carbon budgets per function so the runtime can introspect resource consumption (`@eclexia.resource.energy` metadata, etc.).
+- Ensure runtime calls (e.g., `@eclexia_runtime_start_tracking`) are declared and emitted before/after natives, and update the `HealthServer` instrumentation to expose shadow prices from native executions.
+- Continue wiring reactive crates (modules, db, tiered) so `build --analyze` sees LLVM-compiled artifacts and can annotate budgets/constraints in reports.
+- **Progress (2026-02-12):** function-level `!eclexia.resource.*` metadata attachment and runtime tracking hook emission are now present in generated IR; remaining work is adaptive dispatch integration and runtime consumption of these metadata nodes.
 
-### Week 7-8: Adaptive Functions (Core Innovation)
-
-**Tasks:**
-- [ ] Generate separate functions for each `@solution`
-- [ ] Create dispatch table (array of function pointers)
-- [ ] Generate wrapper function:
-  1. Call shadow price scheduler
-  2. Index into dispatch table
-  3. Call selected function
-- [ ] Implement shadow price scheduler in runtime library
-- [ ] Resource metadata encoding (LLVM metadata nodes)
-
-**Example:**
-```eclexia
-adaptive def foo(n: Int) -> Int
-    @requires: energy < 100J
-    @optimize: minimize energy
-{
-    @solution "a": @provides: energy: 5J { n * 2 }
-    @solution "b": @provides: energy: 50J { n * n }
-}
-```
-
-**Generated LLVM IR (conceptual):**
-```llvm
-define i64 @foo_solution_a(i64 %n) {
-  %result = mul i64 %n, 2
-  ret i64 %result
-}
-
-define i64 @foo_solution_b(i64 %n) {
-  %result = mul i64 %n, %n
-  ret i64 %result
-}
-
-define i64 @foo(i64 %n) {
-  ; Get shadow prices from runtime
-  %prices = call ptr @eclexia_runtime_get_shadow_prices()
-
-  ; Select solution (calls linear programming solver)
-  %solution_id = call i32 @eclexia_runtime_select_solution(
-    ptr @foo_metadata,
-    ptr %prices
-  )
-
-  ; Dispatch
-  switch i32 %solution_id, label %default [
-    i32 0, label %call_a
-    i32 1, label %call_b
-  ]
-
-call_a:
-  %result_a = call i64 @foo_solution_a(i64 %n)
-  br label %done
-
-call_b:
-  %result_b = call i64 @foo_solution_b(i64 %n)
-  br label %done
-
-done:
-  %result = phi i64 [ %result_a, %call_a ], [ %result_b, %call_b ]
-  ret i64 %result
-}
-```
-
-**Deliverable:** Adaptive functions compile and dispatch correctly
+### Phase 4 — Optimization & cross-compilation (Mar 15-31)
+- Run LLVM opt passes (const-folding, DCE, inlining, vectorization) before invoking `llc`; capture pass logs when `--analyze` is on.
+- Support cross-target builds (`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `aarch64-apple-darwin`, `x86_64-pc-windows-msvc`, others as needed) and document required toolchains, linker flags, runtime lib paths, etc.
+- Link generated object files with the runtime (`runtime/eclexia-runtime`) via `clang`/`gcc` wrappers to produce final executables or dynamic libraries.
+- Add CI coverage for `--target llvm` (build + tests) and cross compile jobs.
 
 ---
 
-### Week 9-10: Resource Tracking
-
-**Tasks:**
-- [ ] Implement runtime resource tracking library
-  - RAPL (Intel/AMD energy counters)
-  - PowerMetrics (macOS)
-  - Clock for timing
-  - Carbon calculation (energy × grid intensity)
-- [ ] Insert tracking hooks in generated code
-  - Before function: `call @eclexia_runtime_start_tracking()`
-  - After function: `call @eclexia_runtime_stop_tracking()`
-- [ ] Zero-cost when unused (LLVM dead-code elimination)
-- [ ] Expose to user: `current_energy()`, `current_carbon()`
-
-**Deliverable:** Resource tracking works, minimal overhead
+## Milestones
+- [x] Core toolchain (parser/typeck/MIR), runtime, CLI, tests, docs audited and stable (Priority 2 done, Quick Status honed).
+- [x] `.ll` emitter + `llc` compile path (Phase 1 deliverable).
+- [ ] Robust type lowering + control flow (Phase 2 deliverable).
+- [ ] Adaptive functions + resource tracking instrumentation (Phase 3 deliverable).
+- [ ] Optimized, cross-platform native packages (Phase 4 deliverable).
 
 ---
 
-### Week 11-12: Optimization & Cross-Compilation
-
-**Tasks:**
-- [ ] Run LLVM optimization passes
-  - Constant folding
-  - Dead code elimination
-  - Inlining (especially for zero-cost abstractions)
-  - SIMD vectorization
-- [ ] Cross-compilation support
-  - x86-64-unknown-linux-gnu
-  - aarch64-apple-darwin (M1/M2/M3)
-  - aarch64-unknown-linux-gnu (AWS Graviton)
-  - x86_64-pc-windows-msvc
-- [ ] Link against runtime library
-- [ ] Static vs dynamic linking options
-
-**Deliverable:** Production-quality binaries for major platforms
+## Success criteria
+- `eclexia build --target llvm` writes `.ll`, compiles with `llc`, and prints artifact sizes within CLI output.
+- Generated LLVM IR includes hooks for `@eclexia_runtime_start_tracking`, `stop_tracking`, and `current_energy`, matching runtime instrumentation.
+- Shadow-price-driven adaptive dispatch is visible in emitted IR/objects, with metadata nodes representing budget constraints.
+- Native execution (with the runtime linked) reproduces the same outputs and resource reports as bytecode execution for `examples/hello_world.ecl` and key demos.
+- CI exercises `--target llvm` on Linux/macOS, and documentation tells users how to install LLVM and run the target.
 
 ---
 
-## Priority 2: Runtime Library (Parallel Track)
-
-**While building LLVM backend, implement runtime in Rust:**
-
-### Runtime Components
-
-1. **Shadow Price Scheduler** (`runtime/src/scheduler.rs`)
-   ```rust
-   pub fn select_solution(
-       solutions: &[Solution],
-       constraints: &[Constraint],
-       shadow_prices: &[f64],
-   ) -> usize {
-       // Linear programming solver (good_lp crate)
-       // Returns index of Pareto-optimal solution
-   }
-   ```
-
-2. **Resource Tracker** (`runtime/src/tracking.rs`)
-   ```rust
-   pub fn start_tracking() -> ResourceSnapshot;
-   pub fn stop_tracking(start: ResourceSnapshot) -> ResourceUsage;
-   pub fn current_energy() -> f64;  // Joules
-   pub fn current_carbon() -> f64;  // gCO2e
-   ```
-
-3. **Carbon APIs** (`runtime/src/carbon.rs`)
-   ```rust
-   pub fn get_grid_carbon_intensity(location: Location) -> Result<f64>;
-   pub fn get_forecast(location: Location, hours: u32) -> Result<Vec<CarbonForecast>>;
-   ```
+## Immediate next steps
+1. Finish remaining Phase 2 control-flow depth: add explicit `phi`-sensitive tests (and lowering strategy where needed) for merged values across loops/matches so dominance assumptions stay explicit.
+2. Connect emitted resource metadata to adaptive runtime decisions: thread `!eclexia.resource.*` data into scheduler/profiler health reporting and adaptive solution selection diagnostics.
+3. Expand end-to-end native checks: add linked native execution tests comparing bytecode/runtime resource reports against LLVM native runs for key examples.
 
 ---
 
-## Development Setup
-
-### Prerequisites
-
-```bash
-# Install LLVM 17 (or latest)
-# macOS
-brew install llvm@17
-
-# Fedora
-sudo dnf install llvm-devel llvm-static clang
-
-# Ubuntu
-sudo apt install llvm-17-dev libclang-17-dev
-```
-
-### Rust Dependencies
-
-Add to `Cargo.toml`:
-```toml
-[dependencies]
-# LLVM bindings
-inkwell = { version = "0.4", features = ["llvm17-0"] }
-
-# Linear programming (shadow price optimization)
-good_lp = "1.8"
-
-# Energy measurement
-rapl = "0.1"  # Intel/AMD energy counters
-
-# HTTP client (for carbon APIs)
-reqwest = { version = "0.11", features = ["json"] }
-tokio = { version = "1", features = ["full"] }
-```
+## Risks & mitigations
+- **Missing `llc`/`clang` on contributors' systems:** fail fast with a clear non-zero `llc` error that includes install instructions (Homebrew `llvm@17`, `apt install llvm-17`, etc.) while still emitting `.ll` so contributors can rerun `llc` manually.
+- **Resource instrumentation drift:** compare the bytecode-run resource log vs. native run for the same example; add golden JSON fixtures for `current_energy()` and `current_carbon()` to ensure the runtime hooks fire and report comparable values.
+- **Cross-compilation complexity:** keep the arm64/macOS targets in a separate branch until Linux artifacts succeed, reuse existing runtime health server for readiness/liveness.
 
 ---
 
-## Milestone Checklist
-
-### Milestone 1: Hello, LLVM (Week 2)
-- [ ] Generate LLVM IR for `def main() { println("Hello") }`
-- [ ] Compile to native binary
-- [ ] Run successfully
-- [ ] Benchmark vs bytecode VM
-
-### Milestone 2: Fibonacci (Week 4)
-- [ ] Generate LLVM IR for recursive fibonacci
-- [ ] Control flow (if/else) works
-- [ ] Function calls work
-- [ ] Performance competitive with Rust
-
-### Milestone 3: Adaptive Fibonacci (Week 8)
-- [ ] Two solutions (efficient vs naive)
-- [ ] Shadow price selection works
-- [ ] Runtime picks optimal solution
-- [ ] Overhead < 50ns
-
-### Milestone 4: Resource Tracked Fibonacci (Week 10)
-- [ ] Energy measurement works (RAPL)
-- [ ] `current_energy()` returns accurate value
-- [ ] Zero overhead when tracking disabled
-- [ ] Benchmark shows negligible impact
-
-### Milestone 5: Multi-Target (Week 12)
-- [ ] Cross-compile to x86-64 Linux
-- [ ] Cross-compile to ARM64 macOS
-- [ ] Cross-compile to Windows
-- [ ] Performance within 1.5x of Rust
-
----
-
-## Success Criteria
-
-**Technical:**
-- ✅ Compiles all 32 conformance tests
-- ✅ Passes all test suite
-- ✅ Performance ≤ 1.5x Rust
-- ✅ Binary size ≤ 10MB (static)
-- ✅ Supports 3+ platforms
-
-**User-Facing:**
-- ✅ `eclexia build app.ecl` produces native binary
-- ✅ `eclexia build --target aarch64-apple-darwin` cross-compiles
-- ✅ Resource tracking works out-of-box (RAPL on Linux, PowerMetrics on macOS)
-- ✅ Adaptive functions ~10ns overhead
-- ✅ Documentation explains usage
-
----
-
-## Next Steps (IMMEDIATE)
-
-### Today (Feb 7):
-1. ✅ Create this implementation plan
-2. ⏳ Set up LLVM development environment
-3. ⏳ Scaffold `compiler/eclexia-codegen-llvm/` crate
-4. ⏳ Write minimal "Hello, World" IR generator
-
-### Tomorrow (Feb 8):
-5. ⏳ Get first native binary compiling
-6. ⏳ Benchmark vs bytecode VM
-7. ⏳ Create GitHub issues for week-by-week tasks
-
-### This Week:
-8. ⏳ Type lowering (Int, Float, Bool, String)
-9. ⏳ Function codegen (parameters, return, calls)
-10. ⏳ Hello, World → Fibonacci working natively
-
----
-
-## Risk Mitigation
-
-### Risk 1: LLVM Complexity
-**Mitigation:** Start simple (integers, basic functions). Build incrementally. Use inkwell abstractions.
-
-### Risk 2: Performance Regression
-**Mitigation:** Benchmark every week. Profile with `perf`. Use LLVM optimization passes aggressively.
-
-### Risk 3: Cross-Platform Issues
-**Mitigation:** Test on Linux first (easiest), then macOS, then Windows. Use CI for all platforms.
-
-### Risk 4: Resource Tracking Accuracy
-**Mitigation:** Validate against external tools (Intel VTune, powermetrics). Document limitations.
-
----
-
-## Resources
-
-### Learning LLVM
-- **Inkwell Tutorial:** https://github.com/TheDan64/inkwell
-- **LLVM Language Reference:** https://llvm.org/docs/LangRef.html
-- **Kaleidoscope Tutorial:** https://llvm.org/docs/tutorial/MyFirstLanguageFrontend/
-
-### Reference Implementations
-- **Rust compiler:** How rustc uses LLVM
-- **Zig compiler:** Similar approach (self-hosted, LLVM backend)
-- **Crystal compiler:** Another Rust → LLVM pipeline
-
-### Debugging
-- **llvm-dis:** Disassemble LLVM bitcode to IR
-- **opt:** Run optimization passes standalone
-- **llc:** Lower LLVM IR to assembly
-- **lldb:** Debug generated binaries
-
----
-
-## Communication
-
-### Weekly Updates
-Post progress to:
-- GitHub Discussions (technical details)
-- Discord #development (community)
-- Twitter (public milestones)
-
-### Blockers
-If stuck for >4 hours:
-- Post to Discord #help
-- Create GitHub issue with "blocked" label
-- Reach out to LLVM community (forum.llvm.org)
-
----
-
-## The Goal
-
-**In 12 weeks:**
-- Eclexia compiles to native code via LLVM
-- Adaptive functions work with real shadow price optimization
-- Resource tracking measures energy/carbon
-- Cross-compiles to x86-64, ARM64, Windows
-- Performance competitive with Rust (≤1.5x)
-
-**Then:** Self-hosting, domain libraries, world domination. 🌍
-
-**Let's build this.** 🚀
+## Notes
+- Reactive crate wiring (modules, db, tiered) and infrastructure enrolment (gitbot fleet, PanLL, OPSM trust) are tracked in `ECLEXIA-COMPLETE-STATUS-2026-02-09.md`; reference that document when choosing follow-up work.
+- Update `QUICK_STATUS.md` after Phase 1 so the status page says "LLVM target emits `.ll` and runs `llc`".
+- This plan is the working record of the native-target effort; annotate it as things move from TODO → DONE so downstream agents can pick up exactly where this session leaves off.
