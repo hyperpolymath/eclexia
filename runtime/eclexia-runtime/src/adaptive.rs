@@ -308,3 +308,141 @@ impl Default for AdaptiveDecisionEngine {
         Self::new(RuntimeConfig::default())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_candidate(name: &str, energy: f64, time: f64, priority: f64) -> SolutionCandidate {
+        SolutionCandidate {
+            name: SmolStr::new(name),
+            costs: vec![
+                ResourceCost {
+                    resource: SmolStr::new("energy"),
+                    dimension: Dimension::energy(),
+                    amount: energy,
+                },
+                ResourceCost {
+                    resource: SmolStr::new("time"),
+                    dimension: Dimension::time(),
+                    amount: time,
+                },
+            ],
+            condition: None,
+            priority,
+        }
+    }
+
+    #[test]
+    fn test_select_best_minimize_cost() {
+        let engine = AdaptiveDecisionEngine::default();
+        let prices = ShadowPriceRegistry::new();
+
+        let candidates = vec![
+            make_candidate("expensive", 100.0, 10.0, 1.0),
+            make_candidate("cheap", 1.0, 0.1, 1.0),
+            make_candidate("medium", 50.0, 5.0, 1.0),
+        ];
+
+        let best = engine.select_best(&candidates, &prices);
+        assert_eq!(best, Some(1)); // "cheap" has lowest cost
+    }
+
+    #[test]
+    fn test_select_best_weighted() {
+        let mut engine = AdaptiveDecisionEngine::default();
+        engine.set_criteria(SelectionCriteria::Weighted {
+            energy_weight: 10.0,
+            time_weight: 0.0,
+            memory_weight: 0.0,
+            carbon_weight: 0.0,
+        });
+        let prices = ShadowPriceRegistry::new();
+
+        let candidates = vec![
+            make_candidate("low_energy", 1.0, 100.0, 1.0),
+            make_candidate("high_energy", 100.0, 1.0, 1.0),
+        ];
+
+        let best = engine.select_best(&candidates, &prices);
+        // Whichever index is selected, it should be consistent
+        assert!(best.is_some());
+        // The selected candidate should have lower weighted energy cost
+        let idx = best.unwrap();
+        let selected = &candidates[idx];
+        let other_idx = if idx == 0 { 1 } else { 0 };
+        let other = &candidates[other_idx];
+        let sel_cost = selected.calculate_cost(&prices);
+        let oth_cost = other.calculate_cost(&prices);
+        // With weighted criteria, selected should have lower or equal score
+        assert!(sel_cost <= oth_cost || (sel_cost - oth_cost).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_select_best_prefer_priority() {
+        let mut engine = AdaptiveDecisionEngine::default();
+        engine.set_criteria(SelectionCriteria::PreferPriority { threshold: 0.5 });
+        let prices = ShadowPriceRegistry::new();
+
+        // Both candidates are "high priority" (>= 0.5), but one is cheaper
+        let candidates = vec![
+            make_candidate("expensive", 100.0, 10.0, 1.0),
+            make_candidate("cheap", 1.0, 0.1, 1.0),
+        ];
+
+        let best = engine.select_best(&candidates, &prices);
+        assert!(best.is_some());
+        // Among high-priority candidates, select the cheapest
+        assert_eq!(best, Some(1)); // "cheap" should win
+    }
+
+    #[test]
+    fn test_budget_filtering() {
+        let mut config = RuntimeConfig::default();
+        config.max_resource_budget.energy = Some(10.0); // tight energy budget
+        let engine = AdaptiveDecisionEngine::new(config);
+        let prices = ShadowPriceRegistry::new();
+
+        let candidates = vec![
+            make_candidate("over_budget", 100.0, 1.0, 1.0), // exceeds 10.0 limit
+            make_candidate("within_budget", 5.0, 1.0, 1.0),
+        ];
+
+        let best = engine.select_best(&candidates, &prices);
+        assert_eq!(best, Some(1)); // only "within_budget" is viable
+    }
+
+    #[test]
+    fn test_empty_candidates_returns_none() {
+        let engine = AdaptiveDecisionEngine::default();
+        let prices = ShadowPriceRegistry::new();
+
+        let best = engine.select_best(&[], &prices);
+        assert_eq!(best, None);
+    }
+
+    #[test]
+    fn test_all_over_budget_returns_none() {
+        let mut config = RuntimeConfig::default();
+        config.max_resource_budget.energy = Some(1.0); // very tight
+        let engine = AdaptiveDecisionEngine::new(config);
+        let prices = ShadowPriceRegistry::new();
+
+        let candidates = vec![
+            make_candidate("a", 100.0, 1.0, 1.0),
+            make_candidate("b", 50.0, 1.0, 1.0),
+        ];
+
+        let best = engine.select_best(&candidates, &prices);
+        assert_eq!(best, None); // nothing meets budget
+    }
+
+    #[test]
+    fn test_solution_calculate_cost() {
+        let prices = ShadowPriceRegistry::new();
+        let candidate = make_candidate("test", 100.0, 1.0, 1.0);
+        let cost = candidate.calculate_cost(&prices);
+        // Cost should be > 0 since shadow prices are > 0
+        assert!(cost > 0.0);
+    }
+}

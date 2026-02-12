@@ -3982,3 +3982,295 @@ enum ExecutionResult {
     /// Return from function
     Return(Value),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bytecode::BytecodeFunction;
+    use std::collections::HashMap;
+
+    fn make_module(instructions: Vec<Instruction>) -> BytecodeModule {
+        BytecodeModule {
+            functions: vec![BytecodeFunction {
+                name: SmolStr::new("main"),
+                param_count: 0,
+                local_count: 0,
+                return_ty: Ty::Primitive(PrimitiveTy::Int),
+                instructions,
+                labels: HashMap::new(),
+                resource_constraints: vec![],
+                is_adaptive: false,
+            }],
+            strings: vec![],
+            floats: vec![],
+            integers: vec![],
+            entry_point: Some(0),
+        }
+    }
+
+    #[test]
+    fn test_vm_add() {
+        let module = make_module(vec![
+            Instruction::PushInt(10),
+            Instruction::PushInt(20),
+            Instruction::AddInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(30)));
+    }
+
+    #[test]
+    fn test_vm_sub() {
+        let module = make_module(vec![
+            Instruction::PushInt(50),
+            Instruction::PushInt(20),
+            Instruction::SubInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(30)));
+    }
+
+    #[test]
+    fn test_vm_mul() {
+        let module = make_module(vec![
+            Instruction::PushInt(6),
+            Instruction::PushInt(7),
+            Instruction::MulInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(42)));
+    }
+
+    #[test]
+    fn test_vm_div() {
+        let module = make_module(vec![
+            Instruction::PushInt(100),
+            Instruction::PushInt(5),
+            Instruction::DivInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(20)));
+    }
+
+    #[test]
+    fn test_vm_rem() {
+        let module = make_module(vec![
+            Instruction::PushInt(17),
+            Instruction::PushInt(5),
+            Instruction::RemInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(2)));
+    }
+
+    #[test]
+    fn test_vm_compare() {
+        let module = make_module(vec![
+            Instruction::PushInt(5),
+            Instruction::PushInt(10),
+            Instruction::LtInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Bool(true)));
+    }
+
+    #[test]
+    fn test_vm_jump() {
+        // Push 1, jump over push 999, push 2, add, return → should get 3
+        let module = make_module(vec![
+            Instruction::PushInt(1),       // 0
+            Instruction::Jump(3),          // 1: skip to instruction 3
+            Instruction::PushInt(999),     // 2: this should be skipped
+            Instruction::PushInt(2),       // 3
+            Instruction::AddInt,           // 4
+            Instruction::ReturnValue,      // 5
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(3)));
+    }
+
+    #[test]
+    fn test_vm_branch_true() {
+        // Push true, branch to instruction 3 if true, push 999, push 42, return
+        let module = make_module(vec![
+            Instruction::PushBool(true),   // 0
+            Instruction::JumpIf(3),        // 1: jump to 3 if true
+            Instruction::PushInt(999),     // 2: skipped
+            Instruction::PushInt(42),      // 3
+            Instruction::ReturnValue,      // 4
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(42)));
+    }
+
+    #[test]
+    fn test_vm_division_by_zero() {
+        let module = make_module(vec![
+            Instruction::PushInt(1),
+            Instruction::PushInt(0),
+            Instruction::DivInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_vm_local_variables() {
+        let mut module = make_module(vec![
+            Instruction::PushInt(42),
+            Instruction::StoreLocal(0),
+            Instruction::LoadLocal(0),
+            Instruction::ReturnValue,
+        ]);
+        module.functions[0].local_count = 1;
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(42)));
+    }
+
+    #[test]
+    fn test_vm_float_arithmetic() {
+        let module = make_module(vec![
+            Instruction::PushFloat(3.14),
+            Instruction::PushFloat(2.0),
+            Instruction::MulFloat,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        match result {
+            Value::Float(f) => assert!((f - 6.28).abs() < 1e-10),
+            other => panic!("Expected Float, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_vm_boolean_logic() {
+        let module = make_module(vec![
+            Instruction::PushBool(true),
+            Instruction::PushBool(false),
+            Instruction::Or,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Bool(true)));
+    }
+
+    #[test]
+    fn test_vm_negation() {
+        let module = make_module(vec![
+            Instruction::PushInt(42),
+            Instruction::NegInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(-42)));
+    }
+
+    #[test]
+    fn test_vm_string_push() {
+        let mut module = make_module(vec![
+            Instruction::PushString(0),
+            Instruction::ReturnValue,
+        ]);
+        module.strings = vec!["hello".to_string()];
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        match result {
+            Value::String(s) => assert_eq!(s, "hello"),
+            other => panic!("Expected String, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_vm_dup_and_pop() {
+        let module = make_module(vec![
+            Instruction::PushInt(10),
+            Instruction::Dup,
+            Instruction::AddInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(20)));
+    }
+
+    #[test]
+    fn test_vm_jump_if_not() {
+        // Push false, JumpIfNot skips over push 999, push 42, return
+        let module = make_module(vec![
+            Instruction::PushBool(false),  // 0
+            Instruction::JumpIfNot(3),     // 1: jump to 3 if false
+            Instruction::PushInt(999),     // 2: skipped
+            Instruction::PushInt(42),      // 3
+            Instruction::ReturnValue,      // 4
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(42)));
+    }
+
+    #[test]
+    fn test_vm_return_unit() {
+        let module = make_module(vec![
+            Instruction::Return,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Unit));
+    }
+
+    #[test]
+    fn test_vm_comparison_operators() {
+        // Test EqInt
+        let module = make_module(vec![
+            Instruction::PushInt(5),
+            Instruction::PushInt(5),
+            Instruction::EqInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Bool(true)));
+
+        // Test NeInt
+        let module = make_module(vec![
+            Instruction::PushInt(5),
+            Instruction::PushInt(3),
+            Instruction::NeInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Bool(true)));
+
+        // Test GeInt
+        let module = make_module(vec![
+            Instruction::PushInt(10),
+            Instruction::PushInt(5),
+            Instruction::GeInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Bool(true)));
+    }
+}
