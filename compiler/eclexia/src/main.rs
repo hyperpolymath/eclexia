@@ -53,6 +53,10 @@ enum Commands {
         /// Run resource analysis and compile-time verification on MIR
         #[arg(long)]
         analyze: bool,
+
+        /// Watch for file changes and rebuild automatically
+        #[arg(long)]
+        watch: bool,
     },
 
     /// Build and run an Eclexia program
@@ -269,8 +273,13 @@ fn main() -> miette::Result<()> {
             output,
             target,
             analyze,
+            watch,
         } => {
-            commands::build(&input, output.as_deref(), &target, analyze)?;
+            if watch {
+                commands::build_watch(&input, output.as_deref(), &target, analyze)?;
+            } else {
+                commands::build(&input, output.as_deref(), &target, analyze)?;
+            }
         }
         Commands::Run {
             input,

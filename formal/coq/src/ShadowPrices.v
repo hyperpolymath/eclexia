@@ -319,17 +319,20 @@ Proof.
     + apply Rlt_le. apply Rinv_0_lt_compat. assumption.
     + destruct Husage as [H1 [H2 H3]]. assumption.
   - (* Both exponential: exp(5*(u1/b-0.5)) <= exp(5*(u2/b-0.5)) *)
-    apply Rlt_le. apply exp_increasing.
-    apply Rmult_lt_compat_l; [lra|].
-    unfold Rdiv.
-    apply Rplus_lt_compat_r.
-    apply Rmult_lt_compat_r.
-    + apply Rinv_0_lt_compat. assumption.
-    + destruct Husage as [H1 [H2 H3]].
-      (* u1 <= u2: need strict? No, we need u1/b < u2/b or u1/b <= u2/b *)
-      (* Since we need <, but we only have <=, this case actually needs <= *)
-      admit. (* Need Rmult_le_compat_r instead of lt — close but needs adjustment *)
-Admitted. (* Nearly complete: monotonicity in all 4 regions established *)
+    destruct (Req_dec usage1 usage2) as [Heq | Hneq].
+    + (* usage1 = usage2: equal exponentials *)
+      rewrite Heq. apply Rle_refl.
+    + (* usage1 < usage2: strictly increasing exponential *)
+      apply Rlt_le. apply exp_increasing.
+      apply Rmult_lt_compat_l; [lra|].
+      unfold Rdiv.
+      apply Rplus_lt_compat_r.
+      apply Rmult_lt_compat_r.
+      * apply Rinv_0_lt_compat. assumption.
+      * destruct Husage as [H1 [H2 H3]].
+        (* usage1 <= usage2 and usage1 <> usage2 implies usage1 < usage2 *)
+        apply Rnot_le_lt. intro. apply Hneq. lra.
+Qed.
 
 (** Eclexia shadow prices are non-negative *)
 Theorem eclexia_shadow_price_nonnegative :

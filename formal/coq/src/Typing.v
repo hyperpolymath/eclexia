@@ -236,6 +236,19 @@ Inductive step : expr -> expr -> Prop :=
       (op = OpMul /\ n3 = n1 * n2) ->
       EBinOp op (EInt n1) (EInt n2) → EInt n3
 
+  (* Boolean operations *)
+  | STBinOpBool : forall op b1 b2 b3,
+      (op = OpAnd /\ b3 = andb b1 b2) \/
+      (op = OpOr /\ b3 = orb b1 b2) ->
+      EBinOp op (EBool b1) (EBool b2) → EBool b3
+
+  (* Comparison operations *)
+  | STBinOpCmp : forall op n1 n2 b,
+      (op = OpEq /\ b = (n1 =? n2)) \/
+      (op = OpLt /\ b = (n1 <? n2)) \/
+      (op = OpGt /\ b = (n1 >? n2)) ->
+      EBinOp op (EInt n1) (EInt n2) → EBool b
+
   | STBinOpLeft : forall op e1 e1' e2,
       e1 → e1' ->
       EBinOp op e1 e2 → EBinOp op e1' e2
@@ -257,14 +270,36 @@ Inductive multi_step : expr -> expr -> Prop :=
 
 Notation "e '→*' e'" := (multi_step e e') (at level 40).
 
+(** ** Weakening Lemma *)
+
+Lemma weakening : forall ctx e T,
+  [] ⊢ e ∈ T ->
+  value e ->
+  ctx ⊢ e ∈ T.
+Proof.
+  intros ctx e T Htyped Hval.
+  inversion Hval; subst; inversion Htyped; subst.
+  - (* VInt *)
+    apply TInt_typed.
+  - (* VFloat *)
+    apply TFloat_typed.
+  - (* VBool *)
+    apply TBool_typed.
+  - (* VFun *)
+    apply TFun_typed. assumption.
+  - (* VDimLit *)
+    apply TDimLit_typed.
+Qed.
+
 (** ** Substitution Lemma *)
 
 Lemma subst_preserves_typing : forall x v e T1 T2 ctx,
+  value v ->
   [] ⊢ v ∈ T1 ->
   ((x, T1) :: ctx) ⊢ e ∈ T2 ->
   ctx ⊢ subst x v e ∈ T2.
 Proof.
-  intros x v e T1 T2 ctx Hv Htyped.
+  intros x v e T1 T2 ctx Hval Hv Htyped.
   generalize dependent ctx.
   generalize dependent T2.
   induction e; intros T2 ctx Htyped; simpl; inversion Htyped; subst.
@@ -279,8 +314,8 @@ Proof.
     destruct (String.eqb x s) eqn:Heq.
     + (* x = s: substitute *)
       injection H1 as H1. subst.
-      (* Need weakening lemma: well-typed in [] implies well-typed in any context *)
-      admit. (* Requires weakening lemma *)
+      (* Apply weakening lemma: value well-typed in [] is well-typed in any context *)
+      apply (weakening ctx v T1 Hv Hval).
     + (* x <> s: keep variable *)
       apply TVar_typed. assumption.
   - (* ELet *)
@@ -314,7 +349,7 @@ Proof.
     eapply TBinOp_Cmp_typed; eauto.
   - (* EDimLit *)
     apply TDimLit_typed.
-Admitted. (* One admit remains: weakening lemma for variable case *)
+Qed.
 
 (** ** Type Soundness *)
 
@@ -379,21 +414,30 @@ Proof.
     right.
     destruct IHHtyped1 as [Hval1 | [e1' Hstep1]]; auto.
     + destruct IHHtyped2 as [Hval2 | [e2' Hstep2]]; auto.
-      * (* Both values — booleans don't have step rules yet, so admit *)
-        admit. (* Needs bool step rules: STBinOpBool *)
+      * (* Both values *)
+        inversion Hval1; subst.
+        inversion Hval2; subst.
+        destruct H as [HAnd | HOr]; subst.
+        { exists (EBool (andb b b0)). apply STBinOpBool. left. split; reflexivity. }
+        { exists (EBool (orb b b0)). apply STBinOpBool. right. split; reflexivity. }
       * exists (EBinOp op e1 e2'). apply STBinOpRight; assumption.
     + exists (EBinOp op e1' e2). apply STBinOpLeft. assumption.
   - (* TBinOp Cmp *)
     right.
     destruct IHHtyped1 as [Hval1 | [e1' Hstep1]]; auto.
     + destruct IHHtyped2 as [Hval2 | [e2' Hstep2]]; auto.
-      * (* Both values — comparison doesn't have step rules yet, so admit *)
-        admit. (* Needs comparison step rules: STBinOpCmp *)
+      * (* Both values *)
+        inversion Hval1; subst.
+        inversion Hval2; subst.
+        destruct H as [HEq | [HLt | HGt]]; subst.
+        { exists (EBool (n =? n0)). apply STBinOpCmp. left. split; reflexivity. }
+        { exists (EBool (n <? n0)). apply STBinOpCmp. right. left. split; reflexivity. }
+        { exists (EBool (n >? n0)). apply STBinOpCmp. right. right. split; reflexivity. }
       * exists (EBinOp op e1 e2'). apply STBinOpRight; assumption.
     + exists (EBinOp op e1' e2). apply STBinOpLeft. assumption.
   - (* TDimLit *)
     left. apply VDimLit.
-Admitted. (* Remaining admits: need step rules for bool ops and comparisons *)
+Qed.
 
 (** Preservation: If e : T and e → e', then e' : T *)
 Theorem preservation : forall e e' T,
@@ -450,15 +494,15 @@ Proof.
     eapply TBinOp_Bool_typed; eauto.
   - (* TBinOp Bool — STBinOpRight *)
     eapply TBinOp_Bool_typed; eauto.
-  - (* Impossible: TBinOp Cmp values don't reduce via STBinOpInt to Bool *)
-    admit. (* Needs step rule for comparisons *)
+  - (* Impossible: TBinOp Cmp (OpEq/OpLt/OpGt) doesn't reduce via STBinOpInt (OpAdd/OpSub/OpMul) *)
+    destruct H as [HEq | [HLt | HGt]]; destruct H0 as [[HA _] | [[HB _] | [HC _]]]; subst; discriminate.
   - (* TBinOp Cmp — STBinOpLeft *)
     eapply TBinOp_Cmp_typed; eauto.
   - (* TBinOp Cmp — STBinOpRight *)
     eapply TBinOp_Cmp_typed; eauto.
   - (* Impossible *)
     inversion H3.
-Admitted. (* One admit: comparison step rule interaction *)
+Qed.
 
 (** ** Type Soundness (Combined) *)
 

@@ -209,6 +209,109 @@ pub fn build(
     Ok(())
 }
 
+/// Build with watch mode: rebuild on file changes.
+pub fn build_watch(
+    input: &Path,
+    output: Option<&Path>,
+    target: &str,
+    analyze: bool,
+) -> miette::Result<()> {
+    use eclexia_tiered::watch::WatchConfig;
+    use std::sync::mpsc;
+
+    let watch_config = WatchConfig::new(
+        input
+            .parent()
+            .unwrap_or(Path::new("."))
+            .to_path_buf()
+    );
+
+    println!(
+        "Watch mode: monitoring {} for changes (debounce: {}ms)",
+        watch_config.root.display(),
+        watch_config.debounce.as_millis()
+    );
+    println!("Press Ctrl+C to stop.\n");
+
+    // Initial build
+    println!("Initial build...");
+    if let Err(e) = build(input, output, target, analyze) {
+        eprintln!("Build failed: {}", e);
+    }
+
+    println!("\n--- Watching for changes ---\n");
+
+    // Set up file watcher
+    let (tx, rx) = mpsc::channel::<notify::Event>();
+
+    let mut watcher =
+        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+            if let Ok(event) = res {
+                if matches!(
+                    event.kind,
+                    notify::EventKind::Modify(_)
+                        | notify::EventKind::Create(_)
+                        | notify::EventKind::Remove(_)
+                ) {
+                    let _ = tx.send(event);
+                }
+            }
+        })
+        .into_diagnostic()
+        .wrap_err("Failed to create file watcher")?;
+
+    use notify::Watcher;
+    watcher
+        .watch(&watch_config.root, notify::RecursiveMode::Recursive)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Failed to watch {}", watch_config.root.display()))?;
+
+    // Event loop with debouncing
+    loop {
+        let first_event = rx.recv().into_diagnostic()?;
+        let mut changed: std::collections::HashSet<std::path::PathBuf> =
+            std::collections::HashSet::new();
+        for p in &first_event.paths {
+            if watch_config.should_watch(p) {
+                changed.insert(p.clone());
+            }
+        }
+
+        // Debounce window
+        let deadline = std::time::Instant::now() + watch_config.debounce;
+        loop {
+            match rx.recv_timeout(deadline.saturating_duration_since(std::time::Instant::now())) {
+                Ok(event) => {
+                    for p in &event.paths {
+                        if watch_config.should_watch(p) {
+                            changed.insert(p.clone());
+                        }
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => break,
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(miette::miette!("File watcher disconnected"));
+                }
+            }
+        }
+
+        if !changed.is_empty() {
+            println!("\n{} file(s) changed, rebuilding...", changed.len());
+            let start = std::time::Instant::now();
+
+            match build(input, output, target, analyze) {
+                Ok(()) => {
+                    println!("✓ Build successful ({:.2}s)", start.elapsed().as_secs_f64());
+                }
+                Err(e) => {
+                    eprintln!("✗ Build failed: {}", e);
+                }
+            }
+            println!();
+        }
+    }
+}
+
 fn find_project_root(input: &Path) -> std::path::PathBuf {
     for ancestor in input.ancestors() {
         if ancestor.join("package.toml").is_file() || ancestor.join("Cargo.toml").is_file() {
@@ -808,12 +911,41 @@ fn run_mir_analysis(mir: &eclexia_mir::MirFile, ast: &eclexia_ast::SourceFile, s
         );
     }
 
-    // Module import analysis
+    // Module import analysis with dependency graph statistics
     let imports = eclexia_modules::extract_imports(ast);
     if !imports.is_empty() {
         println!("  Module imports: {} import(s) detected", imports.len());
+
+        // Build dependency graph for analysis
+        use eclexia_modules::dep_graph::DependencyGraph;
+        let mut dep_graph = DependencyGraph::new();
+        let current_module = eclexia_modules::ModuleId::new("current".to_string());
+        dep_graph.add_module(current_module.clone());
+
         for import in &imports {
+            dep_graph.add_module(import.clone());
+            dep_graph.add_dependency(&current_module, import);
             println!("    - {}", import.path);
+        }
+
+        // Report graph statistics
+        let total_modules = dep_graph.len();
+        println!("    Graph: {} module(s) total", total_modules);
+        println!("    Edges: {} dependency relation(s)", dep_graph.edge_count());
+
+        // Check for cycles
+        if dep_graph.topological_order().is_none() {
+            println!("    ⚠  Potential dependency cycle detected");
+        }
+
+        // Report leaf and root modules
+        let leaf_count = dep_graph.leaf_modules().len();
+        let root_count = dep_graph.root_modules().len();
+        if leaf_count > 0 {
+            println!("    Leaf modules (no dependencies): {}", leaf_count);
+        }
+        if root_count > 0 {
+            println!("    Root modules (not imported): {}", root_count);
         }
     }
 
