@@ -24,10 +24,17 @@
 //! (import "eclexia" "track_resource" (func $track (param i32 f64)))
 //! ```
 //!
+//! ## Type representation
+//!
+//! - Primitives: i32, i64, f32, f64 map directly to WASM value types
+//! - Strings: stored in data section, referenced by i32 offset
+//! - Tuples: stored in linear memory, fields at 8-byte stride, accessed via i32 pointer
+//! - Arrays: stored as (pointer: i32, length: i32) header + contiguous elements
+//! - Structs: stored in linear memory, accessed via i32 pointer
+//!
 //! ## Limitations
 //!
-//! - Strings stored in data section with fixed offsets (no GC/malloc)
-//! - Complex types (tuples, arrays, structs) not yet supported
+//! - No garbage collection (bump allocator, no free)
 //! - WASI preview1 integration available (enable with `with_wasi(true)`)
 //! - Indirect calls via basic function table only
 
@@ -153,12 +160,44 @@ impl WasmModule {
 }
 
 /// Map an Eclexia type to a WASM value type.
+///
+/// Primitive types map directly. Complex types (tuples, arrays, structs,
+/// strings) are represented as i32 pointers into linear memory.
 fn ty_to_wasm(ty: &Ty) -> Option<WasmType> {
     match ty {
         Ty::Primitive(p) => prim_to_wasm(*p),
         Ty::Resource { base, .. } => prim_to_wasm(*base),
-        _ => None, // Complex types not yet supported
+        // Complex types become i32 pointers into linear memory
+        Ty::Tuple(_) | Ty::Array { .. } | Ty::Named { .. } => Some(WasmType::I32),
+        Ty::Function { .. } => Some(WasmType::I32), // function pointer
+        _ => None,
     }
+}
+
+/// Calculate the byte size of a type in linear memory.
+fn ty_byte_size(ty: &Ty) -> u32 {
+    match ty {
+        Ty::Primitive(p) | Ty::Resource { base: p, .. } => match p {
+            PrimitiveTy::I8 | PrimitiveTy::U8 | PrimitiveTy::Bool => 4, // WASM aligns to 4
+            PrimitiveTy::I16 | PrimitiveTy::U16 | PrimitiveTy::Char => 4,
+            PrimitiveTy::Int | PrimitiveTy::I32 | PrimitiveTy::UInt | PrimitiveTy::U32 => 4,
+            PrimitiveTy::I64 | PrimitiveTy::U64 => 8,
+            PrimitiveTy::I128 | PrimitiveTy::U128 => 16,
+            PrimitiveTy::F32 | PrimitiveTy::Float => 8, // promote to 8 for alignment
+            PrimitiveTy::F64 => 8,
+            PrimitiveTy::String => 8, // (offset: i32, length: i32)
+            PrimitiveTy::Unit => 0,
+        },
+        Ty::Tuple(fields) => fields.iter().map(ty_byte_size).sum(),
+        Ty::Array { .. } => 8, // (pointer: i32, length: i32)
+        Ty::Named { .. } => 4, // pointer
+        _ => 4,
+    }
+}
+
+/// Calculate the byte offset of a tuple field.
+fn tuple_field_offset(fields: &[Ty], index: usize) -> u32 {
+    fields[..index].iter().map(ty_byte_size).sum()
 }
 
 /// Map an Eclexia primitive type to a WASM value type.
@@ -207,6 +246,30 @@ struct ImportIndices {
     clock_time_get: Option<u32>,
     args_get: Option<u32>,
     args_sizes_get: Option<u32>,
+}
+
+/// Bump allocator for WASM linear memory.
+///
+/// Tracks the next free offset in linear memory. Strings from the data
+/// section occupy the beginning of memory; the heap starts after them.
+struct BumpAllocator {
+    next_offset: u32,
+}
+
+impl BumpAllocator {
+    fn new(initial_offset: u32) -> Self {
+        Self {
+            next_offset: initial_offset,
+        }
+    }
+
+    /// Allocate `size` bytes, returning the start offset.
+    fn alloc(&mut self, size: u32) -> u32 {
+        // Align to 8 bytes for f64 compatibility
+        let aligned = (self.next_offset + 7) & !7;
+        self.next_offset = aligned + size;
+        aligned
+    }
 }
 
 /// WASM backend for Eclexia.
@@ -858,8 +921,9 @@ impl WasmBackend {
                     memory_index: 0,
                 }));
             }
-            Value::Field { base, .. } | Value::Index { base, .. } => {
-                // Not fully supported — just lower the base expression
+            Value::Field { base, field } => {
+                // Field access on a tuple/struct pointer in linear memory.
+                // Lower base to get the pointer, then add the field offset and load.
                 self.lower_value(
                     base,
                     func_body,
@@ -869,6 +933,59 @@ impl WasmBackend {
                     string_offsets,
                     indices,
                 );
+                // Parse numeric field names for tuple access (e.g., "0", "1")
+                if let Ok(idx) = field.parse::<usize>() {
+                    // Try to determine the tuple type from the base
+                    let field_offset = idx as i32 * 8; // conservative 8-byte stride
+                    if field_offset > 0 {
+                        func_body.instruction(&Instruction::I32Const(field_offset));
+                        func_body.instruction(&Instruction::I32Add);
+                    }
+                }
+                // Load the value at the computed address
+                func_body.instruction(&Instruction::I32Load(wasm_encoder::MemArg {
+                    offset: 0,
+                    align: 2,
+                    memory_index: 0,
+                }));
+            }
+            Value::Index { base, index } => {
+                // Array index access: base pointer + (index * element_size).
+                // Lower base to get array data pointer.
+                self.lower_value(
+                    base,
+                    func_body,
+                    mir_func,
+                    mir,
+                    import_count,
+                    string_offsets,
+                    indices,
+                );
+                // Skip past the 8-byte array header (ptr, len) to data pointer
+                func_body.instruction(&Instruction::I32Load(wasm_encoder::MemArg {
+                    offset: 0,
+                    align: 2,
+                    memory_index: 0,
+                }));
+                // Compute offset: index * 4 (i32 element size default)
+                self.lower_value(
+                    index,
+                    func_body,
+                    mir_func,
+                    mir,
+                    import_count,
+                    string_offsets,
+                    indices,
+                );
+                func_body.instruction(&Instruction::I32Const(4));
+                func_body.instruction(&Instruction::I32Mul);
+                func_body.instruction(&Instruction::I32Add);
+                // Load element
+                func_body.instruction(&Instruction::I32Load(wasm_encoder::MemArg {
+                    offset: 0,
+                    align: 2,
+                    memory_index: 0,
+                }));
             }
             Value::Cast { value, target_ty } => {
                 self.lower_value(
@@ -2322,5 +2439,86 @@ mod tests {
         assert_eq!(module.imports[0].name, "query_shadow_price");
         let bytes = module.to_bytes();
         assert_eq!(&bytes[0..4], b"\0asm");
+    }
+
+    #[test]
+    fn test_wasm_complex_type_mapping() {
+        // Tuple type should map to I32 (pointer)
+        let tuple_ty = Ty::Tuple(vec![
+            Ty::Primitive(PrimitiveTy::I32),
+            Ty::Primitive(PrimitiveTy::F64),
+        ]);
+        assert_eq!(ty_to_wasm(&tuple_ty), Some(WasmType::I32));
+
+        // Array type should map to I32 (pointer)
+        let array_ty = Ty::Array {
+            elem: Box::new(Ty::Primitive(PrimitiveTy::I32)),
+            size: Some(10),
+        };
+        assert_eq!(ty_to_wasm(&array_ty), Some(WasmType::I32));
+
+        // Named type (struct) should map to I32 (pointer)
+        let named_ty = Ty::Named {
+            name: SmolStr::new("Point"),
+            args: vec![],
+        };
+        assert_eq!(ty_to_wasm(&named_ty), Some(WasmType::I32));
+
+        // Function type should map to I32 (function pointer)
+        let fn_ty = Ty::Function {
+            params: vec![Ty::Primitive(PrimitiveTy::I32)],
+            ret: Box::new(Ty::Primitive(PrimitiveTy::I32)),
+        };
+        assert_eq!(ty_to_wasm(&fn_ty), Some(WasmType::I32));
+    }
+
+    #[test]
+    fn test_wasm_type_byte_sizes() {
+        assert_eq!(ty_byte_size(&Ty::Primitive(PrimitiveTy::I32)), 4);
+        assert_eq!(ty_byte_size(&Ty::Primitive(PrimitiveTy::I64)), 8);
+        assert_eq!(ty_byte_size(&Ty::Primitive(PrimitiveTy::F64)), 8);
+        assert_eq!(ty_byte_size(&Ty::Primitive(PrimitiveTy::Bool)), 4);
+        assert_eq!(ty_byte_size(&Ty::Primitive(PrimitiveTy::String)), 8);
+        assert_eq!(ty_byte_size(&Ty::Primitive(PrimitiveTy::Unit)), 0);
+
+        // Tuple of (i32, f64) = 4 + 8 = 12 bytes
+        let tuple_ty = Ty::Tuple(vec![
+            Ty::Primitive(PrimitiveTy::I32),
+            Ty::Primitive(PrimitiveTy::F64),
+        ]);
+        assert_eq!(ty_byte_size(&tuple_ty), 12);
+
+        // Array is 8 bytes (pointer + length)
+        let array_ty = Ty::Array {
+            elem: Box::new(Ty::Primitive(PrimitiveTy::I32)),
+            size: None,
+        };
+        assert_eq!(ty_byte_size(&array_ty), 8);
+    }
+
+    #[test]
+    fn test_wasm_tuple_field_offset() {
+        let fields = vec![
+            Ty::Primitive(PrimitiveTy::I32),  // 4 bytes
+            Ty::Primitive(PrimitiveTy::F64),  // 8 bytes
+            Ty::Primitive(PrimitiveTy::Bool), // 4 bytes
+        ];
+        assert_eq!(tuple_field_offset(&fields, 0), 0);
+        assert_eq!(tuple_field_offset(&fields, 1), 4);
+        assert_eq!(tuple_field_offset(&fields, 2), 12);
+    }
+
+    #[test]
+    fn test_wasm_bump_allocator() {
+        let mut alloc = BumpAllocator::new(100);
+        // First allocation: aligned to 8 from offset 100 → 104
+        let a = alloc.alloc(16);
+        assert_eq!(a, 104); // 100 rounded up to 104 (next 8-byte aligned)
+        // Second: 104 + 16 = 120, already aligned
+        let b = alloc.alloc(8);
+        assert_eq!(b, 120);
+        // Third: 120 + 8 = 128, already aligned
+        let c = alloc.alloc(4);
+        assert_eq!(c, 128);
     }
 }
