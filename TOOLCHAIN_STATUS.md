@@ -1,75 +1,88 @@
 # Eclexia Toolchain Status
 
-**Last Updated:** 2026-02-08
-**Overall Completion:** Alpha — Core pipeline functional, backends and runtime stubs pending
+**Last Updated:** 2026-02-12
+**Overall Completion:** Alpha — Core pipeline functional, all SONNET-TASKS complete
+**Tests:** 507 total (446 library + 32/32 valid + 19/19 invalid conformance + integration), 0 failures, 0 clippy warnings
 
 ## Core Compiler Pipeline
 
 | Component | Status | Completion | Notes |
 |-----------|--------|------------|-------|
-| Lexer | ✅ Complete | 100% | Full tokenization with dimensional literals |
-| Parser | ✅ Complete | 100% | Recursive descent with error recovery |
-| AST | ✅ Complete | 100% | Complete syntax tree with attributes |
-| Type Checker | ✅ Complete | 100% | Hindley-Milner + dimensional analysis |
-| HIR | ✅ Complete | 100% | High-level IR with explicit types |
-| MIR | ✅ Complete | 100% | Mid-level IR with CFG and optimization |
-| Codegen | ✅ Complete | 100% | Bytecode backend with VM execution |
-| Interpreter | ✅ Complete | 100% | Tree-walking interpreter (legacy) |
+| Lexer | Done | 100% | 893 lines, 95+ tokens, dimensional literals |
+| Parser | Done | 100% | Pratt parser, 3106+ lines, macro support |
+| AST | Done | 100% | Complete syntax tree with attributes |
+| Type Checker | Done | 100% | Hindley-Milner + Robinson unification + dimensional analysis (2210 lines) |
+| HIR | Done | 100% | Concurrency expressions: Spawn, Channel, Send, Recv, Select, Yield, MacroCall |
+| MIR | Done | 95% | Constant propagation, dead code elimination, block inlining |
+| Codegen | Done | 95% | Bytecode generator with concurrency builtins |
+| Interpreter | Done | 95% | Tree-walking with tokio concurrency (28 builtin tests) |
 
 ## Runtime System
 
 | Component | Status | Completion | Notes |
 |-----------|--------|------------|-------|
-| Virtual Machine | ✅ Complete | 100% | Stack-based bytecode VM |
-| Shadow Prices | ✅ Complete | 100% | Dynamic price tracking and forecasting |
-| Resource Tracker | ✅ Complete | 100% | Energy/time/memory/carbon monitoring |
-| Adaptive Engine | ✅ Complete | 100% | Solution selection with constraints |
+| Virtual Machine | Done | 95% | Stack-based bytecode VM (934 lines, 18 unit tests) |
+| Shadow Prices | Done | 85% | Real defaults (energy=0.000033, time=0.001, carbon=0.00005), LP duality, EMA (8+ tests) |
+| Resource Tracker | Done | 80% | Energy, time, memory, carbon tracking |
+| Adaptive Engine | Done | 85% | Budget enforcement, solution selection (7 tests) |
+| Scheduler | Done | 90% | Shadow-price-aware defer/reject/run (4 tests) |
+| Profiler | Done | 85% | Wall-clock + energy/carbon + RSS memory on Linux (6 tests) |
+| Carbon Monitor | Done | 90% | Grid intensity with Green/Yellow/Red signals (7 tests) |
+| Shadow Engine | Done | 90% | LP duality pricing + EMA forecasting (8+ tests) |
 
 ## Standard Library
 
 | Module | Status | Completion | Notes |
 |--------|--------|------------|-------|
-| Core (stdlib/core.ecl) | ✅ Complete | 100% | Option, Result, panic, assert, print |
-| Collections (stdlib/collections.ecl) | ✅ Complete | 100% | Vec, HashMap, HashSet, SortedMap, Queue, PriorityQueue |
-| Math (stdlib/math.ecl) | ✅ Complete | 100% | Trig, log, rounding, number theory |
-| I/O (stdlib/io.ecl) | ✅ Complete | 100% | read_file, write_file, file_exists, JSON helpers |
-| Text (stdlib/text.ecl) | ✅ Complete | 100% | trim, split, contains, uppercase, lowercase, replace |
-| Time (stdlib/time.ecl) | ✅ Complete | 100% | Duration, Instant, DateTime, sleep, measure |
+| Core (stdlib/core.ecl) | Done | 100% | Option, Result, panic, assert, print |
+| Collections (stdlib/collections.ecl) | Done | 100% | Vec, HashMap, HashSet, SortedMap, Queue, PriorityQueue |
+| Math (stdlib/math.ecl) | Done | 100% | Trig, log, rounding, number theory |
+| I/O (stdlib/io.ecl) | Done | 100% | read_file, write_file, file_exists, JSON helpers |
+| Text (stdlib/text.ecl) | Done | 100% | trim, split, contains, uppercase, lowercase, replace |
+| Time (stdlib/time.ecl) | Done | 100% | Duration, Instant, DateTime, sleep, measure |
+| Async (stdlib/async.ecl) | Done | 85% | task_spawn, task_await, channels, parallel (wired to VM + interpreter) |
+
+## Backends
+
+| Backend | Status | Completion | Tests | Notes |
+|---------|--------|------------|-------|-------|
+| WASM | Done | 75% | 24 | Valid .wasm binaries, complex types as i32 pointers, WASI preview1 (fd_write, clock_time_get, args). No GC. |
+| LLVM | Done | 60% | 21 | Textual .ll IR files. Runtime linking via eclexia-rt-native static library (5 C-compatible symbols). Manual linking. |
+| Cranelift | Done | 70% | 8 | Real JIT for simple int functions. String data sections. Range/RangeInclusive. Fallback estimation for complex ops. |
 
 ## Developer Tools
 
 | Tool | Status | Completion | Notes |
 |------|--------|------------|-------|
-| CLI | ✅ Complete | 100% | build, run, check, fmt, repl, init, test, bench, doc |
-| REPL | ✅ Complete | 100% | Interactive expression evaluation |
-| Testing Framework | ✅ Complete | 100% | #[test] attributes with full pipeline execution |
-| Benchmarking Framework | ✅ Complete | 100% | #[bench] attributes with statistics |
-| Package Manager | ✅ Complete | 100% | Manifest parsing, dependency resolution, registry client |
-| LSP Server | ✅ Complete | 100% | Diagnostics, 13 symbol kinds, navigation, hover, completion, format |
-| Formatter | ✅ Complete | 100% | AST pretty printer with economics-aware formatting |
-| Linter | ✅ Complete | 100% | 10+ rules (unused vars, dimension mismatch, shadow price analysis) |
-| Debugger | ✅ Complete | 100% | Interactive debugger with breakpoints, step-through, economics inspection |
-| Documentation Generator | ✅ Complete | 100% | HTML/Markdown output from doc comments |
-| VSCode Extension | ✅ Complete | 100% | Syntax highlighting + LSP integration |
+| CLI | Done | 100% | 15 commands: build, run, check, fmt, lint, repl, init, test, bench, debug, doc, install, watch, disasm, interop |
+| REPL | Done | 100% | Interactive expression evaluation |
+| Testing Framework | Done | 100% | #[test] attributes with full pipeline execution |
+| Benchmarking Framework | Done | 100% | #[bench] attributes with statistics |
+| Package Manager | Done | 85% | Manifest parsing, dependency resolution (registry server stub exists) |
+| LSP Server | Done | 90% | Diagnostics, 13 symbol kinds, navigation, hover, completion, rename, formatting |
+| Formatter | Done | 95% | AST pretty printer with economics-aware formatting |
+| Linter | Done | 95% | 10+ rules (unused vars, dimension mismatch, shadow price analysis) |
+| Debugger | Done | 80% | Interactive with breakpoints, step-through, economics inspection |
+| Documentation Generator | Done | 100% | HTML/Markdown output from doc comments |
+| VSCode Extension | Done | 85% | Syntax highlighting + LSP integration |
+| Interop Validator | Done | 70% | `eclexia interop check` validates 4 language bridges |
 
 ## Testing Infrastructure
 
-**Library Tests:** 62 passing ✅
-**Conformance Tests:** 51 (32 valid + 19 invalid) ✅
-**Property-Based:** 11 tests (1000+ cases each) ✅
-**Integration:** 4 passing + 9 aspirational
-**Code Coverage:** 17.92% (baseline, path to 80% documented)
-**Panic-Attack:** Zero production weak points across all crates ✅
+**Library Tests:** 446 passing
+**Conformance Tests:** 51 (32 valid + 19 invalid)
+**Property-Based:** 11 tests (1000+ cases each)
+**Total:** 507 passing, 0 failures
+**Clippy Warnings:** 0
 
 ### Test Categories
 
 | Category | Count | Status | Notes |
 |----------|-------|--------|-------|
-| Conformance (Valid) | 32 | ✅ All Passing | Tests that should compile and run successfully |
-| Conformance (Invalid) | 19 | ✅ All Passing | Tests that should fail compilation with expected errors |
-| Property-Based | 11 | ✅ All Passing | 1000+ generated test cases per property |
-| Integration | 13 | 🚧 4/13 Passing | Full compiler pipeline tests (9 aspirational) |
-| Unit | 21 | ✅ All Passing | Component-level tests |
+| Library | 446 | All Passing | Across all 25 crates |
+| Conformance (Valid) | 32 | All Passing | Tests that should compile and run |
+| Conformance (Invalid) | 19 | All Passing | Tests that should fail with expected errors |
+| Property-Based | 11 | All Passing | 1000+ generated test cases per property |
 
 ### Conformance Tests (51 total)
 
@@ -92,31 +105,17 @@ Tests with 1000+ generated cases each:
 10. Resource tracking is accurate
 11. Multi-objective optimization is Pareto-optimal
 
-### Integration Tests (13 total)
+## Security Status
 
-**Passing (4):**
-1. `simple_arithmetic` - Basic integer arithmetic (5 + 10 = 15)
-2. `conditional` - If expressions with branches
-3. `function_call` - Simple function invocation
-4. `type_inference` - Polymorphic function inference
-
-**Aspirational (9):** nested_calls, factorial, boolean_logic, float_arithmetic, comparison_chain, adaptive_selection, resource_tracking, shadow_price_computation, carbon_aware_scheduling
-
-**Note:** Integration tests run full compiler pipeline: Parse → HIR → MIR → Codegen → Execute
-
-## Example Files
-
-| File | Purpose | Status |
-|------|---------|--------|
-| examples/hello.ecl | Basic hello world | ✅ Working |
-| examples/fibonacci_adaptive.ecl | Adaptive solution selection | ✅ Working |
-| examples/dimensional_types.ecl | Resource type demonstration | ✅ Working |
-| examples/test_example.ecl | Testing framework demo | ✅ Working |
-| examples/bench_example.ecl | Benchmarking framework demo | ✅ Working |
+| Metric | Value | Notes |
+|--------|-------|-------|
+| Production unwraps | 20 | Down from 100+ |
+| Unsafe blocks | 28 | All in FFI boundaries |
+| Clippy warnings | 0 | All resolved |
 
 ## Package Management
 
-### Implemented ✅
+### Implemented
 
 - Package manifest specification (PACKAGE_SPEC.md)
 - TOML parsing and serialization
@@ -131,143 +130,71 @@ Tests with 1000+ generated cases each:
   - Version conflict detection
   - Highest compatible version selection
 
-### Registry Client ✅
+### Registry Server
 
-- Package registry HTTP API client
-- Dependency downloading and caching
-- Wire resolver to CLI (add/remove commands)
+- Registry server crate: `eclexia-registry-server`
+- Filesystem backend (packages stored as files)
+- 3 routes: GET metadata, GET download, POST upload
+- Not deployed (local testing only)
 
-### Future Enhancement ⏳
+### Future Enhancement
 
 - Workspace support for multi-package projects
+- Deploy registry server
+- Registry authentication
 
-## LSP Server (Complete - 100%)
+## LSP Server (90%)
 
 ### Core Features
 
-- [✅] Language Server Protocol implementation (tower-lsp setup)
-- [✅] Text document synchronization (full sync)
-- [✅] Diagnostic reporting (parse errors + type errors)
-- [✅] Symbol resolution and scope tracking (13 symbol kinds)
-- [✅] Document symbols (outline view)
-- [✅] Hover information (type and kind for all symbols)
-- [✅] Go to definition (position-based symbol lookup)
-- [✅] Find references (tracks all symbol usages)
-- [✅] Code completion (suggests symbols in scope)
-- [✅] Formatting (integrated with eclexia-fmt)
+- [x] Language Server Protocol implementation (tower-lsp setup)
+- [x] Text document synchronization (full sync)
+- [x] Diagnostic reporting (parse errors + type errors)
+- [x] Symbol resolution and scope tracking (13 symbol kinds)
+- [x] Document symbols (outline view)
+- [x] Hover information (type and kind for all symbols)
+- [x] Go to definition (position-based symbol lookup)
+- [x] Find references (tracks all symbol usages)
+- [x] Code completion (suggests symbols in scope)
+- [x] Formatting (integrated with eclexia-fmt)
 
-### Implemented ✅
-
-**Server Infrastructure:**
-- Tower-LSP based async server
-- DashMap for concurrent document storage
-- Proper LSP initialization and capabilities
-- Text synchronization (open, change, save, close events)
-- In-memory document tracking with versioning
-- Symbol table stored per document
-
-**Diagnostic Reporting:**
-- Real-time parse error detection
-- Real-time type error detection
-- Accurate line:column positioning (converts byte offsets to LSP positions)
-- Separate error sources (eclexia-parser vs eclexia-typeck)
-- Automatic diagnostics on file open/change/save
-
-**Symbol Resolution (100%):**
-- SymbolTable with hierarchical scope tracking
-- 13 symbol kinds: Function, AdaptiveFunction, TypeDef, Const, Variable, Parameter, Method, Field, EnumVariant, Module, Static, Effect, Trait
-- All pattern bindings tracked (var, tuple, constructor, struct, slice, or, binding, reference, range, rest, wildcard)
-- Impl block method/assoc type/assoc const indexing
-- Import path resolution and reference tracking
-- Extern block function/static indexing
-- Trait method and associated item indexing
-- Module scope nesting for inline modules
-- Effect operation indexing
-- Match arm pattern scoping
-- Lambda parameter scoping
-- PathExpr, Cast, MethodCall, Field reference collection
-
-**LSP Features:**
-- Document symbols (provides outline view in IDE)
-- Hover information (shows type and symbol kind)
-- Go to definition (navigates to symbol declarations)
-- Find references (tracks read/write/call usages)
-- Code completion (context-aware suggestions from scope chain)
-- Symbol table automatically rebuilt on document changes
-
-### Future Enhancement ⏳
+### Future Enhancement
 
 - Semantic tokens (syntax highlighting via LSP)
 - Code actions (quick fixes)
-- Rename symbol (workspace edits)
 - Signature help for function calls
 - Cross-file symbol resolution
 
 ### IDE Integration
 
-- [✅] VS Code extension (Syntax highlighting + LSP integration)
-- [⏳] Neovim plugin (README includes config example)
-- [⏳] Emacs mode
-- [⏳] IntelliJ plugin
-
-## Documentation System
-
-**Total:** ~42,000 words of documentation
-**Status:** ✅ Complete (100%)
-
-| Component | Status | Details |
-|-----------|--------|---------|
-| API Documentation Generator | ✅ Complete | eclexia-doc crate generates HTML/Markdown from doc comments |
-| Stdlib Documentation | ✅ Complete | 6 modules documented (core, collections, math, io, text, time) |
-| Tutorial Series | ✅ Complete | 4 comprehensive tutorials (22,000 words) |
-| Language Reference | ✅ Complete | EBNF grammar, type system, semantics (5,000+ words) |
-
-### Tutorials
-
-| Tutorial | Words | Audience | Status |
-|----------|-------|----------|--------|
-| Getting Started | 5,200 | Beginner | ✅ Complete |
-| Resource-Aware Programming | 5,400 | Intermediate | ✅ Complete |
-| Advanced Type System | 5,100 | Advanced | ✅ Complete |
-| Economics-as-Code | 6,200 | Expert | ✅ Complete |
-
-### Generated Documentation
-
-- **HTML Output:** 35.2KB across 6 modules
-- **Format Support:** HTML and Markdown
-- **Doc Comments:** Extracted from `///` and `//!` comments
-- **Index Pages:** stdlib-index.html, tutorial index
+- [x] VS Code extension (Syntax highlighting + LSP integration)
+- [ ] Neovim plugin
+- [ ] Emacs mode
+- [ ] IntelliJ plugin
 
 ## Formal Verification
 
-**Total:** 20+ mechanically-verified theorems
-**Status:** 🚧 In Progress (60% - 12/20 theorems fully proved)
+**Status:** Typing.v: 0 Admitted, ShadowPrices.v: 4 Admitted (deep LP theory)
 
-| Component | Status | Theorems | Proof Assistant |
-|-----------|--------|----------|-----------------|
-| Shadow Prices (ShadowPrices.v) | ✅ Complete | 8 theorems | Coq |
-| Type System (Typing.v) | ✅ Complete | 4 theorems | Coq |
-| Resource Tracking (ResourceTracking.agda) | ✅ Complete | 9 theorems | Agda |
+| Component | Theorems | Admitted | Proof Assistant |
+|-----------|----------|----------|-----------------|
+| Type System (Typing.v) | 4 | 0 | Coq |
+| Shadow Prices (ShadowPrices.v) | 8 | 4 | Coq |
+| Resource Tracking (ResourceTracking.agda) | 9 | 0 | Agda |
 
 ### Key Theorems Proved
 
-**Shadow Prices (Coq):**
-1. Strong duality theorem
-2. Shadow prices are non-negative
-3. Complementary slackness
-4. Shadow prices track marginal value
-5. Dual simplex correctness
-6. Shadow price convergence
-7. Economic optimality
-8. Budget-shadow price relationship
-
-**Type System (Coq):**
+**Type System (Coq - all proved):**
 1. Progress theorem (well-typed programs don't get stuck)
 2. Preservation theorem (evaluation preserves types)
 3. Soundness theorem (combination of progress + preservation)
 4. Dimensional type safety
 
-**Resource Tracking (Agda):**
+**Shadow Prices (Coq - 4/8 proved, 4 Admitted):**
+- Proved: non-negativity, convergence, economic optimality, budget relationship
+- Admitted: strong duality, dual variables, complementary slackness, positive/binding (deep LP theory requiring Farkas' lemma)
+
+**Resource Tracking (Agda - all proved):**
 1. Tracking soundness (tracked usage = actual usage)
 2. Usage monotonicity
 3. Deterministic tracking
@@ -278,125 +205,47 @@ Tests with 1000+ generated cases each:
 8. Budget inheritance
 9. Multi-resource tracking independence
 
-### Documentation
+## Example Files
 
-- **EXTENDED_PROOFS.md:** Comprehensive catalog of all theorems
-- **formal/coq/:** Coq proof files (ShadowPrices.v, Typing.v)
-- **formal/agda/:** Agda proof files (ResourceTracking.agda)
+| File | Purpose | Status |
+|------|---------|--------|
+| examples/hello.ecl | Basic hello world | Working |
+| examples/fibonacci_adaptive.ecl | Adaptive solution selection | Working |
+| examples/dimensional_types.ecl | Resource type demonstration | Working |
+| examples/test_example.ecl | Testing framework demo | Working |
+| examples/bench_example.ecl | Benchmarking framework demo | Working |
 
-## Deployment Infrastructure
+## What Does NOT Work Yet
 
-**Status:** ✅ Complete (100%)
-
-| Component | Status | Details |
-|-----------|--------|---------|
-| Docker Containerization | ✅ Complete | Multi-stage build, 25MB final image |
-| Kubernetes Deployment | ✅ Complete | StatefulSet, ConfigMap, Service manifests |
-| Guix Package | ✅ Complete | Bit-for-bit reproducible builds |
-
-### Docker
-
-- **Image Size:** 25MB (target: <50MB) ✅
-- **Build Time:** ~5 minutes (cold), ~1 minute (cached)
-- **Base Image:** Alpine 3.19
-- **Security:** Non-root user, minimal dependencies
-- **Multi-stage:** Builder (Rust 1.75-alpine) + Runtime (Alpine)
-
-### Kubernetes
-
-- **StatefulSet:** 3 replicas with persistent shadow price state
-- **Persistence:** 10GB data + 5GB shadow-prices per pod
-- **Configuration:** Resource budgets, carbon config, adaptive config (TOML)
-- **Service:** ClusterIP with session affinity + headless service
-- **Health Checks:** Liveness (30s) and readiness (10s) probes
-- **Documentation:** deploy/kubernetes/README.md (2,500+ words)
-
-### Guix
-
-- **Package Definition:** guix.scm
-- **Build System:** cargo-build-system
-- **License:** PMPL-1.0-or-later
-- **Reproducibility:** Bit-for-bit identical builds
-- **Dependencies:** Rust compiler, cargo, crates from Guix
-
-### Cloud Provider Costs
-
-- **AWS EKS:** ~$95/month (3 t3.medium + 45GB EBS)
-- **GCP GKE:** ~$105/month (3 n1-standard-1 + 45GB disk)
-- **Azure AKS:** ~$92/month (3 Standard_B2s + 45GB disk)
+- **WASM GC:** Bump allocator defined but not wired to linear memory
+- **LLVM end-to-end linking:** Static library exists, automatic linking not wired
+- **Runtime OS metrics:** Scheduler/profiler/carbon implemented but not wired to real OS metrics (except RSS on Linux)
+- **Macro expansion in MIR:** MacroCall lowered to HIR but MIR emits Nop
+- **Measured benchmarks:** None — all performance claims are projections
+- **Registry deployment:** Server stub exists, not deployed
+- **ShadowPrices.v:** 4 Admitted proofs (deep LP theory)
 
 ## Next Steps
 
-**Toolchain Hardening Complete!** All components at 100%, zero production weak points. Remaining work:
+1. **Wire WASM GC** — connect bump allocator to linear memory
+2. **Automate LLVM linking** — integrate rt-native into build command
+3. **Wire OS metrics** — connect runtime to real system metrics
+4. **Deploy registry** — package registry server
+5. **Complete ShadowPrices.v** — resolve remaining 4 Admitted proofs
+6. **Add benchmarks** — measure actual performance
 
-1. **Code Coverage Improvement** (~20-30 hours)
-   - Currently: 17.92% baseline
-   - Target: 80%+
-   - Focus: HIR lowering, MIR passes, codegen edge cases
-   - Add integration tests for uncovered paths
+---
 
-2. **Complete Formal Proofs** (~10-15 hours)
-   - Currently: 12/20 theorems proved
-   - Target: 20/20 theorems fully mechanized
-   - Focus: Complete 8 aspirational theorems
-   - Verify all proofs in CI
-
-3. **LLVM/Cranelift Backend** (~40-60 hours)
-   - Native code generation for production performance
-   - JIT compilation for hot paths
-   - Profile-guided optimization
-
-4. **Ecosystem Growth** (Ongoing)
-   - Community building and adoption
-   - Third-party package development
-   - IDE plugins for other editors (Neovim, Emacs, IntelliJ)
-   - Academic collaborations
-
-## Performance Metrics
-
-### Compilation Speed
-
-- Lexer: ~1M tokens/sec
-- Parser: ~500K lines/sec
-- Type checker: ~100K lines/sec
-- HIR lowering: ~200K lines/sec
-- MIR lowering: ~150K lines/sec
-- Bytecode generation: ~100K instructions/sec
-
-### Runtime Performance
-
-- VM execution: ~10M instructions/sec
-- Function call overhead: ~50ns
-- Resource tracking overhead: ~10ns/operation
-
-## Known Issues
-
-1. VM: No JIT compilation yet (bytecode interpreter only)
-2. Type checker: Some edge cases in polymorphic type inference
-3. No LLVM/Cranelift native code backend (bytecode-only execution)
-4. Code coverage at 17.92% (target 80%)
-
-## Documentation Status
-
-| Document | Status | Notes |
-|----------|--------|-------|
-| WHITEPAPER.md | ✅ Complete | Academic foundation |
-| PROOFS.md | ✅ Complete | Formal correctness proofs |
-| SPECIFICATION.md | ✅ Complete | Language specification |
-| FORMAL_VERIFICATION.md | ✅ Complete | Verification strategy |
-| THEORY.md | ✅ Complete | Type theory and semantics |
-| ALGORITHMS.md | ✅ Complete | Core algorithms |
-| BIBLIOGRAPHY.md | ✅ Complete | Academic references |
-| EXTENDED_PROOFS.md | ✅ Complete | Detailed mathematical proofs |
-| IMPLEMENTATION_ROADMAP.md | ✅ Complete | Development phases |
-| CARBON_APIS.md | ✅ Complete | Carbon-aware scheduling APIs |
-| GETTING_STARTED.md | ✅ Complete | Quick start guide |
-| PACKAGE_SPEC.md | ✅ Complete | Package manifest format |
+**Honest assessment:** Eclexia is a working alpha compiler with a functional pipeline
+from source to bytecode VM, with three real code-generation backends (WASM, LLVM, Cranelift).
+The economics-as-code concepts (shadow prices, adaptive functions, resource tracking) are
+implemented in the runtime with real defaults and tests. All 18 SONNET-TASKS completion
+tasks are done. Not production-ready. Not feature-complete. Active development.
 
 ---
 
 **Legend:**
-- ✅ Complete - Fully implemented and tested
-- 🚧 In Progress - Partially implemented
-- ⏳ Planned - Not started yet
-- ❌ Blocked - Waiting on dependencies
+- Done - Implemented and tested
+- In Progress - Partially implemented
+- Planned - Not started yet
+- Blocked - Waiting on dependencies

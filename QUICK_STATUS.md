@@ -1,9 +1,9 @@
 # Eclexia - Quick Status Reference
 
 **Last Updated:** 2026-02-12
-**Completion:** Alpha — Core compiler functional, many subsystems stubbed
-**Build:** Passing (25 crates, zero warnings)
-**Tests:** 271 library tests + 32/32 valid + 19/19 invalid conformance (0 skips)
+**Completion:** Alpha — Core compiler functional, all SONNET-TASKS.md tasks complete
+**Build:** Passing (25 crates, zero clippy warnings)
+**Tests:** 507 total (446 library + 32/32 valid + 19/19 invalid conformance + integration)
 
 ---
 
@@ -13,22 +13,25 @@
 - Lexer with dimensional literals (893 lines, 95+ tokens)
 - Pratt parser with macro definition support (3106+ lines)
 - Hindley-Milner type checker with Robinson unification (2210 lines)
-- HIR lowering (desugaring, type annotations)
+- HIR lowering with concurrency expressions (Spawn, Channel, Send, Recv, Select, Yield, MacroCall)
 - MIR with optimizations (constant propagation, dead code elimination)
-- Bytecode generator
-- Stack-based VM (934 lines)
-- Tree-walking interpreter (separate path, 28 builtin tests)
+- Bytecode generator with concurrency builtins
+- Stack-based VM (934 lines) with 18 unit tests
+- Tree-walking interpreter (separate path, 28 builtin tests, concurrency support via tokio)
 
-### Runtime System (Partial)
-- Shadow price registry and forecasting (real implementation, 5326 lines)
-- Resource tracking: energy, time, memory, carbon (4681 lines)
-- Adaptive decision engine (8690 lines)
-- Budget enforcement
-
+### Runtime System
+- Shadow price registry and forecasting (real defaults: energy=0.000033, time=0.001, carbon=0.00005)
+- Resource tracking: energy, time, memory, carbon
+- Adaptive decision engine with budget enforcement (7 tests)
 - Scheduler: shadow-price-aware task scheduling with defer/reject/run (4 tests)
-- Profiler: wall-clock profiling with energy/carbon estimation (6 tests)
+- Profiler: wall-clock profiling with energy/carbon estimation + RSS memory tracking (6 tests)
 - Carbon monitor: grid intensity with Green/Yellow/Red signals (7 tests)
-- Shadow price engine: utilization-curve LP duality pricing (8 tests)
+- Shadow price engine: utilization-curve LP duality pricing (8+ tests)
+
+### Backends (All 3 generate real code)
+- **WASM:** Generates valid .wasm binaries via wasm-encoder; complex types (tuples, arrays, structs) as i32 linear memory pointers; WASI preview1 imports (fd_write, clock_time_get, args); 24 tests
+- **LLVM:** Generates textual .ll IR files; runtime linking via eclexia-rt-native static library (5 C-compatible symbols); 21 tests
+- **Cranelift:** Real JIT for simple integer functions; string data sections; Range/RangeInclusive support; fallback estimation for complex ops; 8 tests
 
 ### Standard Library (~85%)
 - Core types: Option, Result
@@ -37,60 +40,54 @@
 - I/O operations: read_file, write_file, file_exists
 - Text processing: trim, split, contains, uppercase, lowercase
 - Time: Duration, Instant, DateTime, sleep, measure
-- **Missing:** Concurrency primitives, networking, regex
+- Async: task_spawn, task_await, channel_create, channel_send, channel_recv (wired to VM + interpreter)
 
 ### Developer Tooling
-- CLI: build (--analyze), run, check, fmt, lint, repl, init, test, bench, debug, doc, install, watch, disasm
+- CLI: build (--analyze, --target wasm/llvm), run, check, fmt, lint, repl, init, test, bench, debug, doc, install, watch, disasm, interop
 - REPL with expression evaluation
 - Testing framework (#[test] attributes)
 - Benchmarking framework (#[bench] attributes)
-- Package manager: manifest parsing + dependency resolution (registry is client stub)
+- Package manager: manifest parsing + dependency resolution + registry server stub
 - LSP server: diagnostics, symbols, navigation, hover, completion, rename, formatting
 - Formatter: AST pretty printer
 - Linter: 10+ rules
 - Debugger: Interactive with breakpoints, step, stack inspection
 - VSCode extension: Syntax highlighting + LSP integration
+- Interop bridge validator: `eclexia interop check` validates 4 language bridges
 
 ### Testing
-- 271 library tests passing (across all crates)
+- 507 total tests passing (0 failures)
+- 446 library tests passing (across all crates)
 - 32/32 valid conformance tests passing
 - 19/19 invalid conformance tests correctly rejecting (0 skips)
-- 5 integration tests failing (pre-existing temp file race condition — not a code bug)
 - 11 property-based tests (1000+ generated cases each)
+- 0 clippy warnings
 
 ### Formal Verification (Partial)
-- Coq proofs: ShadowPrices.v, Typing.v
+- Coq proofs: Typing.v (0 Admitted), ShadowPrices.v (4 Admitted — deep LP theory)
 - Agda proofs: ResourceTracking.agda
-- **22 theorems Admitted (assumed, not proven)** — honest count
-- Some theorems fully proved (progress, preservation, duality)
+- 4 remaining Admitted theorems are genuinely hard LP proofs (strong duality, dual variables, complementary slackness)
 
 ---
 
 ## What Does NOT Work Yet
 
-- **Native backends:** Cranelift has a JIT skeleton for simple integer functions; the LLVM target now emits `.ll`, runs `llc` to produce `.o`, and exits non-zero if `llc` fails (while preserving `.ll`); IR now includes runtime start/stop tracking hooks and function resource metadata attachments (`!eclexia.resource.*`); linking to runtime is still manual. WASM backend already generates real `.wasm` binaries.
-- **Runtime integration:** scheduler/profiler/carbon/shadow implemented but not wired to real system metrics
-- **Reactive compilation:** 4/7 crates wired into `build --analyze` (absinterp, comptime, specialize, effects); remaining 3 not yet wired (db, modules, tiered)
-- **Shadow prices:** ShadowPriceRegistry real defaults (energy=0.000033, time=0.001, carbon=0.00005); dynamic prices computed from VM resource usage via ShadowPriceEngine
-- **Bytecode serialization:** .eclb binary format implemented (write/read/round-trip verified)
-- **Bytecode builtins:** CallBuiltin instruction + VM dispatch (println, print, to_string, abs, sqrt, etc.) — `build` now works on files using builtins
-- **Adaptive def MIR:** Fixed — `build --analyze` no longer panics on adaptive def constructs
-- **Package registry:** Client stub exists, no server deployed
-- **Concurrency:** AST nodes parsed (spawn, channel, send, recv, select, yield) but interpreter returns errors
-- **Macro expansion in HIR:** MacroCall lowers to Unit — only interpreter supports macro eval
+- **Native compilation end-to-end:** LLVM backend generates .ll but linking to runtime is manual (static library exists, automatic linking not wired)
+- **WASM GC:** No garbage collection in WASM linear memory; bump allocator defined but not yet wired
+- **Runtime system metrics:** scheduler/profiler/carbon/shadow implemented but not wired to real OS metrics (except RSS memory on Linux)
+- **Macro expansion in HIR:** MacroCall lowered to HIR variant but MIR emits Nop — only interpreter supports macro eval
 - **Measured benchmarks:** None — all performance claims are projections
-- **Code coverage:** 17.92% baseline (target: 80%)
+- **Package registry deployment:** Server stub exists (filesystem backend, 3 routes), not deployed
+- **Formal proofs:** 4 Admitted in ShadowPrices.v (strong duality, dual variables, slack/zero, positive/binding)
 
 ---
 
-## Security Status (panic-attack scan 2026-02-09)
+## Security Status
 
-- **15 weak points** (327 unwraps, 28 unsafe blocks, 48 panic sites)
-- Top offenders: builtins.rs (96 unwraps in tests), parser/lib.rs (84)
-- 3 dangerous production unwraps fixed (modules, REPL, LSP)
-- 2 Critical: believe_me in Idris2 ABI files (intentional pattern)
-- 1 Command injection risk: recoverer-setup.sh (47 unquoted vars)
-- 47,295 total lines scanned
+- **Production unwraps:** 20 (down from 100+, all remaining in non-critical paths)
+- **Clippy warnings:** 0 (all resolved)
+- **Unsafe blocks:** 28 (all in FFI boundaries)
+- 0 unwraps in production-critical code paths
 
 ---
 
@@ -106,11 +103,20 @@ cargo test --workspace --lib
 # Run conformance tests
 cargo test -p eclexia --test conformance_tests
 
+# Full test suite (507 tests)
+cargo test --workspace
+
+# Check for warnings
+cargo clippy --workspace
+
 # Try the REPL
 cargo run -- repl
 
 # Run an example
 cargo run -- run examples/fibonacci_adaptive.ecl
+
+# Validate interop bridges
+cargo run -- interop check
 
 # Security scan
 panic-attack assail . --output /tmp/eclexia-scan.json
@@ -125,14 +131,19 @@ panic-attack assail . --output /tmp/eclexia-scan.json
 | Compiler | compiler/eclexia-{lexer,parser,typeck,hir,mir,codegen}/ |
 | Interpreter | compiler/eclexia-interp/ |
 | Runtime | runtime/eclexia-runtime/ |
+| Native Runtime | runtime/eclexia-rt-native/ (static lib for LLVM linking) |
+| Registry Server | runtime/eclexia-registry-server/ |
+| Backends | compiler/eclexia-{cranelift,llvm,wasm}/ |
 | Tooling | compiler/eclexia-{fmt,lint,debugger,doc,lsp}/ |
 | Tests | tests/conformance/{valid,invalid}/ |
 | Formal | formal/{coq,agda}/ |
 | Stdlib | stdlib/ |
+| Interop | interop/*.toml, compiler/eclexia/src/interop.rs |
 
 ---
 
 **Honest assessment:** Eclexia is a working alpha compiler with a functional pipeline
-from source to bytecode VM. The economics-as-code concepts (shadow prices, adaptive
-functions, resource tracking) are implemented in the runtime but several subsystems
-are stubs. Not production-ready. Not feature-complete. Active development.
+from source to bytecode VM, with three real code-generation backends (WASM, LLVM, Cranelift).
+The economics-as-code concepts (shadow prices, adaptive functions, resource tracking) are
+implemented in the runtime with real defaults and tests. All 18 SONNET-TASKS.md completion
+tasks are done. Not production-ready. Not feature-complete. Active development.

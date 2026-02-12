@@ -3,13 +3,14 @@
 
 This document outlines the development roadmap for Eclexia, tracking progress and planned milestones.
 
-For detailed technical implementation plans, see [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md).
+For detailed technical implementation plans, see link:IMPLEMENTATION_ROADMAP.md[IMPLEMENTATION_ROADMAP.md].
 
 == Current Status
 
-**Phase**: v0.2 - Core Development
-**Overall Completion**: ~55%
-**Last Updated**: 2026-02-09
+**Phase**: v0.2 - Core Development (Alpha)
+**Overall Completion**: ~75%
+**Last Updated**: 2026-02-12
+**Tests**: 507 total (446 library + 32/32 valid + 19/19 invalid conformance + 11 property-based), 0 failures, 0 clippy warnings
 
 ---
 
@@ -43,42 +44,93 @@ For detailed technical implementation plans, see [IMPLEMENTATION_ROADMAP.md](IMP
 
 == In Progress
 
-=== v0.2.0 - Core Development (In Progress)
+=== v0.2.0 - Core Development (In Progress — ~75% Complete)
 
+==== Compiler Pipeline (Complete)
 - [x] 25-crate Rust compiler architecture
 - [x] Lexer (logos, 893 lines, 95+ tokens)
 - [x] Parser (Pratt, 3106 lines, 32 valid + 19 invalid conformance tests)
 - [x] Type checker (Robinson unification, 2210 lines, dimensional types)
-- [x] HIR and MIR lowering
-- [x] Bytecode codegen and stack-based VM (934 lines)
-- [x] Tree-walking interpreter with builtins
+- [x] HIR lowering with concurrency expressions (Spawn, Channel, Send, Recv, Select, Yield, MacroCall)
+- [x] MIR with optimizations (constant propagation, dead code elimination, block inlining)
+- [x] Bytecode codegen with concurrency builtins
+- [x] Stack-based VM (934 lines, 18 unit tests)
+- [x] Tree-walking interpreter with tokio concurrency
 - [x] .eclb binary bytecode format
-- [x] LSP server, formatter, linter, debugger
-- [x] 271 lib tests passing, 0 conformance skips
-- [ ] Wire reactive compiler crates (salsa DB, modules, effects) into CLI
-- [ ] Reduce unwrap() calls in parser/interpreter
-- [ ] Link builtins into bytecode build path
-- [ ] Real codegen for backend crates (Cranelift, LLVM, WASM)
+
+==== Runtime System (Complete)
+- [x] Shadow prices with real defaults and LP duality pricing (8+ tests)
+- [x] Resource tracking: energy, time, memory, carbon
+- [x] Adaptive decision engine with budget enforcement (7 tests)
+- [x] Scheduler: shadow-price-aware defer/reject/run (4 tests)
+- [x] Profiler: wall-clock + energy/carbon + RSS memory tracking (6 tests)
+- [x] Carbon monitor: grid intensity Green/Yellow/Red (7 tests)
+
+==== Standard Library (Complete)
+- [x] Core (Option, Result, assert, print)
+- [x] Collections (Vec, HashMap, HashSet, SortedMap, Queue, PriorityQueue)
+- [x] Math (trig, log, rounding, number theory)
+- [x] I/O (read_file, write_file, file_exists)
+- [x] Text (trim, split, contains, uppercase, lowercase)
+- [x] Time (Duration, Instant, DateTime, sleep, measure)
+- [x] Async (task_spawn, task_await, channels, parallel)
+
+==== Developer Tooling (Complete)
+- [x] LSP server (diagnostics, symbols, navigation, hover, completion, rename, formatting)
+- [x] Formatter (AST pretty printer)
+- [x] Linter (10+ rules)
+- [x] Debugger (breakpoints, step, stack inspection)
+- [x] VSCode extension (syntax highlighting + LSP)
+- [x] Package manager (manifest parsing, dependency resolution)
+- [x] Documentation generator
+- [x] Interop bridge validator (`eclexia interop check`)
+
+==== Backends (In Progress)
+- [x] WASM: valid .wasm binaries, complex types as i32 pointers, WASI preview1 (24 tests)
+- [x] LLVM: textual .ll IR, rt-native static library (21 tests)
+- [x] Cranelift: real JIT, string data sections, Range/RangeInclusive (8 tests)
+- [ ] WASM GC: bump allocator not wired to linear memory
+- [ ] LLVM end-to-end linking: currently manual
+- [ ] Package registry deployment
+
+==== Reactive Crates (Wired into --analyze)
+- [x] eclexia-db: Salsa incremental compilation (8 tests)
+- [x] eclexia-modules: Module system, dep graph, parallel compilation (21 tests)
+- [x] eclexia-comptime: Compile-time evaluation, constant folding (19 tests)
+- [x] eclexia-absinterp: Abstract interpretation, interval analysis (38 tests)
+- [x] eclexia-effects: Effect system, row polymorphism (26 tests)
+- [x] eclexia-specialize: Binding-time analysis, specialization (14 tests)
+- [x] eclexia-tiered: Tiered execution, PGO profiling, watch mode (26 tests)
+
+==== Quality
+- [x] 507 total tests passing (0 failures)
+- [x] 0 clippy warnings
+- [x] 20 production unwraps (down from 100+)
+- [x] Typing.v: 0 Admitted proofs
+- [ ] ShadowPrices.v: 4 Admitted proofs (deep LP theory)
+- [ ] No measured benchmarks yet
 
 ---
 
 == Planned Milestones
 
-=== v0.3.0 - Testing & Quality
+=== v0.3.0 - Production Hardening
 
-- [ ] Integration tests
-- [ ] Property-based tests
-- [ ] Performance benchmarks
-- [ ] Code quality gates
-- [ ] Documentation improvements
+- [ ] Wire WASM bump allocator for GC
+- [ ] Automate LLVM linking to rt-native
+- [ ] Wire runtime metrics to real OS metrics
+- [ ] Deploy package registry server
+- [ ] Complete ShadowPrices.v proofs
+- [ ] Add measured benchmarks
+- [ ] Reduce production unwraps to <10
 
 === v0.4.0 - CI/CD Enhancement
 
 - [ ] Multi-platform CI workflows
 - [ ] Automated releases
 - [ ] Changelog automation
-- [ ] Security scanning integration
-- [ ] Container builds (Podman)
+- [ ] Security scanning integration (panic-attack in CI)
+- [ ] Container builds (Podman + Chainguard)
 
 === v1.0.0 - Stable Release
 
@@ -123,8 +175,8 @@ Following Rhodium Standard Repository guidelines:
 
 Have ideas for features or improvements?
 
-1. Check existing [issues](https://github.com/hyperpolymath/eclexia/issues) and [discussions](https://github.com/hyperpolymath/eclexia/discussions)
-2. Open a [feature request](https://github.com/hyperpolymath/eclexia/issues/new?template=feature_request.md)
+1. Check existing https://github.com/hyperpolymath/eclexia/issues[issues] and https://github.com/hyperpolymath/eclexia/discussions[discussions]
+2. Open a https://github.com/hyperpolymath/eclexia/issues/new?template=feature_request.md[feature request]
 3. Participate in roadmap discussions
 
 ---
@@ -133,4 +185,4 @@ Have ideas for features or improvements?
 
 This roadmap is updated as the project evolves. See `.machine_readable/STATE.scm` for machine-readable project state.
 
-*Last reviewed: 2026-02-09*
+_Last reviewed: 2026-02-12_
