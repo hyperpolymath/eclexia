@@ -16,11 +16,9 @@
 //! - Efficient calling conventions
 
 pub mod bytecode;
-mod cranelift_backend;
 mod vm;
 
 pub use bytecode::{BytecodeGenerator, BytecodeModule, Instruction as BytecodeInstruction};
-pub use cranelift_backend::CraneliftBackend;
 pub use vm::{
     CallFrame, DebugAction, DebugEvent, ResourceUsage, Value as VmValue, VirtualMachine, VmError,
 };
