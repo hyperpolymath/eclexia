@@ -3488,3 +3488,90 @@ fn format_instruction(
         Instruction::CallBuiltin(name, argc) => format!("call_builtin   {} ({})", name, argc),
     }
 }
+
+/// Validate interop bridge configurations
+pub fn interop_check(command: &str) -> miette::Result<()> {
+    use crate::interop::{load_all_bridges, validate_all_bridges};
+
+    let project_root = std::env::current_dir().into_diagnostic()?;
+    let interop_dir = project_root.join("interop");
+
+    match command {
+        "check" => {
+            println!("Validating interop bridge configurations...\n");
+
+            let validations = validate_all_bridges(&interop_dir, &project_root)
+                .map_err(|e| miette::miette!("Failed to validate bridges: {}", e))?;
+
+            if validations.is_empty() {
+                println!("No bridge configurations found in {}", interop_dir.display());
+                return Ok(());
+            }
+
+            let mut all_valid = true;
+
+            for validation in &validations {
+                println!("Bridge: {}", validation.bridge_name);
+                println!("  Status: {}", if validation.valid { "✓ Valid" } else { "✗ Invalid" });
+
+                if !validation.errors.is_empty() {
+                    all_valid = false;
+                    println!("  Errors:");
+                    for error in &validation.errors {
+                        println!("    - {}", error);
+                    }
+                }
+
+                if !validation.warnings.is_empty() {
+                    println!("  Warnings:");
+                    for warning in &validation.warnings {
+                        println!("    - {}", warning);
+                    }
+                }
+
+                println!();
+            }
+
+            if all_valid {
+                println!("All {} bridge(s) are valid!", validations.len());
+            } else {
+                return Err(miette::miette!("Some bridges have errors"));
+            }
+        }
+        "list" => {
+            println!("Loading bridge configurations...\n");
+
+            let bridges = load_all_bridges(&interop_dir)
+                .map_err(|e| miette::miette!("Failed to load bridges: {}", e))?;
+
+            if bridges.is_empty() {
+                println!("No bridge configurations found in {}", interop_dir.display());
+                return Ok(());
+            }
+
+            println!("Found {} bridge configuration(s):\n", bridges.len());
+
+            for (name, bridge) in &bridges {
+                println!("  {} → {}", name, bridge.language.name);
+                println!("    Repo: {}", bridge.language.repo);
+                println!("    Build: {}", bridge.language.build_system);
+                println!("    FFI: {}", bridge.language.ffi_mechanism);
+                if let Some(ref header) = bridge.bridge.header {
+                    println!("    Header: {}", header);
+                }
+                if let Some(ref target) = bridge.bridge.target_file {
+                    println!("    Target: {}", target);
+                }
+                println!();
+            }
+        }
+        _ => {
+            return Err(miette::miette!(
+                "Unknown interop command: '{}'. Use 'check' or 'list'",
+                command
+            ));
+        }
+    }
+
+    Ok(())
+}

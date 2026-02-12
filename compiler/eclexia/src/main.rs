@@ -10,6 +10,7 @@ mod bench_runner;
 #[allow(dead_code)]
 mod cache;
 mod commands;
+mod interop;
 #[allow(dead_code)]
 mod lockfile;
 #[allow(dead_code)]
@@ -262,6 +263,13 @@ enum Commands {
         #[arg(value_name = "FILE")]
         input: PathBuf,
     },
+
+    /// Validate interop bridge configurations
+    Interop {
+        /// Subcommand (check, list)
+        #[arg(value_name = "COMMAND", default_value = "check")]
+        command: String,
+    },
 }
 
 fn main() -> miette::Result<()> {
@@ -364,6 +372,9 @@ fn main() -> miette::Result<()> {
         }
         Commands::Disasm { input } => {
             commands::disasm(&input)?;
+        }
+        Commands::Interop { command } => {
+            commands::interop_check(&command)?;
         }
     }
 
