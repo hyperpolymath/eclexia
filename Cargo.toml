@@ -30,6 +30,7 @@ members = [
     "compiler/eclexia-wasm",
     "compiler/eclexia-tiered",
     "runtime/eclexia-async",
+    "runtime/eclexia-rt-native",
     "runtime/eclexia-carbon",
     "runtime/eclexia-web-server",
     "runtime/eclexia-rest",

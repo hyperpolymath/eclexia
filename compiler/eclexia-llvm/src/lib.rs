@@ -22,6 +22,23 @@
 //! module.write_to_file("output.ll")?;
 //! // Optionally compile: llc -O2 output.ll -o output.o
 //! ```
+//!
+//! ## Runtime linking
+//!
+//! The generated IR references runtime symbols implemented by
+//! `eclexia-rt-native` (a static library). To link:
+//!
+//! ```bash
+//! llc -O2 output.ll -filetype=obj -o output.o
+//! cc output.o -L target/release -leclexia_rt_native -lm -lpthread -o output
+//! ```
+//!
+//! Runtime symbols:
+//! - `__eclexia_runtime_start_tracking()` - Init resource tracking
+//! - `__eclexia_runtime_stop_tracking(ptr)` - Finalize and print summary
+//! - `__eclexia_track_resource(ptr, double)` - Record resource usage
+//! - `__eclexia_query_shadow_price(ptr)` - Query shadow price
+//! - `__eclexia_range(i64, i64, i1)` - Create range object
 
 use eclexia_ast::types::{PrimitiveTy, Ty};
 use eclexia_codegen::{Backend, CodegenError};

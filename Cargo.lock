@@ -928,6 +928,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "eclexia-rt-native"
+version = "0.1.0"
+
+[[package]]
 name = "eclexia-runtime"
 version = "0.1.0"
 dependencies = [
