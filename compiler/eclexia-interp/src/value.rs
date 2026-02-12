@@ -56,6 +56,12 @@ pub enum Value {
     Some(Box<Value>),
     /// Option::None
     None,
+    /// Task handle for concurrency
+    TaskHandle(Rc<RefCell<Option<tokio::task::JoinHandle<Value>>>>),
+    /// Channel sender
+    Sender(Rc<RefCell<tokio::sync::mpsc::UnboundedSender<Value>>>),
+    /// Channel receiver
+    Receiver(Rc<RefCell<tokio::sync::mpsc::UnboundedReceiver<Value>>>),
 }
 
 /// A user-defined function.
@@ -187,6 +193,9 @@ impl Value {
             Value::Macro(_) => "Macro",
             Value::Some(_) => "Option",
             Value::None => "Option",
+            Value::TaskHandle(_) => "TaskHandle",
+            Value::Sender(_) => "Sender",
+            Value::Receiver(_) => "Receiver",
         }
     }
 
@@ -293,6 +302,9 @@ impl std::fmt::Display for Value {
             Value::Macro(m) => write!(f, "<macro {} ({} rules)>", m.name, m.rules.len()),
             Value::Some(v) => write!(f, "Some({})", v),
             Value::None => write!(f, "None"),
+            Value::TaskHandle(_) => write!(f, "<task handle>"),
+            Value::Sender(_) => write!(f, "<channel sender>"),
+            Value::Receiver(_) => write!(f, "<channel receiver>"),
         }
     }
 }

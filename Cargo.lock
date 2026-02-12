@@ -800,6 +800,7 @@ dependencies = [
  "serde_json",
  "smol_str",
  "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]

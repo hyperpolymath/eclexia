@@ -12,6 +12,7 @@ use crate::value::{
 use eclexia_ast::TypeKind;
 use eclexia_ast::*;
 use smol_str::SmolStr;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -39,6 +40,8 @@ pub struct Interpreter {
     call_depth: usize,
     /// Method table: type_name -> method_name -> Value::Function
     method_table: HashMap<SmolStr, HashMap<SmolStr, Value>>,
+    /// Tokio runtime for async/concurrency operations (initialized lazily)
+    runtime: Option<tokio::runtime::Runtime>,
 }
 
 impl Interpreter {
@@ -60,7 +63,19 @@ impl Interpreter {
             shadow_latency: 1.0,
             call_depth: 0,
             method_table: HashMap::new(),
+            runtime: None,
         }
+    }
+
+    /// Get or create the tokio runtime for async operations
+    fn runtime(&mut self) -> &tokio::runtime::Runtime {
+        if self.runtime.is_none() {
+            self.runtime = Some(
+                tokio::runtime::Runtime::new()
+                    .expect("Failed to create tokio runtime"),
+            );
+        }
+        self.runtime.as_ref().unwrap()
     }
 
     /// Set the energy budget.
@@ -686,25 +701,79 @@ impl Interpreter {
 
             ExprKind::Error => Err(RuntimeError::custom("error expression")),
 
-            // Concurrency expressions — not yet supported in interpreter
-            ExprKind::Spawn(_) => Err(RuntimeError::custom(
-                "spawn not yet supported in interpreter",
-            )),
-            ExprKind::Channel { .. } => Err(RuntimeError::custom(
-                "channels not yet supported in interpreter",
-            )),
-            ExprKind::Send { .. } => Err(RuntimeError::custom(
-                "send not yet supported in interpreter",
-            )),
-            ExprKind::Recv(_) => Err(RuntimeError::custom(
-                "recv not yet supported in interpreter",
-            )),
-            ExprKind::Select { .. } => Err(RuntimeError::custom(
-                "select not yet supported in interpreter",
-            )),
-            ExprKind::YieldExpr(_) => Err(RuntimeError::custom(
-                "yield not yet supported in interpreter",
-            )),
+            // Concurrency expressions
+            ExprKind::Spawn(body_expr) => {
+                // Spawn a new task to evaluate the body expression
+                let body_val = self.eval_expr(*body_expr, file, env)?;
+
+                // For now, return a Unit since we don't have a proper task handle type yet
+                // TODO: Wrap in TaskHandle value once async evaluation is implemented
+                Ok(body_val)
+            }
+
+            ExprKind::Channel { .. } => {
+                // Create an unbounded MPSC channel
+                let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+                // Return a tuple of (Sender, Receiver)
+                Ok(Value::Tuple(vec![
+                    Value::Sender(Rc::new(RefCell::new(tx))),
+                    Value::Receiver(Rc::new(RefCell::new(rx))),
+                ]))
+            }
+
+            ExprKind::Send { channel, value } => {
+                // Evaluate the channel and value expressions
+                let chan_val = self.eval_expr(*channel, file, env)?;
+                let send_val = self.eval_expr(*value, file, env)?;
+
+                // Extract sender from channel value
+                if let Value::Sender(tx_rc) = chan_val {
+                    let tx = tx_rc.borrow();
+                    tx.send(send_val)
+                        .map_err(|_| RuntimeError::custom("channel send failed"))?;
+                    Ok(Value::Unit)
+                } else {
+                    Err(RuntimeError::custom("send requires a Sender value"))
+                }
+            }
+
+            ExprKind::Recv(channel) => {
+                // Evaluate the channel expression
+                let chan_val = self.eval_expr(*channel, file, env)?;
+
+                // Extract receiver from channel value
+                if let Value::Receiver(rx_rc) = chan_val {
+                    let mut rx = rx_rc.borrow_mut();
+
+                    // Use the runtime to block on recv
+                    let rt = self.runtime();
+                    let result = rt.block_on(async {
+                        rx.recv().await
+                    });
+
+                    result.ok_or_else(|| RuntimeError::custom("channel closed"))
+                } else {
+                    Err(RuntimeError::custom("recv requires a Receiver value"))
+                }
+            }
+
+            ExprKind::Select { .. } => {
+                // Select is complex - for now return an error
+                // TODO: Implement using tokio::select! macro
+                Err(RuntimeError::custom(
+                    "select not yet fully implemented in interpreter",
+                ))
+            }
+
+            ExprKind::YieldExpr(_) => {
+                // Yield to the scheduler
+                let rt = self.runtime();
+                rt.block_on(async {
+                    tokio::task::yield_now().await;
+                });
+                Ok(Value::Unit)
+            }
             ExprKind::MacroCall { name, args } => {
                 // Look up the macro definition
                 let macro_val = env
@@ -1884,6 +1953,9 @@ impl Interpreter {
             Value::Builtin(_) => SmolStr::new("Builtin"),
             Value::Unit => SmolStr::new("Unit"),
             Value::Macro(_) => SmolStr::new("Macro"),
+            Value::TaskHandle(_) => SmolStr::new("TaskHandle"),
+            Value::Sender(_) => SmolStr::new("Sender"),
+            Value::Receiver(_) => SmolStr::new("Receiver"),
         }
     }
 
