@@ -104,6 +104,8 @@ pub struct NativeModule {
     pub functions: Vec<CompiledFunction>,
     /// Total code size in bytes.
     pub total_code_size: usize,
+    /// String data section (constant strings used by functions).
+    pub string_data: Vec<(String, Vec<u8>)>,
 }
 
 /// A compiled native function.
@@ -633,9 +635,17 @@ impl CraneliftBackend {
                         Some(builder.ins().iconst(types::I32, 0))
                     }
                     ConstantKind::Resource { value, .. } => Some(builder.ins().f64const(*value)),
-                    ConstantKind::String(_) => {
-                        // Placeholder: real string data needs module-level data sections.
-                        Some(builder.ins().iconst(types::I64, 0))
+                    ConstantKind::String(s) => {
+                        // TODO: Real implementation requires:
+                        // 1. Add string to module-level data section (NativeModule.string_data)
+                        // 2. Create a data object in the object file
+                        // 3. Use symbol_value() to reference the data object
+                        // 4. Return pointer to the string data
+                        //
+                        // For now: return a non-zero placeholder address
+                        // The hash serves as a unique identifier for this string
+                        let placeholder_addr = hash_resource_name(s) & 0x7FFFFFFF;
+                        Some(builder.ins().iconst(types::I64, placeholder_addr))
                     }
                     ConstantKind::Function(name) => {
                         if let Some(&fref) = ctx.func_refs.get(name.as_str()) {
@@ -850,7 +860,11 @@ impl CraneliftBackend {
                 let res = builder.ins().sshr(li, ri);
                 Some(builder.ins().bitcast(lhs_ty, MemFlags::new(), res))
             }
-            // Range/RangeInclusive: placeholder — range values need runtime support.
+            // Range/RangeInclusive: TODO - proper implementation requires:
+            // 1. Allocate stack slot for {start: i64, end: i64} struct
+            // 2. Store lhs to start field, rhs to end field
+            // 3. Return pointer to the stack slot
+            // For now: return placeholder (ideally would be struct pointer)
             BinaryOp::Range | BinaryOp::RangeInclusive => Some(builder.ins().iconst(types::I64, 0)),
             // Float comparisons → i32 result
             BinaryOp::Eq => {
@@ -910,7 +924,11 @@ impl CraneliftBackend {
             BinaryOp::BitXor => Some(builder.ins().bxor(lhs, rhs)),
             BinaryOp::Shl => Some(builder.ins().ishl(lhs, rhs)),
             BinaryOp::Shr => Some(builder.ins().sshr(lhs, rhs)),
-            // Range/RangeInclusive: placeholder — range values need runtime support.
+            // Range/RangeInclusive: TODO - proper implementation requires:
+            // 1. Allocate stack slot for {start: i64, end: i64} struct
+            // 2. Store lhs to start field, rhs to end field
+            // 3. Return pointer to the stack slot
+            // For now: return placeholder (ideally would be struct pointer)
             BinaryOp::Range | BinaryOp::RangeInclusive => Some(builder.ins().iconst(types::I64, 0)),
             // Integer comparisons → i32 result
             BinaryOp::Eq => {
@@ -999,10 +1017,15 @@ impl Backend for CraneliftBackend {
             functions.push(compiled);
         }
 
+        // TODO: Collect string constants during lowering and add to string_data
+        // For now, placeholder empty data section
+        let string_data = Vec::new();
+
         Ok(NativeModule {
             target: self.target,
             functions,
             total_code_size,
+            string_data,
         })
     }
 
