@@ -346,6 +346,8 @@ observeShadowPrice : (d : Dimension) -> IO (sp : Double ** So (sp >= 0.0))
 observeShadowPrice d = do
   price <- primIO (Outbound.prim__observeShadowPrice (dimensionTag d))
   -- Runtime check (FFI values need runtime validation)
+-- PROOF_TODO: Replace believe_me with actual proof
+-- PROOF_TODO: Replace believe_me with actual proof
   pure (price ** believe_me (Oh))
 
 ||| Consume resources with budget conservation check
@@ -362,6 +364,8 @@ export
 selectStrategy : SelectionContext -> IO Strategy
 selectStrategy ctx = do
   -- Pack context into C struct (zero-copy when possible)
+-- PROOF_TODO: Replace believe_me with actual proof
+-- PROOF_TODO: Replace believe_me with actual proof
   tag <- primIO (Outbound.prim__adaptiveSelect (believe_me ctx))
   pure $ case tag of
     0 => Fast
