@@ -29,6 +29,9 @@ Cargo.lock
 Thumbs.db
 .Trash-*/
 
+# AI CLI crash captures
+ai-cli-crash-capture/
+
 # Temporary
 *.tmp
 *.log
