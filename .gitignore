@@ -2,13 +2,19 @@
 
 # Rust/Cargo
 /target/
-Cargo.lock
 **/*.rs.bk
 *.pdb
+*.rlib
+*.rmeta
+
+# Keep lockfile for reproducible CLI/build tooling
+!Cargo.lock
 
 # IDE
 .vscode/
 .idea/
+.direnv/
+.envrc
 *.swp
 *.swo
 *~
@@ -19,11 +25,21 @@ Cargo.lock
 *.so
 *.dylib
 *.dll
+*.a
+*.o
+*.ll
+*.eclb
+*.bc
+*.obj
+*.exe
 
 # Testing
 .coverage/
 *.profraw
 *.profdata
+coverage/
+htmlcov/
+lcov.info
 
 # OS
 Thumbs.db
@@ -35,3 +51,15 @@ ai-cli-crash-capture/
 # Temporary
 *.tmp
 *.log
+*.bak
+tmp/
+temp/
+
+# Runtime and cloud tooling temp state
+.wrangler/
+.clusterfuzzlite/build/
+.clusterfuzzlite/out/
+
+# Fuzzing runtime outputs
+fuzz/artifacts/
+fuzz/corpus/

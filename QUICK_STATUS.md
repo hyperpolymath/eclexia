@@ -1,9 +1,9 @@
 # Eclexia - Quick Status Reference
 
-**Last Updated:** 2026-02-12
-**Completion:** Alpha — Core compiler functional, all SONNET-TASKS.md tasks complete
+**Last Updated:** 2026-02-24
+**Completion:** Alpha — Core compiler functional, all SONNET completion tasks complete
 **Build:** Passing (25 crates, zero clippy warnings)
-**Tests:** 507 total (446 library + 32/32 valid + 19/19 invalid conformance + integration)
+**Tests:** Local quality gate passing (docs, fmt, lint, unit, conformance, integration, p2p, e2e, benchmarks)
 
 ---
 
@@ -54,6 +54,8 @@
 - Debugger: Interactive with breakpoints, step, stack inspection
 - VSCode extension: Syntax highlighting + LSP integration
 - Interop bridge validator: `eclexia interop check` validates 4 language bridges
+- ABI extension lane active: `ecl_abi_get_info`, `ecl_tracker_create_ex`, `ecl_tracker_snapshot` (additive, compatibility-preserving)
+- Cross-repo proven guardrails: docs/CI verify critical `../proven` bindings referenced by examples
 
 ### Testing
 - 507 total tests passing (0 failures)
@@ -84,10 +86,10 @@
 
 ## Security Status
 
-- **Production unwraps:** 20 (down from 100+, all remaining in non-critical paths)
+- **panic-attack (2026-02-24):** 0 weak points
+- **panic-attacker stats:** 14 `unwrap` calls, 25 `unsafe` blocks, 110 panic sites (no active weak-point findings)
 - **Clippy warnings:** 0 (all resolved)
-- **Unsafe blocks:** 28 (all in FFI boundaries)
-- 0 unwraps in production-critical code paths
+- **Known conformance skip:** `stack_overflow_deep_recursion.ecl` skipped by default to avoid intentional `SIGABRT` core dumps in routine QA runs
 
 ---
 
@@ -119,7 +121,7 @@ cargo run -- run examples/fibonacci_adaptive.ecl
 cargo run -- interop check
 
 # Security scan
-panic-attack assail . --output /tmp/eclexia-scan.json
+just panic-attack
 ```
 
 ---
@@ -145,5 +147,5 @@ panic-attack assail . --output /tmp/eclexia-scan.json
 **Honest assessment:** Eclexia is a working alpha compiler with a functional pipeline
 from source to bytecode VM, with three real code-generation backends (WASM, LLVM, Cranelift).
 The economics-as-code concepts (shadow prices, adaptive functions, resource tracking) are
-implemented in the runtime with real defaults and tests. All 18 SONNET-TASKS.md completion
+implemented in the runtime with real defaults and tests. All 18 SONNET completion
 tasks are done. Not production-ready. Not feature-complete. Active development.

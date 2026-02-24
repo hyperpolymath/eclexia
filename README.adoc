@@ -1,39 +1,41 @@
+= Eclexia
+:toc: left
+:toclevels: 3
+:sectanchors:
+:sectnums:
+
 image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
 
+Eclexia is an Economics-as-Code programming language.
+It treats energy, time, memory, and carbon as first-class constraints so software can optimize for performance and sustainability together.
 
-Eclexia: Economics-as-Code
+== Quick Links
 
-A programming language where economics is a first-class paradigm
-Making resource-efficient, carbon-aware software the default, not the exception.
+* link:GETTING_STARTED.md[Getting Started]
+* link:QUICK_STATUS.md[Current Implementation Status]
+* link:docs/README.md[Documentation Index]
+* link:docs/wiki/Home.md[Wiki Home]
+* link:SPECIFICATION.md[Language Specification]
+* link:WHITEPAPER.md[Whitepaper]
+* link:PROOFS.md[Formal Proofs]
+* link:IMPLEMENTATION_ROADMAP.md[Implementation Roadmap]
+* link:CONTRIBUTING.md[Contributing]
+* link:SECURITY.md[Security Policy]
 
-🌟 What is Eclexia?
+== What Is Eclexia?
 
-Eclexia introduces Economics-as-Code: a revolutionary programming paradigm where economic principles—scarcity, trade-offs, and optimization—are built into the language itself.
-Instead of treating performance and resource usage as afterthoughts, Eclexia makes them first-class concerns with:
+Eclexia introduces economics directly into language semantics:
 
-Resource types with dimensional analysis (energy, time, memory, carbon)
+* Resource-aware constraints in code (`@requires`, `@provides`)
+* Adaptive solution selection under changing runtime conditions
+* Shadow-price-based tradeoff decisions
+* Carbon-aware execution and scheduling
+* Multi-objective optimization declared at source level
 
-Adaptive blocks that automatically select optimal algorithms based on runtime constraints
+Example shape of an adaptive function:
 
-Shadow prices that guide decision-making using economic principles
-
-Carbon-aware execution to minimize environmental impact
-
-Multi-objective optimization declared directly in code
-
-The Problem
-
-Traditional programming forces developers to:
-
-Manually optimize for performance, energy, or cost
-Hard-code algorithm choices that don't adapt to changing conditions
-Ignore carbon footprint and sustainability
-Trade off between competing objectives with no principled framework
-
-The Solution
-
-Eclexia makes these decisions automatic and economically optimal:
-
+[source,eclexia]
+----
 adaptive def matrix_multiply(A: Matrix, B: Matrix) -> Matrix
     @requires: energy < 100J, latency < 500ms
     @optimize: minimize energy, minimize carbon
@@ -44,578 +46,148 @@ adaptive def matrix_multiply(A: Matrix, B: Matrix) -> Matrix
     {
         gpu::multiply(A, B)
     }
-    
+
     @solution "parallel_cpu":
         @when: cpu_cores >= 4
         @provides: energy: 80J, latency: 300ms, carbon: 8gCO2e
     {
         parallel::multiply(A, B)
     }
-    
-    @solution "naive":
-        @when: true  // always available
-        @provides: energy: 30J, latency: 800ms, carbon: 3gCO2e
-    {
-        naive::multiply(A, B)
-    }
 }
+----
 
-The runtime automatically selects the best solution based on:
-
-Available resources (energy budget, CPU cores, GPU availability)
-Current carbon intensity of the power grid
-Shadow prices that reflect the true cost of resources
-Your declared optimization objectives
-
-📚 Documentation
-
-Core Documents
-
-Document
-Description
-Audience
-
-White Paper
-Comprehensive introduction to Economics-as-Code
-All readers
-
-Formal Proofs
-Mathematical foundations and correctness proofs
-Researchers, PL theorists
-
-IP Claims
-Intellectual property analysis and strategy
-Legal, business
-
-Language Specification
-Complete language syntax and semantics
-Language implementers
-
-Tutorial
-Getting started guide with examples
-Developers
-
-API Reference
-Standard library documentation
-Developers
-
-Quick Navigation
-
-👋 New to Eclexia? Start with the White Paper (Section 1-3) or Tutorial
-🔬 Want the theory? Read the Formal Proofs and Language Specification
-💼 Business/Legal interests? See IP Claims for patent strategy and commercialization
-👨‍💻 Ready to code? Check out Examples and Getting Started
-
-🚀 Quick Start
-
-Installation
-
-From this repository:
+== Quick Start
 
 [source,bash]
 ----
-# Build from source (requires Rust 1.75+)
+# Build from source (Rust 1.75+)
 cargo build --release
 
-# Verify the build works
-cargo test
+# Run tests
+cargo test --workspace
+
+# Run a sample program
 cargo run -- run examples/hello.ecl
 ----
 
-The compiler binary will be at `target/release/eclexia`.
+Compiler binary:
 
-Hello World with Resources
-
-def main() -> Unit
-    @requires: energy < 1J
-{
-    println("Hello, Economics-as-Code!")
-}
-
-Your First Adaptive Function
-
-adaptive def fibonacci(n: Int) -> Int
-    @requires: energy < 100J
-    @optimize: minimize latency
-{
-    @solution "memoized":
-        @when: n > 20
-        @provides: energy: 50J, latency: 5ms
-    {
-        memo_fib(n)
-    }
-    
-    @solution "naive":
-        @provides: energy: 10J, latency: 100ms
-    {
-        if n <= 1 then n
-        else fibonacci(n-1) + fibonacci(n-2)
-    }
-}
-
-Run it:
-
-[source,bash]
+[source,text]
 ----
-cargo run -- run examples/fibonacci.ecl
+target/release/eclexia
 ----
 
-💡 Key Features
+For a fuller walkthrough, use link:GETTING_STARTED.md[GETTING_STARTED.md].
 
-1. Resource Types with Dimensions
+== Documentation Index
 
-Prevent bugs at compile time:
+[cols="1,3,1",options="header"]
+|===
+| Document | Purpose | Audience
 
-let energy: Energy = 100J
-let time: Time = 5s
-let power: Power = energy / time  // ✓ Correctly typed as Watts
+| link:GETTING_STARTED.md[Getting Started]
+| Installation, first run, and CLI usage
+| New users
 
-// let invalid = energy + time  // ✗ Compile error: dimension mismatch!
+| link:QUICK_STATUS.md[Quick Status]
+| Snapshot of what works and what does not
+| Users and contributors
 
-2. Adaptive Execution
+| link:SPECIFICATION.md[Specification]
+| Language syntax and semantics
+| Language implementers
 
-The runtime automatically chooses the best algorithm:
+| link:WHITEPAPER.md[Whitepaper]
+| High-level design and motivation
+| General and research audience
 
-adaptive def sort(arr: Array[Int]) -> Array[Int]
-    @requires: energy < 50J, latency < 100ms
-    @optimize: minimize energy
-{
-    @solution "quicksort":
-        @when: length(arr) > 100
-        @provides: energy: 40J, latency: 50ms
-    { /* ... */ }
-    
-    @solution "insertion_sort":
-        @when: length(arr) <= 100
-        @provides: energy: 10J, latency: 80ms
-    { /* ... */ }
-}
+| link:PROOFS.md[Proofs]
+| Formal statements and theorem development
+| Researchers
 
-3. Shadow Prices
+| link:FORMAL_VERIFICATION.md[Formal Verification]
+| Coq/Agda proof status and verification notes
+| Researchers and maintainers
 
-The runtime computes shadow prices—the marginal value of each resource—to guide decisions:
+| link:IMPLEMENTATION_ROADMAP.md[Implementation Roadmap]
+| Medium/long-term engineering roadmap
+| Contributors and maintainers
 
-def analyze() -> Unit
-    @observe: shadow_prices
-{
-    // Runtime automatically computes:
-    // - λ_energy: how valuable is 1 more Joule?
-    // - λ_time: how valuable is 1 more millisecond?
-    // - λ_carbon: how valuable is 1g less CO2?
-    
-    // Solutions are ranked by weighted cost:
-    // cost = λ_energy * energy + λ_time * time + λ_carbon * carbon
-}
+| link:TOOLCHAIN_STATUS.md[Toolchain Status]
+| Status of compiler/runtime/tooling components
+| Contributors
 
-4. Carbon-Aware Scheduling
+| link:ALGORITHMS.md[Algorithms]
+| Algorithmic details and implementation notes
+| Contributors and researchers
 
-Automatically defer work to low-carbon times:
+| link:BIBLIOGRAPHY.md[Bibliography]
+| Research references used by the project
+| Researchers
+|===
 
-async def train_model(data: Dataset) -> Model
-    @requires: carbon < 500gCO2e
-    @optimize: minimize carbon
-    @defer_until: grid_carbon_intensity < 100gCO2e/kWh
-{
-    // This will wait for low-carbon electricity
-    // Typical time: overnight or windy/sunny periods
-    expensive_training(data)
-}
+== Current Status
 
-5. Multi-Objective Optimization
+As of link:QUICK_STATUS.md[QUICK_STATUS.md] (updated 2026-02-12):
 
-Declare trade-offs explicitly:
+* Alpha stage
+* Core compiler pipeline functional
+* Runtime components available with active development
+* Conformance and workspace tests are in regular use
 
-adaptive def compress(image: Image) -> CompressedImage
-    @optimize: minimize carbon, maximize quality
-{
-    // Runtime finds Pareto-optimal solution
-    // balancing carbon cost vs. image quality
-    @solution "high_quality": { /* ... */ }
-    @solution "low_carbon": { /* ... */ }
-    @solution "balanced": { /* ... */ }
-}
+This repository has many deep-dive documents. The README now stays focused on orientation, while detailed operational and research content lives in dedicated docs and wiki pages.
 
-📊 Expected Benefits (Projected)
+== Repository Layout
 
-NOTE: These are theoretical projections based on the language design. Measured benchmarks are not yet available.
-
-Metric
-Expected Improvement
-Workload
-
-Energy Reduction
-20-40% (projected)
-Typical web server
-
-Battery Life
-+25-35% (projected)
-Mobile applications
-
-Carbon Footprint
-40-60% (projected)
-With carbon-aware scheduling
-
-Developer Time
-50-70% less (projected)
-Optimization vs. manual tuning
-
-Benchmarking infrastructure exists (`eclexia bench`) but comprehensive results have not yet been measured.
-
-🧪 Research & Formal Foundations
-
-Eclexia is built on solid theoretical foundations:
-Formal Proofs
-
-Coq and Agda files are present (1222 lines). Some theorems are fully proved; others are `Admitted` (assumed without proof) and remain to be completed. The proofs address:
-
-Type Safety (progress & preservation)
-
-Resource Safety (no budget violations, no resource leaks)
-
-Economic Optimality (shadow prices converge to optimal values)
-
-Dimensional Correctness (prevents unit errors)
-
-Termination (under resource bounds)
-
-See PROOFS.md for complete proofs.
-Type System
-
-Eclexia extends traditional type systems with:
-
-Resource types: Energy, Time, Memory, Carbon
-
-Dimensional analysis: Track physical dimensions at type level
-
-Constraint types: @requires, @provides, @optimize
-
-Effect types: Track side effects (I/O, energy consumption)
-
-Operational Semantics
-
-We define a formal small-step operational semantics for Eclexia's core calculus, proving:
-
-Progress: well-typed programs don't get stuck
-
-Preservation: evaluation preserves types
-
-Determinism: same context → same selection
-
-🏗️ Project Structure
-
+[source,text]
+----
 eclexia/
-├── README.md                 # This file
-├── WHITEPAPER.md            # Comprehensive introduction
-├── PROOFS.md                # Formal mathematical proofs
-├── IP_CLAIMS.md             # Intellectual property strategy
-├── SPECIFICATION.md         # Language specification
-├── LICENSE                  # Apache 2.0
-│
-├── compiler/                # Compiler source code
-│   ├── src/
-│   │   ├── parser/         # Lexer and parser
-│   │   ├── typechecker/    # Type system implementation
-│   │   ├── optimizer/      # Optimization passes
-│   │   └── codegen/        # Code generation
-│   └── Cargo.toml
-│
-├── runtime/                 # Runtime system
-│   ├── src/
-│   │   ├── scheduler/      # Adaptive scheduler
-│   │   ├── profiler/       # Resource profiler
-│   │   ├── shadow/         # Shadow price computation
-│   │   └── monitor/        # Runtime monitoring
-│   └── Cargo.toml
-│
-├── stdlib/                  # Standard library
-│   ├── core/               # Core types and functions
-│   ├── collections/        # Data structures
-│   ├── io/                 # Input/output
-│   └── carbon/             # Carbon-aware utilities
-│
-├── examples/                # Example programs
-│   ├── hello_world.ecl
-│   ├── fibonacci.ecl
-│   ├── matrix_multiply.ecl
-│   └── carbon_aware_ml.ecl
-│
-├── benchmarks/              # Performance benchmarks
-│   ├── energy/
-│   ├── latency/
-│   └── carbon/
-│
-├── docs/                    # Documentation
-│   ├── TUTORIAL.md
-│   ├── API.md
-│   ├── GUIDE.md
-│   └── CONTRIBUTING.md
-│
-└── tests/                   # Test suite
-    ├── unit/
-    ├── integration/
-    └── correctness/
+├── README.adoc
+├── compiler/          # compiler crates and CLI front-end
+├── runtime/           # runtime crates (scheduler, profiling, carbon, shadow)
+├── libraries/         # ecosystem libraries
+├── stdlib/            # standard library sources
+├── examples/          # sample .ecl programs
+├── tests/             # conformance and integration tests
+├── formal/            # Coq/Agda artifacts
+└── docs/              # reference docs, tutorials, and generated docs
+----
 
-🤝 Contributing
+== README vs Wiki
 
-We welcome contributions! Eclexia is open-source (Apache 2.0) and community-driven.
-How to Contribute
+The README should remain a concise project entry point.
+Long-lived narrative and frequently evolving content is better placed in the wiki.
 
-Read CONTRIBUTING.md
+Recommended wiki destinations:
 
-Join our Discord/Slack community
+* Architecture walkthroughs and subsystem maps
+* Backlog triage and milestone notes
+* Design discussions and ADR-style rationale
+* Research notes and reading guides
+* Contributor onboarding playbooks
 
-Pick an issue from GitLab Issues
+Proposed wiki structure and migration map:
+link:docs/wiki/README.md[docs/wiki/README.md]
 
-Submit a merge request (MR)
+== Contributing
 
-Areas of Interest
+* link:CONTRIBUTING.md[Contributing Guide]
+* link:CODE_OF_CONDUCT.md[Code of Conduct]
+* link:SECURITY.md[Security Policy]
 
-Compiler development (Rust)
-Type system research
-Runtime optimization
+== License
 
-Standard library (collections, algorithms)
+Eclexia is licensed under PMPL-1.0-or-later.
+See link:LICENSE[LICENSE] and link:LICENSE.txt[LICENSE.txt].
 
-Benchmarking (energy, performance)
+== Contact
 
-Documentation (tutorials, examples)
+* General: mailto:info@eclexia.org[info@eclexia.org]
+* Research: mailto:research@eclexia.org[research@eclexia.org]
+* Security: mailto:security@eclexia.org[security@eclexia.org]
 
-Tooling (IDE plugins, LSP)
-
-🌍 Community
-
-GitLab: https://gitlab.com/eclexia-lang/eclexia
-
-Website: https://eclexia.org
-
-Discord: https://discord.gg/eclexia (coming soon)
-
-Email: info@eclexia.org
-
-Forum: https://discuss.eclexia.org (coming soon)
-
-Social Media
-
-Twitter/X: @eclexialang (coming soon)
-
-Mastodon: @eclexia@fosstodon.org (coming soon)
-
-LinkedIn: Eclexia Project (coming soon)
-
-🎓 Academic Use
-
-Eclexia is designed for research and education:
-Research Papers
-
-We encourage academic papers about:
-
-Language design and extensions
-Type system innovations
-Optimization algorithms
-Energy/carbon modeling
-Sustainability in computing
-
-See docs/RESEARCH.md for research ideas.
-Teaching
-
-Use Eclexia in courses on:
-
-Programming language design
-Compilers and runtime systems
-Sustainable computing
-Operations research in CS
-Multi-objective optimization
-
-See docs/TEACHING.md for course materials.
-Citation
-
-If you use Eclexia in research, please cite:
-
-@techreport{eclexia2025,
-  title={Economics-as-Code: A Novel Programming Paradigm for Sustainable Computing},
-  author={Jewell, Jonathan D.A.},
-  year={2025},
-  month={October},
-  institution={Eclexia Project},
-  url={https://eclexia.org},
-  note={Version 1.0}
-}
-
-📜 License
-
-License: PMPL-1.0-or-later (Palimpsest License)
-
-Applies to: All Eclexia source code, compiler, standard library, tooling.
-
-See: LICENSE
-
-🚧 Roadmap
-
-Phase 1: Core Compiler (Q4 2025) — Complete
-
-✅ Language specification (draft)
-✅ Core compiler pipeline (Lexer → Parser → AST → TypeCheck → HIR → MIR → Bytecode → VM)
-  - ✅ Lexer with 95+ token types including dimensional literals (893 lines)
-  - ✅ Pratt parser with full expression and item parsing (3106 lines)
-  - ✅ Hindley-Milner type checker with Robinson unification (2210 lines)
-  - ✅ HIR lowering (desugaring, type annotations)
-  - ✅ MIR lowering (CFG representation, basic optimizations)
-  - ✅ Bytecode code generator
-  - ✅ Stack-based VM with resource tracking (934 lines)
-  - ✅ Tree-walking interpreter (separate execution path, 28 builtin tests)
-✅ Standard library (6 modules: core, collections, math, I/O, text, time — 1280 lines .ecl)
-✅ Developer toolchain
-  - ✅ CLI (build, run, check, fmt, lint, repl, init, new, test, bench, debug, doc, install)
-  - ✅ Project minter with 10 templates (bin, lib, web, cli, mcp, ssg, lsp, tool, framework, db-connector)
-  - ✅ REPL with expression evaluation
-  - ✅ Test runner and benchmark runner
-  - ✅ Package manager (manifest parsing, dependency resolution — registry is stub)
-  - ✅ LSP server (diagnostics, completion, go-to-def, references, symbols, hover, rename, signature help, formatting)
-  - ✅ Formatter (eclexia-fmt: functions, traits, impls, modules, effects)
-  - ✅ Linter (configurable rules)
-  - ✅ Interactive debugger (breakpoints, step, continue, stack/locals/callstack/resources inspection)
-✅ 246 library tests passing, zero warnings, 25 crates compiling
-✅ Documentation (specification, getting started guide, whitepaper, theory)
-
-Phase 2: Ecosystem Foundation (Q1–Q2 2026) — In Progress
-
-✅ License migration to PMPL-1.0-or-later
-🔄 Core ecosystem libraries (json, http, crypto, regex, log — not yet started)
-🔄 TEA web framework (planned)
-🔄 Database connectors (Idris2 ABI + Zig FFI pattern — templates ready)
-🔄 Package registry (HTTP client exists, server not yet deployed)
-🔄 Playground / web REPL (not yet started)
-🔄 Eclexia website (not yet started)
-✅ odds-and-sods-package-manager integration (Eclexia registry adapter committed)
-🔄 Codebase annotation coverage improvement
-
-Phase 3: Advanced Compiler (Q3 2026)
-
-Reactive compilation via Salsa incremental database (structural crates exist, not wired in)
-Parallel module compilation
-Error recovery for resilient parsing
-Compile-time evaluation (comptime)
-Abstract interpretation for resource analysis
-Algebraic effect compilation (evidence-passing)
-Partial evaluation and adaptive specialization
-
-Phase 4: Multi-Target + Production (Q4 2026)
-
-Native backends (Cranelift for dev, LLVM for release — currently stubs that estimate sizes)
-WebAssembly backend (currently stub)
-Tiered execution (interpreter → VM → Cranelift → LLVM)
-Profile-guided optimization
-BytecodeModule serialization (file output)
-Formal verification completion (some Coq/Agda theorems currently Admitted)
-Production deployment infrastructure (Docker/Kubernetes manifests exist, untested)
-
-Known Limitations (Current)
-
-Backends (Cranelift, LLVM, WASM) are structural stubs — they estimate code sizes, not generate real machine code
-Runtime modules (scheduler, profiler, carbon, shadow) are 6-line stubs
-10 reactive compiler crates exist structurally but are not wired into CLI commands
-BytecodeModule does not implement Serialize (no bytecode file output yet)
-Package registry server does not exist yet (client is a stub)
-Formal verification has Admitted/unproven theorems
-No benchmarks with measured results yet (projections only)
-
-🙏 Acknowledgments
-
-Creator: Jonathan D.A. Jewell
-Contributors: Joshua B. Jewell (feedback and insights)
-Inspiration: This project draws on decades of research in:
-
-Programming languages (Pierce, Wadler, Cardelli)
-Operations research (Dantzig, Karmarkar)
-Sustainable computing (Barroso, Hölzle)
-Type theory (Hindley, Milner, Martin-Löf)
-
-Special Thanks:
-
-The Rust community (for systems programming excellence)
-The PL research community (for foundational work)
-GitLab (for hosting our open-source project)
-Early adopters and beta testers
-
-📞 Contact
-
-General inquiries: info@eclexia.org
-
-Research collaborations: research@eclexia.org
-
-Commercial licensing: licensing@eclexia.org
-
-Press & media: press@eclexia.org
-
-Security issues: security@eclexia.org
-
-🌟 Why "Eclexia"?
-
-The name "Eclexia" combines:
-
-"Ec-" from "Economics"
-
-"-lexia" from Greek "λέξις" (lexis), meaning "word" or "speech"
-
-Together: "Economic Speech" or "Economics in Language"
-It also evokes:
-
-Eclectic: Drawing from diverse fields (CS, economics, sustainability)
-
-Excellence: Striving for optimal, principled design
-
-Ecology: Caring about environmental impact
-
-📝 Status & Stability
-
-Current Status: Alpha
-Eclexia is under active development. As of February 2026:
-
-* **32/32 valid conformance tests passing (100%)**
-* Full parser, interpreter, formatter, and linter functional
-* LSP server for IDE support
-* Type casting, pattern matching, adaptive functions, Option types all working
-* Resource tracking and shadow pricing operational
-
-The language specification is stabilizing but expect breaking changes to syntax/semantics.
-We're targeting Beta release in Q2 2026.
-
-⚖️ Legal
-
-Patents
-
-Some aspects of Eclexia may be subject to patent protection. See IP_CLAIMS.md for details.
-Patent Grant: If you use Eclexia under the PMPL-1.0-or-later license, you receive a royalty-free patent license for patents embodied in the open-source code.
-Trademarks
-
-Eclexia™ is a trademark of Jonathan D.A. Jewell / Eclexia Project
-
-Economics-as-Code™ is a trademark of Jonathan D.A. Jewell / Eclexia Project
-
-Use of trademarks must comply with TRADEMARK_POLICY.md.
-Confidentiality
-
-Some documents (e.g., IP_CLAIMS.md) contain strategic information. Distribution is limited. See headers in each document.
-
-🎯 Mission
-
-"Make resource-efficient, carbon-aware software the default, not the exception."
-We believe that:
-
-Computing has a carbon footprint that must be addressed
-
-Developers want to do the right thing but need better tools
-
-Economic principles can guide better software design
-
-Language-level support is more effective than libraries
-
-Eclexia aims to make sustainable computing easy, automatic, and economically optimal.
-
-Welcome to the future of programming. Welcome to Economics-as-Code. Welcome to Eclexia.
-
-"The best way to predict the future is to invent it." — Alan Kay
-
-Last Updated: February 9, 2026
-Document Version: 1.1
 Repository: https://gitlab.com/eclexia-lang/eclexia
+
+== Mission
+
+Make resource-efficient, carbon-aware software the default, not the exception.

@@ -190,7 +190,7 @@
          "All 69 workspace tests pass, no regressions")))
      ((date "2026-02-12")
       (accomplishments
-        ("Completed all 18 SONNET-TASKS.md tasks"
+        ("Completed all 18 SONNET completion tasks"
          "HIR concurrency expressions: Spawn, Channel, Send, Recv, Select, Yield, MacroCall"
          "Interpreter concurrency via tokio (spawn, channels, yield)"
          "Typing.v: all Admitted proofs completed (0 remaining)"
