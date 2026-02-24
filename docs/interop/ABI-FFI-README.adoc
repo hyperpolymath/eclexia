@@ -1,0 +1,237 @@
+= Eclexia Bidirectional ABI/FFI Layer
+:author: Jonathan D.A. Jewell
+:email: jonathan.jewell@open.ac.uk
+:revdate: 2026-02-24
+:toc:
+:spdx: PMPL-1.0-or-later
+
+== Overview
+
+Eclexia's resource system is exposed through a *bidirectional* ABI/FFI layer:
+
+* **Outbound** -- Eclexia programs call optimised native implementations (SIMD Pareto, lock-free shadow prices)
+* **Inbound** -- External code (C, Rust, Python ctypes, SCADA/DCS systems, embedded devices) calls into the Eclexia resource runtime
+
+The ABI is managed with two lanes:
+
+* **Stable lane** -- existing C ABI symbols remain compatible
+* **Extension lane** -- additive APIs evolve capability without breaking existing callers
+
+== Reinforcement Strategy
+
+`proven` is used as targeted reinforcement for critical paths, not as a full-language migration policy.
+
+* Keep Rust and other practical languages as defaults for most implementation work.
+* Apply Idris2/proven components where failure cost is high (safe crypto, path/url/json/network validation, critical ABI invariants).
+* Avoid mandatory high-assurance substitutions where they would harm delivery speed, operability, or contributor accessibility.
+
+== ABI Extension APIs (RC4)
+
+The following additive APIs are now part of the RC boundary:
+
+* `ecl_abi_get_info` -- version/capability negotiation (`ecl_abi_info_t`)
+* `ecl_tracker_create_ex` -- forward-compatible tracker creation (`ecl_tracker_options_t`)
+* `ecl_tracker_snapshot` -- stable budget snapshots with optional timestamp
+* Typed SLA constraint struct (`ecl_sla_constraint_t`) for `ecl_sla_check`
+
+== Architecture
+
+[source]
+----
+┌─────────────────────────────────────────────────┐
+│  Eclexia Programs (.ecl)                        │
+│  @requires(energy: 100J)                        │
+│  shadow_price(energy)                           │
+└────────────┬────────────────────────────────────┘
+             │ Outbound FFI
+┌────────────▼────────────────────────────────────┐
+│  Idris2 ABI Definitions                         │
+│  src/abi/ResourceABI.idr                        │
+│  - Dependent type proofs (dimension safety)     │
+│  - Shadow price non-negativity proof            │
+│  - Budget conservation law proof                │
+│  - SLA satisfiability proof                     │
+└────────────┬────────────────────────────────────┘
+             │ C ABI (generated header)
+┌────────────▼────────────────────────────────────┐
+│  Generated C Header                             │
+│  generated/abi/eclexia_ffi.h                    │
+│  - ecl_resource_t, ecl_budget_t, etc.           │
+│  - All function declarations                    │
+└────────────┬────────────────────────────────────┘
+             │
+┌────────────▼────────────────────────────────────┐
+│  Zig FFI Implementation                         │
+│  ffi/zig/src/resource.zig                       │
+│  - SIMD: Pareto frontier, batch shadow prices   │
+│  - Lock-free: atomic budget consumption         │
+│  - Zero-copy: budget propagation                │
+│  - Cache-aligned: 64-byte selection context     │
+└────────────┬────────────────────────────────────┘
+             │ Inbound FFI
+┌────────────▼────────────────────────────────────┐
+│  External Code                                  │
+│  C / Rust / Python / SCADA / IoT / Cloud APIs   │
+│  ecl_tracker_create(ECL_DIM_ENERGY, 100.0)      │
+│  ecl_inject_measurement(ECL_DIM_CARBON, val, t) │
+│  ecl_shadow_subscribe(ECL_DIM_TIME, callback)   │
+└─────────────────────────────────────────────────┘
+----
+
+== Optimisations
+
+|===
+| Technique | Where | What
+
+| SIMD vectorisation
+| `ecl_adaptive_select`, `ecl_pareto_compute`
+| 4-wide f64 vectors for simultaneous resource dimension comparison
+
+| Lock-free atomics
+| `ecl_shadow_price_observe/update`, `ecl_resource_consume`
+| CAS loops on bit-cast f64→u64 atomics, no mutex contention
+
+| Zero-copy propagation
+| `ecl_budget_propagate`
+| Parent budget pointer → child struct write, no allocation
+
+| Cache-line alignment
+| `ecl_selection_ctx_t`
+| 64-byte aligned for single cache-line load of all 4 resource dimensions + 4 shadow prices
+
+| Batch operations
+| `ecl_shadow_price_observe_all`, `ecl_budget_check_all`, `ecl_fuse_update_all`
+| Process all dimensions in a single call, avoid per-dimension FFI overhead
+|===
+
+== Bidirectional Interface Target Languages
+
+|===
+| Language | Binding Method | Use Case
+
+| C
+| Direct header include (`eclexia_ffi.h`)
+| Embedded systems, SCADA, real-time controllers
+
+| Rust
+| `bindgen` from C header, or direct `extern "C"` declarations
+| Performance-critical applications, systems integration
+
+| Python
+| `ctypes` / `cffi` from C header
+| Data science, ML inference with resource budgets, prototyping
+
+| Elixir
+| NIF (Native Implemented Function) via C header
+| BEAM-based services with resource tracking
+
+| Gleam
+| Via Erlang NIF bridge
+| Functional backend services
+
+| ReScript
+| Via Deno FFI (`Deno.dlopen`)
+| Web applications with resource awareness
+
+| Ada
+| `pragma Import(C, ...)` from C header
+| Safety-critical systems, aerospace, medical
+
+| Fortran
+| `ISO_C_BINDING` from C header
+| HPC, scientific computing with energy budgets
+
+| SCADA/DCS
+| C shared library loaded by PLC runtime
+| Industrial control with real-time resource monitoring
+|===
+
+== File Structure
+
+[source]
+----
+eclexia/
+├── src/abi/                    # Idris2 ABI definitions
+│   ├── Types.idr               # Platform detection, base types
+│   ├── Layout.idr              # Memory layout proofs
+│   ├── Foreign.idr             # Generic FFI template
+│   └── ResourceABI.idr         # ★ Eclexia resource system ABI
+├── ffi/zig/                    # Zig FFI implementation
+│   ├── build.zig               # Build configuration
+│   └── src/
+│       ├── main.zig            # Generic FFI template
+│       └── resource.zig        # ★ Eclexia resource system FFI
+└── generated/abi/              # Auto-generated C headers
+    └── eclexia_ffi.h           # ★ C header for all bindings
+----
+
+== Building
+
+[source,bash]
+----
+cd ffi/zig
+zig build              # Build shared + static libraries
+zig build test         # Run FFI unit tests
+zig build -Doptimize=ReleaseFast  # Optimised build with SIMD
+----
+
+== Usage Examples
+
+=== C (Embedded/SCADA)
+
+[source,c]
+----
+#include "eclexia_ffi.h"
+
+// Create energy budget tracker
+uint64_t tracker = ecl_tracker_create(ECL_DIM_ENERGY, 1000.0);  // 1000J
+
+// Consume energy
+ecl_result_t r = ecl_resource_consume(ECL_DIM_ENERGY, 50.0);
+if (r == ECL_BUDGET_EXCEEDED) {
+    // Degrade gracefully
+    uint32_t level = ecl_degrade_level(ECL_DIM_ENERGY);
+    switch_to_low_power_mode(level);
+}
+
+// Observe shadow price
+double price = ecl_shadow_price_observe(ECL_DIM_ENERGY);
+----
+
+=== Python (Data Science)
+
+[source,python]
+----
+import ctypes
+lib = ctypes.CDLL("libeclexia_ffi.so")
+
+# Create tracker
+lib.ecl_tracker_create.restype = ctypes.c_uint64
+tracker = lib.ecl_tracker_create(1, ctypes.c_double(100.0))
+
+# Observe shadow price
+lib.ecl_shadow_price_observe.restype = ctypes.c_double
+price = lib.ecl_shadow_price_observe(1)
+print(f"Energy shadow price: {price}")
+----
+
+=== Rust (Systems Integration)
+
+[source,rust]
+----
+extern "C" {
+    fn ecl_tracker_create(dimension: u32, total: f64) -> u64;
+    fn ecl_resource_consume(dimension: u32, amount: f64) -> u32;
+    fn ecl_shadow_price_observe(dimension: u32) -> f64;
+    fn ecl_degrade_level(dimension: u32) -> u32;
+}
+
+fn main() {
+    unsafe {
+        let _tracker = ecl_tracker_create(1, 500.0); // 500J energy
+        let result = ecl_resource_consume(1, 100.0);
+        let price = ecl_shadow_price_observe(1);
+        println!("Shadow price after consumption: {price}");
+    }
+}
+----

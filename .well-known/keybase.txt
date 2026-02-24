@@ -7,6 +7,5 @@
 #   2. Replace this file with the generated proof
 
 # Contact: jonathan.jewell@open.ac.uk
-# Keybase profile: https://keybase.io/hyperpolymath (coming soon)
-
-# Placeholder - awaiting Keybase setup
+# Keybase profile: https://keybase.io/hyperpolymath
+# Status: awaiting DNS proof publication for eclexia.org

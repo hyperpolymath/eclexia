@@ -514,7 +514,7 @@ cargo run -- fmt src/main.ecl
 - Current status: `STATE.scm`, `TOOLCHAIN_STATUS.md`
 - Academic: `WHITEPAPER.md`, `PROOFS.md`
 - Getting started: `GETTING_STARTED.md`
-- This session: `SESSION_HANDOVER_2026-01-31.md`
+- This session: `docs/archive/handovers/SESSION_HANDOVER_2026-01-31.md`
 
 **Next Session Priorities:**
 1. LSP rename/format (2-4 hours)
