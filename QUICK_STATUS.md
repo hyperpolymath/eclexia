@@ -84,10 +84,9 @@
 
 ## Security Status
 
-- **panic-attack (2026-02-24):** 6 weak points, 0 critical (Idris `believe_me` removed)
-- **Production unwraps:** 163 static `unwrap/expect` sites remain across parser/vm/registry paths
+- **panic-attack (2026-02-24):** 0 weak points
+- **panic-attacker stats:** 14 `unwrap` calls, 25 `unsafe` blocks, 110 panic sites (no active weak-point findings)
 - **Clippy warnings:** 0 (all resolved)
-- **Unsafe blocks:** 32 (primarily FFI/runtime-native boundaries)
 - **Known conformance skip:** `stack_overflow_deep_recursion.ecl` skipped by default to avoid intentional `SIGABRT` core dumps in routine QA runs
 
 ---

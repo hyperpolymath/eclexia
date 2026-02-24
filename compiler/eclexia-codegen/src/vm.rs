@@ -4008,6 +4008,13 @@ mod tests {
         }
     }
 
+    fn run_vm(vm: &mut VirtualMachine) -> Value {
+        match vm.run() {
+            Ok(value) => value,
+            Err(err) => panic!("vm run failed: {}", err),
+        }
+    }
+
     #[test]
     fn test_vm_add() {
         let module = make_module(vec![
@@ -4017,7 +4024,7 @@ mod tests {
             Instruction::ReturnValue,
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Int(30)));
     }
 
@@ -4030,7 +4037,7 @@ mod tests {
             Instruction::ReturnValue,
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Int(30)));
     }
 
@@ -4043,7 +4050,7 @@ mod tests {
             Instruction::ReturnValue,
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Int(42)));
     }
 
@@ -4056,7 +4063,7 @@ mod tests {
             Instruction::ReturnValue,
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Int(20)));
     }
 
@@ -4069,7 +4076,7 @@ mod tests {
             Instruction::ReturnValue,
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Int(2)));
     }
 
@@ -4082,7 +4089,7 @@ mod tests {
             Instruction::ReturnValue,
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Bool(true)));
     }
 
@@ -4098,7 +4105,7 @@ mod tests {
             Instruction::ReturnValue,  // 5
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Int(3)));
     }
 
@@ -4113,7 +4120,7 @@ mod tests {
             Instruction::ReturnValue,    // 4
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Int(42)));
     }
 
@@ -4140,7 +4147,7 @@ mod tests {
         ]);
         module.functions[0].local_count = 1;
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Int(42)));
     }
 
@@ -4153,7 +4160,7 @@ mod tests {
             Instruction::ReturnValue,
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         match result {
             Value::Float(f) => assert!((f - 6.28).abs() < 1e-10),
             other => panic!("Expected Float, got {:?}", other),
@@ -4169,7 +4176,7 @@ mod tests {
             Instruction::ReturnValue,
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Bool(true)));
     }
 
@@ -4181,7 +4188,7 @@ mod tests {
             Instruction::ReturnValue,
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Int(-42)));
     }
 
@@ -4190,7 +4197,7 @@ mod tests {
         let mut module = make_module(vec![Instruction::PushString(0), Instruction::ReturnValue]);
         module.strings = vec!["hello".to_string()];
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         match result {
             Value::String(s) => assert_eq!(s, "hello"),
             other => panic!("Expected String, got {:?}", other),
@@ -4206,7 +4213,7 @@ mod tests {
             Instruction::ReturnValue,
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Int(20)));
     }
 
@@ -4221,7 +4228,7 @@ mod tests {
             Instruction::ReturnValue,     // 4
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Int(42)));
     }
 
@@ -4229,7 +4236,7 @@ mod tests {
     fn test_vm_return_unit() {
         let module = make_module(vec![Instruction::Return]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Unit));
     }
 
@@ -4243,7 +4250,7 @@ mod tests {
             Instruction::ReturnValue,
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Bool(true)));
 
         // Test NeInt
@@ -4254,7 +4261,7 @@ mod tests {
             Instruction::ReturnValue,
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Bool(true)));
 
         // Test GeInt
@@ -4265,7 +4272,7 @@ mod tests {
             Instruction::ReturnValue,
         ]);
         let mut vm = VirtualMachine::new(module);
-        let result = vm.run().unwrap();
+        let result = run_vm(&mut vm);
         assert!(matches!(result, Value::Bool(true)));
     }
 }

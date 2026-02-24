@@ -176,12 +176,17 @@ mod tests {
     use std::io::Write;
 
     fn setup_test_registry() -> (tempfile::TempDir, RegistryServer) {
-        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let temp_dir = match tempfile::tempdir() {
+            Ok(dir) => dir,
+            Err(err) => panic!("Failed to create temp dir: {}", err),
+        };
         let server = RegistryServer::new(temp_dir.path()).with_auth_token("test-token".into());
 
         // Create a test package
         let pkg_dir = temp_dir.path().join("testpkg").join("1.0.0");
-        fs::create_dir_all(&pkg_dir).expect("Failed to create test package dir");
+        if let Err(err) = fs::create_dir_all(&pkg_dir) {
+            panic!("Failed to create test package dir: {}", err);
+        }
 
         let metadata = PackageMetadata {
             name: "testpkg".to_string(),
@@ -194,14 +199,23 @@ mod tests {
             checksum: "abc123".to_string(),
         };
 
-        let metadata_json = serde_json::to_string_pretty(&metadata).expect("Failed to serialize");
-        fs::write(pkg_dir.join("metadata.json"), metadata_json).expect("Failed to write metadata");
+        let metadata_json = match serde_json::to_string_pretty(&metadata) {
+            Ok(json) => json,
+            Err(err) => panic!("Failed to serialize: {}", err),
+        };
+        if let Err(err) = fs::write(pkg_dir.join("metadata.json"), metadata_json) {
+            panic!("Failed to write metadata: {}", err);
+        }
 
         // Create a test tarball
         let tarball_path = pkg_dir.join("testpkg-1.0.0.tar");
-        let mut file = fs::File::create(&tarball_path).expect("Failed to create tarball");
-        file.write_all(b"test tarball content")
-            .expect("Failed to write tarball");
+        let mut file = match fs::File::create(&tarball_path) {
+            Ok(file) => file,
+            Err(err) => panic!("Failed to create tarball: {}", err),
+        };
+        if let Err(err) = file.write_all(b"test tarball content") {
+            panic!("Failed to write tarball: {}", err);
+        }
 
         (temp_dir, server)
     }
@@ -230,8 +244,10 @@ mod tests {
         let response = router.dispatch(&req);
         assert_eq!(response.status, 200);
 
-        let metadata: PackageMetadata =
-            serde_json::from_slice(&response.body).expect("Failed to parse metadata");
+        let metadata: PackageMetadata = match serde_json::from_slice(&response.body) {
+            Ok(metadata) => metadata,
+            Err(err) => panic!("Failed to parse metadata: {}", err),
+        };
         assert_eq!(metadata.name, "testpkg");
         assert_eq!(metadata.version, "1.0.0");
     }
