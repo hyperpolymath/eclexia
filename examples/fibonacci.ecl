@@ -1,62 +1,35 @@
-// SPDX-License-Identifier: MIT
-// Adaptive Fibonacci implementation - demonstrates solution selection
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Fibonacci — recursive implementation.
 
-// Helper function for tail-recursive fibonacci
-def fib_helper(n: Int, a: Int, b: Int) -> Int {
-    if n <= 0 {
-        a
-    } else {
-        fib_helper(n - 1, b, a + b)
-    }
-}
-
-// Efficient tail-recursive fibonacci
-def efficient_fib(n: Int) -> Int {
-    fib_helper(n, 0, 1)
-}
-
-// Simple fibonacci using the naive recursive algorithm
-def simple_fib(n: Int) -> Int {
+fn fib(n: Int) -> Int {
     if n <= 1 {
         n
     } else {
-        simple_fib(n - 1) + simple_fib(n - 2)
+        fib(n - 1) + fib(n - 2)
     }
 }
 
-// Adaptive fibonacci: runtime selects best solution based on constraints
-adaptive def fibonacci(n: Int) -> Int
-    @requires: energy < 100J
-    @optimize: minimize energy
-{
-    // Tail-recursive is more efficient (lower energy cost)
-    @solution "efficient":
-        @when: true
-        @provides: energy: 5J, latency: 10ms, carbon: 1gCO2e
-    {
-        efficient_fib(n)
-    }
-
-    // Naive recursive uses more energy
-    @solution "naive":
-        @when: true
-        @provides: energy: 50J, latency: 50ms, carbon: 5gCO2e
-    {
-        simple_fib(n)
+fn fib_tail(n: Int, a: Int, b: Int) -> Int {
+    if n <= 0 {
+        a
+    } else {
+        fib_tail(n - 1, b, a + b)
     }
 }
 
-def main() -> Unit {
-    println("Eclexia Adaptive Fibonacci Demo")
-    println("================================")
+fn main() {
+    println("=== Fibonacci ===");
+    println("Recursive:");
+    println("  fib(0) =", fib(0));
+    println("  fib(1) =", fib(1));
+    println("  fib(5) =", fib(5));
+    println("  fib(10) =", fib(10));
 
-    // Call the adaptive fibonacci function
-    let result = fibonacci(10)
-
-    println("")
-    println("fibonacci(10) =", result)
-    println("")
-    println("The runtime selected the best solution based on shadow prices:")
-    println("  efficient: cost = 5 + 10 + 1 = 16")
-    println("  naive:     cost = 50 + 50 + 5 = 105")
+    println("");
+    println("Tail-recursive:");
+    println("  fib_tail(0) =", fib_tail(0, 0, 1));
+    println("  fib_tail(1) =", fib_tail(1, 0, 1));
+    println("  fib_tail(5) =", fib_tail(5, 0, 1));
+    println("  fib_tail(10) =", fib_tail(10, 0, 1));
+    println("  fib_tail(20) =", fib_tail(20, 0, 1))
 }

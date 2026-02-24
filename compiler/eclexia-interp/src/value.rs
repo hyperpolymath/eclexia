@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Runtime values for the Eclexia interpreter.
@@ -6,9 +6,9 @@
 use eclexia_ast::dimension::Dimension;
 use eclexia_ast::ExprId;
 use smol_str::SmolStr;
-use std::collections::{HashMap, BTreeMap};
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::{BTreeMap, HashMap};
+use std::rc::Rc;
 
 /// A runtime value in Eclexia.
 #[derive(Debug, Clone)]
@@ -50,14 +50,30 @@ pub enum Value {
     AdaptiveFunction(Rc<AdaptiveFunction>),
     /// Built-in function
     Builtin(BuiltinFn),
+    /// Macro definition
+    Macro(Rc<eclexia_ast::MacroDef>),
+    /// Option::Some
+    Some(Box<Value>),
+    /// Option::None
+    None,
+    /// Task handle for concurrency
+    TaskHandle(Rc<RefCell<Option<tokio::task::JoinHandle<Value>>>>),
+    /// Channel sender
+    Sender(Rc<RefCell<tokio::sync::mpsc::UnboundedSender<Value>>>),
+    /// Channel receiver
+    Receiver(Rc<RefCell<tokio::sync::mpsc::UnboundedReceiver<Value>>>),
 }
 
 /// A user-defined function.
 #[derive(Debug)]
 pub struct Function {
+    /// Function name identifier
     pub name: SmolStr,
+    /// Parameter names in declaration order
     pub params: Vec<SmolStr>,
+    /// Reference to the function body in the AST
     pub body: FunctionBody,
+    /// Captured closure environment
     pub closure: super::env::Environment,
 }
 
@@ -65,57 +81,71 @@ pub struct Function {
 #[derive(Debug, Clone, Copy)]
 pub enum FunctionBody {
     /// Reference to a block in the AST (for named functions)
-    Block {
-        file_idx: usize,
-        block_idx: usize,
-    },
+    Block { file_idx: usize, block_idx: usize },
     /// Reference to an expression (for lambdas)
-    Lambda {
-        expr_id: ExprId,
-    },
+    Lambda { expr_id: ExprId },
 }
 
 /// An adaptive function with multiple solutions.
 #[derive(Debug)]
 pub struct AdaptiveFunction {
+    /// Adaptive function name
     pub name: SmolStr,
+    /// Parameter names in declaration order
     pub params: Vec<SmolStr>,
+    /// Available solution alternatives
     pub solutions: Vec<Solution>,
+    /// Resource requirements from `@requires` constraints
     pub requires: ResourceRequires,
+    /// Captured closure environment
     pub closure: super::env::Environment,
 }
 
 /// Resource requirements/constraints from @requires.
 #[derive(Debug, Clone, Default)]
 pub struct ResourceRequires {
-    pub energy: Option<f64>,    // Max Joules
-    pub latency: Option<f64>,   // Max Milliseconds
-    pub memory: Option<f64>,    // Max Bytes
-    pub carbon: Option<f64>,    // Max gCO2e
+    /// Maximum energy in Joules
+    pub energy: Option<f64>,
+    /// Maximum latency in milliseconds
+    pub latency: Option<f64>,
+    /// Maximum memory in bytes
+    pub memory: Option<f64>,
+    /// Maximum carbon emissions in gCO2e
+    pub carbon: Option<f64>,
 }
 
 /// A solution alternative.
 #[derive(Debug, Clone)]
 pub struct Solution {
+    /// Solution name identifier
     pub name: SmolStr,
+    /// Optional `@when` guard expression
     pub when_expr: Option<ExprId>,
+    /// Resource provisions declared by this solution
     pub provides: ResourceProvides,
+    /// Reference to the solution body in the AST
     pub body: FunctionBody,
 }
 
 /// Resource provisions for a solution.
 #[derive(Debug, Clone, Default)]
 pub struct ResourceProvides {
-    pub energy: Option<f64>,    // Joules
-    pub latency: Option<f64>,   // Milliseconds
-    pub memory: Option<f64>,    // Bytes
-    pub carbon: Option<f64>,    // gCO2e
+    /// Energy cost in Joules
+    pub energy: Option<f64>,
+    /// Latency cost in milliseconds
+    pub latency: Option<f64>,
+    /// Memory cost in bytes
+    pub memory: Option<f64>,
+    /// Carbon emissions in gCO2e
+    pub carbon: Option<f64>,
 }
 
 /// Built-in function type.
 #[derive(Clone)]
 pub struct BuiltinFn {
+    /// Name of the built-in function
     pub name: &'static str,
+    /// The native function pointer implementing this builtin
     pub func: fn(&[Value]) -> Result<Value, super::error::RuntimeError>,
 }
 
@@ -132,7 +162,7 @@ impl Value {
             Value::Bool(b) => *b,
             Value::Int(n) => *n != 0,
             Value::Float(f) => *f != 0.0,
-            Value::Unit => false,
+            Value::Unit | Value::None => false,
             Value::String(s) => !s.is_empty(),
             Value::Array(arr) => !arr.borrow().is_empty(),
             Value::HashMap(map) => !map.borrow().is_empty(),
@@ -160,6 +190,12 @@ impl Value {
             Value::Function(_) => "Function",
             Value::AdaptiveFunction(_) => "AdaptiveFunction",
             Value::Builtin(_) => "Builtin",
+            Value::Macro(_) => "Macro",
+            Value::Some(_) => "Option",
+            Value::None => "Option",
+            Value::TaskHandle(_) => "TaskHandle",
+            Value::Sender(_) => "Sender",
+            Value::Receiver(_) => "Receiver",
         }
     }
 
@@ -263,6 +299,12 @@ impl std::fmt::Display for Value {
             Value::Function(func) => write!(f, "<fn {}>", func.name),
             Value::AdaptiveFunction(func) => write!(f, "<adaptive fn {}>", func.name),
             Value::Builtin(b) => write!(f, "<builtin {}>", b.name),
+            Value::Macro(m) => write!(f, "<macro {} ({} rules)>", m.name, m.rules.len()),
+            Value::Some(v) => write!(f, "Some({})", v),
+            Value::None => write!(f, "None"),
+            Value::TaskHandle(_) => write!(f, "<task handle>"),
+            Value::Sender(_) => write!(f, "<channel sender>"),
+            Value::Receiver(_) => write!(f, "<channel receiver>"),
         }
     }
 }
@@ -279,6 +321,18 @@ impl PartialEq for Value {
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Char(a), Value::Char(b)) => a == b,
             (Value::Tuple(a), Value::Tuple(b)) => a == b,
+            (Value::Some(a), Value::Some(b)) => a == b,
+            (Value::None, Value::None) => true,
+            (
+                Value::Struct {
+                    name: na,
+                    fields: fa,
+                },
+                Value::Struct {
+                    name: nb,
+                    fields: fb,
+                },
+            ) => na == nb && fa == fb,
             _ => false,
         }
     }

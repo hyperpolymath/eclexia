@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Docker ignore file
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Build artifacts
+target/
+**/target/
+*.o
+*.so
+*.a
+
+# Documentation (not needed in container)
+docs/
+formal/
+examples/
+*.md
+*.adoc
+
+# Tests
+tests/
+**/tests/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# CI/CD
+.gitlab-ci.yml
+.travis.yml
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Credentials
+*.pem
+*.key
+secrets/

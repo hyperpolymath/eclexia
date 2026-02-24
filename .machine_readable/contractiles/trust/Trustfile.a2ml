@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Eclexia Trustfile (A2ML-compatible structure, adapted from rsr-template-repo)
+
+---
+### [META]
+id: "did:web:eclexia.org"
+version: "1.0.0"
+context:
+  - "https://a2ml.org/ns/v2"
+  - "https://hypatia.scans/ns/v1"
+  - "https://w3id.org/security/v4"
+meta:
+  generated: "2026-02-24T00:00:00Z"
+  expires: "2027-02-24T00:00:00Z"
+  signature:
+    algorithm: "Ed448+Dilithium5"
+    value: "PENDING-PRIMARY-SIGNATURE"
+    signedBy: "did:web:eclexia.org#primary-sig"
+  fallbackSignature:
+    algorithm: "SPHINCS+"
+    value: "PENDING-FALLBACK-SIGNATURE"
+  integrity:
+    sha3-512: "PENDING-SHA3-512"
+    shake256: "PENDING-SHAKE256"
+    zonemd: "PENDING-ZONEMD"
+
+---
+### [TRUSTFILE]
+issuer: "did:web:eclexia.org"
+keys:
+  - id: "#primary-sig"
+    type: "HybridKey2024"
+    classical:
+      algorithm: "Ed448"
+      publicKeyJwk:
+        kty: "OKP"
+        crv: "Ed448"
+        x: "PENDING-ED448-PUBLIC-KEY"
+    postQuantum:
+      algorithm: "Dilithium5"
+      publicKeyJwk:
+        kty: "OKP"
+        crv: "Dilithium5"
+        x: "PENDING-DILITHIUM5-PUBLIC-KEY"
+    fallback:
+      algorithm: "SPHINCS+"
+      publicKeyJwk:
+        kty: "OKP"
+        crv: "SPHINCS+"
+        x: "PENDING-SPHINCSPLUS-PUBLIC-KEY"
+
+algorithms:
+  hashing: ["SHA3-512", "SHAKE256", "BLAKE3"]
+  kdf: "HKDF-SHAKE512"
+  rng: "ChaCha20-DRBG"
+
+---
+### [CI_CD]
+github_actions:
+  workflow: ".github/workflows/hypatia-scan.yml"
+  checks:
+    - "just quality-gate"
+    - "just panic-attack"
+
+gitbot_fleet:
+  hooks:
+    - type: "analysis-submit"
+      script: ".github/workflows/hypatia-scan.yml submits findings to gitbot-fleet"
+    - type: "post-merge-observe"
+      script: "gitbot-fleet monitors inbound findings and remediation loop"
+
+---
+### [SECURITY_SCHEME]
+controls:
+  - "Hypatia security scanning enabled in CI"
+  - "panic-attack scanning included in local quality gate"
+  - "security.txt and trust.txt maintained under .well-known"
+  - "Mustfile invariants enforce FFI/ABI purity boundaries"
+
+ffi_abi_boundary:
+  ffi: "Zig only under ffi/"
+  abi: "Idris2 only under src/abi/"
+
+---
+### [DEPLOYMENT]
+steps:
+  - "Replace PENDING cryptographic material with real values"
+  - "Sign Trustfile and record integrity hashes"
+  - "Validate Trustfile in CI before release"

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>core - Eclexia Documentation</title>
+<style>
+/* SPDX-License-Identifier: PMPL-1.0-or-later */
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #f5f5f5;
+    color: #333;
+}
+
+h1 {
+    color: #2c3e50;
+    border-bottom: 3px solid #3498db;
+    padding-bottom: 10px;
+}
+
+h2 {
+    color: #34495e;
+    border-bottom: 2px solid #95a5a6;
+    padding-bottom: 5px;
+    margin-top: 30px;
+}
+
+h3 {
+    color: #2980b9;
+}
+
+.item {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.signature {
+    background: #f8f8f8;
+    border-left: 4px solid #3498db;
+    padding: 15px;
+    font-family: "Fira Code", "Source Code Pro", monospace;
+    font-size: 14px;
+    overflow-x: auto;
+    border-radius: 3px;
+}
+
+.doc-comment {
+    margin-top: 15px;
+    color: #555;
+}
+
+.doc-comment p {
+    margin: 10px 0;
+}
+
+.doc-comment code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.doc-comment pre {
+    background: #282c34;
+    color: #abb2bf;
+    padding: 15px;
+    border-radius: 5px;
+    overflow-x: auto;
+}
+
+.doc-comment pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+}
+
+ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+ul li {
+    padding: 5px 0;
+}
+
+a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+</style>
+</head>
+<body>
+<h1>Module: core</h1>
+<h2>Table of Contents</h2>
+<ul>
+<li><a href="#assert">assert</a> - Function</li>
+<li><a href="#is_some">is_some</a> - Function</li>
+<li><a href="#is_none">is_none</a> - Function</li>
+<li><a href="#unwrap">unwrap</a> - Function</li>
+<li><a href="#unwrap_or">unwrap_or</a> - Function</li>
+<li><a href="#is_ok">is_ok</a> - Function</li>
+<li><a href="#is_err">is_err</a> - Function</li>
+<li><a href="#unwrap">unwrap</a> - Function</li>
+<li><a href="#unwrap_err">unwrap_err</a> - Function</li>
+<li><a href="#unwrap_or">unwrap_or</a> - Function</li>
+<li><a href="#string_len">string_len</a> - Function</li>
+<li><a href="#string_concat">string_concat</a> - Function</li>
+<li><a href="#string_substring">string_substring</a> - Function</li>
+<li><a href="#int_to_string">int_to_string</a> - Function</li>
+<li><a href="#float_to_string">float_to_string</a> - Function</li>
+</ul>
+<div class="item" id="assert">
+<h3>assert</h3>
+<pre class="signature">fn assert(condition: Idx::<Type>(1), message: Idx::<Type>(2))</pre>
+<div class="doc-comment">
+<p>Assert that a condition is true, panic if false.</p>
+</div>
+</div>
+<div class="item" id="is_some">
+<h3>is_some</h3>
+<pre class="signature">fn is_some(self) -> Idx::<Type>(3)</pre>
+<div class="doc-comment">
+<p>Returns true if the option is Some.</p>
+</div>
+</div>
+<div class="item" id="is_none">
+<h3>is_none</h3>
+<pre class="signature">fn is_none(self) -> Idx::<Type>(4)</pre>
+<div class="doc-comment">
+<p>Returns true if the option is None.</p>
+</div>
+</div>
+<div class="item" id="unwrap">
+<h3>unwrap</h3>
+<pre class="signature">fn unwrap(self) -> Idx::<Type>(5)</pre>
+<div class="doc-comment">
+<p>Returns the contained Some value or panics.</p>
+</div>
+</div>
+<div class="item" id="unwrap_or">
+<h3>unwrap_or</h3>
+<pre class="signature">fn unwrap_or(self, default: Idx::<Type>(6)) -> Idx::<Type>(7)</pre>
+<div class="doc-comment">
+<p>Returns the contained Some value or a default.</p>
+</div>
+</div>
+<div class="item" id="is_ok">
+<h3>is_ok</h3>
+<pre class="signature">fn is_ok(self) -> Idx::<Type>(8)</pre>
+<div class="doc-comment">
+<p>Returns true if the result is Ok.</p>
+</div>
+</div>
+<div class="item" id="is_err">
+<h3>is_err</h3>
+<pre class="signature">fn is_err(self) -> Idx::<Type>(9)</pre>
+<div class="doc-comment">
+<p>Returns true if the result is Err.</p>
+</div>
+</div>
+<div class="item" id="unwrap">
+<h3>unwrap</h3>
+<pre class="signature">fn unwrap(self) -> Idx::<Type>(10)</pre>
+<div class="doc-comment">
+<p>Returns the contained Ok value or panics.</p>
+</div>
+</div>
+<div class="item" id="unwrap_err">
+<h3>unwrap_err</h3>
+<pre class="signature">fn unwrap_err(self) -> Idx::<Type>(11)</pre>
+<div class="doc-comment">
+<p>Returns the contained Err value or panics.</p>
+</div>
+</div>
+<div class="item" id="unwrap_or">
+<h3>unwrap_or</h3>
+<pre class="signature">fn unwrap_or(self, default: Idx::<Type>(12)) -> Idx::<Type>(13)</pre>
+<div class="doc-comment">
+<p>Returns the contained Ok value or a default.</p>
+</div>
+</div>
+<div class="item" id="string_len">
+<h3>string_len</h3>
+<pre class="signature">fn string_len(s: Idx::<Type>(14)) -> Idx::<Type>(15)</pre>
+</div>
+<div class="item" id="string_concat">
+<h3>string_concat</h3>
+<pre class="signature">fn string_concat(a: Idx::<Type>(16), b: Idx::<Type>(17)) -> Idx::<Type>(18)</pre>
+</div>
+<div class="item" id="string_substring">
+<h3>string_substring</h3>
+<pre class="signature">fn string_substring(s: Idx::<Type>(19), start: Idx::<Type>(20), end: Idx::<Type>(21)) -> Idx::<Type>(22)</pre>
+</div>
+<div class="item" id="int_to_string">
+<h3>int_to_string</h3>
+<pre class="signature">fn int_to_string(n: Idx::<Type>(23)) -> Idx::<Type>(24)</pre>
+</div>
+<div class="item" id="float_to_string">
+<h3>float_to_string</h3>
+<pre class="signature">fn float_to_string(f: Idx::<Type>(25)) -> Idx::<Type>(26)</pre>
+</div>
+</body>
+</html>

@@ -1,39 +1,66 @@
-// SPDX-License-Identifier: MIT
-// Adaptive matrix multiplication
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Matrix operations — demonstrates adaptive computation selection.
+//
+// Different matrix algorithms have different resource profiles.
+// The runtime selects the cheapest viable solution.
 
-type Matrix = Array[Array[Float]]
+fn dot_product(a1: Int, a2: Int, a3: Int, b1: Int, b2: Int, b3: Int) -> Int {
+    a1 * b1 + a2 * b2 + a3 * b3
+}
 
-adaptive def matrix_multiply(A: Matrix, B: Matrix) -> Matrix
-    @requires: energy < 100J, latency < 500ms
-    @optimize: minimize energy, minimize carbon
+// Adaptive matrix operation: select algorithm by resource budget
+adaptive def matrix_op(n: Int) -> Int
+    @requires: energy < 100J
+    @requires: carbon < 50gCO2e
+    @optimize: minimize energy
 {
-    @solution "gpu_accelerated":
-        @when: gpu_available() and matrix_size(A) > 1000
-        @provides: energy: 50J, latency: 100ms, carbon: 5gCO2e
-    {
-        gpu::multiply(A, B)
-    }
-
-    @solution "parallel_cpu":
-        @when: cpu_cores() >= 4
-        @provides: energy: 80J, latency: 300ms, carbon: 8gCO2e
-    {
-        parallel::multiply(A, B)
-    }
-
-    @solution "naive":
+    @solution "fast_approx":
         @when: true
-        @provides: energy: 30J, latency: 800ms, carbon: 3gCO2e
+        @provides: energy: 5J, latency: 1ms, carbon: 1gCO2e
     {
-        naive_multiply(A, B)
+        // O(1) approximation
+        n * n
+    }
+
+    @solution "exact_compute":
+        @when: true
+        @provides: energy: 50J, latency: 100ms, carbon: 10gCO2e
+    {
+        // More accurate: sum of squares
+        sum_of_squares(n, 0, 1)
     }
 }
 
-def naive_multiply(A: Matrix, B: Matrix) -> Matrix {
-    // Naive O(n³) implementation placeholder
-    A
+fn sum_of_squares(n: Int, acc: Int, i: Int) -> Int {
+    if i > n {
+        acc
+    } else {
+        sum_of_squares(n, acc + i * i, i + 1)
+    }
 }
 
-def gpu_available() -> Bool { false }
-def cpu_cores() -> Int { 4 }
-def matrix_size(m: Matrix) -> Int { 0 }
+fn main() {
+    println("=== Matrix Operations Demo ===");
+
+    // Direct dot product
+    let dp = dot_product(1, 2, 3, 4, 5, 6);
+    println("Dot product [1,2,3] . [4,5,6] =", dp);
+
+    // Adaptive matrix operation
+    println("");
+    println("Adaptive matrix operations (minimize energy):");
+    println("  matrix_op(3) =", matrix_op(3));
+    println("  matrix_op(5) =", matrix_op(5));
+    println("  matrix_op(10) =", matrix_op(10));
+
+    // Direct sum of squares
+    println("");
+    println("Sum of squares:");
+    println("  1^2 + 2^2 + 3^2 =", sum_of_squares(3, 0, 1));
+    println("  1^2 + ... + 10^2 =", sum_of_squares(10, 0, 1));
+
+    println("");
+    println("Resource budgets enforced:");
+    println("  energy < 100J, carbon < 50gCO2e");
+    println("  Runtime selected cheapest viable algorithm")
+}

@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+
+[package]
+name = "eclexia-async"
+description = "Async runtime and concurrency primitives for Eclexia"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+eclexia-ast = { path = "../../compiler/eclexia-ast" }
+eclexia-runtime = { path = "../eclexia-runtime" }
+tokio = { workspace = true }
+parking_lot = { workspace = true }
+smol_str = { workspace = true }
+tracing = { workspace = true }

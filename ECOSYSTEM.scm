@@ -1,20 +1,20 @@
-;; SPDX-License-Identifier: PMPL-1.0-or-later
-;; ECOSYSTEM.scm - Project ecosystem position
+;; SPDX-License-Identifier: AGPL-3.0-or-later
+;; SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+;; ECOSYSTEM.scm — template-repo
 
 (ecosystem
- (version "1.0")
- (name "eclexia")
- (type "library|application|tool|framework")
- (purpose "TODO: Brief purpose statement")
+  (version "1.0.0")
+  (name "template-repo")
+  (type "project")
+  (purpose "Project in the hyperpolymath ecosystem")
 
- (position-in-ecosystem
-  "TODO: Describe where this fits in the hyperpolymath ecosystem")
+  (position-in-ecosystem
+    "Part of hyperpolymath ecosystem. Follows RSR guidelines.")
 
- (related-projects
-  ())  ;; Add related projects with relationship types
+  (related-projects
+    (project (name "rhodium-standard-repositories")
+             (url "https://github.com/hyperpolymath/rhodium-standard-repositories")
+             (relationship "standard")))
 
- (what-this-is
-  "TODO: What this project is")
-
- (what-this-is-not
-  "TODO: What this project is not"))
+  (what-this-is "Project in the hyperpolymath ecosystem")
+  (what-this-is-not "- NOT exempt from RSR compliance"))

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Type unification implementation.
@@ -6,8 +6,8 @@
 //! Implements Robinson's unification algorithm with occurs check.
 
 use crate::{TypeChecker, TypeError};
-use eclexia_ast::types::{Ty, TypeVar};
 use eclexia_ast::span::Span;
+use eclexia_ast::types::{Ty, TypeVar};
 
 impl TypeChecker<'_> {
     /// Occurs check: does type variable `v` occur in type `t`?
@@ -29,6 +29,7 @@ impl TypeChecker<'_> {
     }
 
     /// Unify two types with occurs check
+    #[allow(clippy::result_large_err)]
     pub fn unify_with_occurs_check(
         &mut self,
         t1: &Ty,
@@ -52,7 +53,10 @@ impl TypeChecker<'_> {
                         span,
                         var: *v,
                         ty: t.clone(),
-                        hint: Some("this type refers to itself infinitely; check your type definitions".to_string()),
+                        hint: Some(
+                            "this type refers to itself infinitely; check your type definitions"
+                                .to_string(),
+                        ),
                     });
                 }
 
@@ -60,9 +64,35 @@ impl TypeChecker<'_> {
                 Ok(())
             }
 
-            (Ty::Primitive(p1), Ty::Primitive(p2)) if p1 == p2 => Ok(()),
+            (Ty::Primitive(p1), Ty::Primitive(p2)) => {
+                use eclexia_ast::types::PrimitiveTy::*;
+                if p1 == p2
+                    || matches!(
+                        (p1, p2),
+                        (Float, F64) | (F64, Float) | (Int, I64) | (I64, Int)
+                    )
+                {
+                    Ok(())
+                } else {
+                    Err(TypeError::Mismatch {
+                        span,
+                        expected: t1,
+                        found: t2,
+                        hint: None,
+                    })
+                }
+            }
 
-            (Ty::Function { params: p1, ret: r1 }, Ty::Function { params: p2, ret: r2 }) => {
+            (
+                Ty::Function {
+                    params: p1,
+                    ret: r1,
+                },
+                Ty::Function {
+                    params: p2,
+                    ret: r2,
+                },
+            ) => {
                 if p1.len() != p2.len() {
                     return Err(TypeError::Mismatch {
                         span,
@@ -74,7 +104,7 @@ impl TypeChecker<'_> {
                 for (a, b) in p1.iter().zip(p2.iter()) {
                     self.unify_with_occurs_check(a, b, span)?;
                 }
-                self.unify_with_occurs_check(&r1, &r2, span)
+                self.unify_with_occurs_check(r1, r2, span)
             }
 
             (Ty::Tuple(e1), Ty::Tuple(e2)) => {
@@ -93,7 +123,7 @@ impl TypeChecker<'_> {
             }
 
             (Ty::Array { elem: e1, .. }, Ty::Array { elem: e2, .. }) => {
-                self.unify_with_occurs_check(&e1, &e2, span)
+                self.unify_with_occurs_check(e1, e2, span)
             }
 
             (Ty::Named { name: n1, args: a1 }, Ty::Named { name: n2, args: a2 }) if n1 == n2 => {

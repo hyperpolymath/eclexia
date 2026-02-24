@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+
+[package]
+name = "eclexia-db"
+description = "Incremental compilation database for the Eclexia compiler"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Salsa incremental computation framework
+salsa = { workspace = true }
+
+# Eclexia compiler crates
+eclexia-ast = { path = "../eclexia-ast" }
+eclexia-lexer = { path = "../eclexia-lexer" }
+eclexia-parser = { path = "../eclexia-parser" }
+eclexia-typeck = { path = "../eclexia-typeck" }
+eclexia-hir = { path = "../eclexia-hir" }
+eclexia-mir = { path = "../eclexia-mir" }
+eclexia-codegen = { path = "../eclexia-codegen" }
+eclexia-lint = { path = "../eclexia-lint" }
+
+# File watching
+notify = { workspace = true }
+
+# Utilities
+smol_str = { workspace = true }
+rustc-hash = { workspace = true }
+parking_lot = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]

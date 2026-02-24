@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Runtime errors for the interpreter.
@@ -12,6 +12,7 @@ pub type RuntimeResult<T> = Result<T, RuntimeError>;
 /// A runtime error.
 #[derive(Debug, Error)]
 pub enum RuntimeError {
+    /// Reference to a variable that has not been defined
     #[error("undefined variable: {name}")]
     UndefinedVariable {
         name: String,
@@ -19,6 +20,7 @@ pub enum RuntimeError {
         hint: Option<String>,
     },
 
+    /// Type mismatch during evaluation
     #[error("type error: expected {expected}, got {got}")]
     TypeError {
         expected: String,
@@ -27,6 +29,7 @@ pub enum RuntimeError {
         hint: Option<String>,
     },
 
+    /// Wrong number of arguments passed to a function
     #[error("arity mismatch: expected {expected} arguments, got {got}")]
     ArityMismatch {
         expected: usize,
@@ -34,12 +37,14 @@ pub enum RuntimeError {
         hint: Option<String>,
     },
 
+    /// Division or modulo by zero
     #[error("division by zero")]
     DivisionByZero {
         span: Option<Span>,
         hint: Option<String>,
     },
 
+    /// Array or tuple index out of valid range
     #[error("index out of bounds: {index} >= {len}")]
     IndexOutOfBounds {
         index: usize,
@@ -48,6 +53,7 @@ pub enum RuntimeError {
         hint: Option<String>,
     },
 
+    /// Access to a nonexistent struct field
     #[error("no field '{field}' on struct '{struct_name}'")]
     NoSuchField {
         struct_name: String,
@@ -56,6 +62,7 @@ pub enum RuntimeError {
         hint: Option<String>,
     },
 
+    /// Attempt to call a value that is not a function
     #[error("cannot call non-function value of type {ty}")]
     NotCallable {
         ty: String,
@@ -63,27 +70,30 @@ pub enum RuntimeError {
         hint: Option<String>,
     },
 
+    /// Resource budget exceeded during execution
     #[error("resource constraint violated: {message}")]
     ResourceViolation {
         message: String,
         hint: Option<String>,
     },
 
+    /// No solution satisfies the adaptive function constraints
     #[error("no suitable solution found for adaptive function '{name}'")]
-    NoSuitableSolution {
-        name: String,
-        hint: Option<String>,
-    },
+    NoSuitableSolution { name: String, hint: Option<String> },
 
+    /// Early return from a function (control flow, not a true error)
     #[error("return from top level")]
     Return(crate::Value),
 
+    /// Break statement encountered (control flow, not a true error)
     #[error("break outside loop")]
     Break,
 
+    /// Continue statement encountered (control flow, not a true error)
     #[error("continue outside loop")]
     Continue,
 
+    /// Generic runtime error with a custom message
     #[error("{message}")]
     Custom {
         message: String,
@@ -93,12 +103,13 @@ pub enum RuntimeError {
 }
 
 impl RuntimeError {
+    /// Create a type error with expected and actual type names.
     pub fn type_error(expected: impl Into<String>, got: impl Into<String>) -> Self {
         let expected_str = expected.into();
         let got_str = got.into();
-        let hint = Some(format!(
-            "check that the value's type matches what is expected in this context"
-        ));
+        let hint = Some(
+            "check that the value's type matches what is expected in this context".to_string(),
+        );
         Self::TypeError {
             expected: expected_str,
             got: got_str,
@@ -107,6 +118,7 @@ impl RuntimeError {
         }
     }
 
+    /// Create an undefined variable error.
     pub fn undefined(name: impl Into<String>) -> Self {
         Self::UndefinedVariable {
             name: name.into(),
@@ -115,10 +127,8 @@ impl RuntimeError {
         }
     }
 
-    pub fn undefined_with_suggestions(
-        name: impl Into<String>,
-        available_names: &[&str],
-    ) -> Self {
+    /// Create an undefined variable error with a "did you mean?" suggestion.
+    pub fn undefined_with_suggestions(name: impl Into<String>, available_names: &[&str]) -> Self {
         let name_str = name.into();
         let hint = find_closest_match(&name_str, available_names)
             .map(|suggestion| format!("did you mean '{}'?", suggestion))
@@ -131,6 +141,7 @@ impl RuntimeError {
         }
     }
 
+    /// Create a missing field error with a "did you mean?" suggestion.
     pub fn no_such_field_with_suggestions(
         struct_name: impl Into<String>,
         field: impl Into<String>,
@@ -149,6 +160,7 @@ impl RuntimeError {
         }
     }
 
+    /// Create a custom runtime error with the given message.
     pub fn custom(message: impl Into<String>) -> Self {
         Self::Custom {
             message: message.into(),
@@ -157,6 +169,7 @@ impl RuntimeError {
         }
     }
 
+    /// Create a custom runtime error with a message and hint.
     pub fn custom_with_hint(message: impl Into<String>, hint: impl Into<String>) -> Self {
         Self::Custom {
             message: message.into(),
@@ -222,27 +235,69 @@ impl RuntimeError {
     /// Add span information to this error.
     pub fn with_span(self, span: Span) -> Self {
         match self {
-            Self::UndefinedVariable { name, hint, .. } => {
-                Self::UndefinedVariable { name, span: Some(span), hint }
-            }
-            Self::TypeError { expected, got, hint, .. } => {
-                Self::TypeError { expected, got, span: Some(span), hint }
-            }
-            Self::ArityMismatch { expected, got, hint } => Self::ArityMismatch { expected, got, hint },
-            Self::DivisionByZero { hint, .. } => Self::DivisionByZero { span: Some(span), hint },
-            Self::IndexOutOfBounds { index, len, hint, .. } => {
-                Self::IndexOutOfBounds { index, len, span: Some(span), hint }
-            }
-            Self::NoSuchField { struct_name, field, hint, .. } => {
-                Self::NoSuchField { struct_name, field, span: Some(span), hint }
-            }
-            Self::NotCallable { ty, hint, .. } => Self::NotCallable { ty, span: Some(span), hint },
+            Self::UndefinedVariable { name, hint, .. } => Self::UndefinedVariable {
+                name,
+                span: Some(span),
+                hint,
+            },
+            Self::TypeError {
+                expected,
+                got,
+                hint,
+                ..
+            } => Self::TypeError {
+                expected,
+                got,
+                span: Some(span),
+                hint,
+            },
+            Self::ArityMismatch {
+                expected,
+                got,
+                hint,
+            } => Self::ArityMismatch {
+                expected,
+                got,
+                hint,
+            },
+            Self::DivisionByZero { hint, .. } => Self::DivisionByZero {
+                span: Some(span),
+                hint,
+            },
+            Self::IndexOutOfBounds {
+                index, len, hint, ..
+            } => Self::IndexOutOfBounds {
+                index,
+                len,
+                span: Some(span),
+                hint,
+            },
+            Self::NoSuchField {
+                struct_name,
+                field,
+                hint,
+                ..
+            } => Self::NoSuchField {
+                struct_name,
+                field,
+                span: Some(span),
+                hint,
+            },
+            Self::NotCallable { ty, hint, .. } => Self::NotCallable {
+                ty,
+                span: Some(span),
+                hint,
+            },
             Self::ResourceViolation { message, hint } => Self::ResourceViolation { message, hint },
             Self::NoSuitableSolution { name, hint } => Self::NoSuitableSolution { name, hint },
             Self::Return(v) => Self::Return(v),
             Self::Break => Self::Break,
             Self::Continue => Self::Continue,
-            Self::Custom { message, hint, .. } => Self::Custom { message, span: Some(span), hint },
+            Self::Custom { message, hint, .. } => Self::Custom {
+                message,
+                span: Some(span),
+                hint,
+            },
         }
     }
 }

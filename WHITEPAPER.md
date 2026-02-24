@@ -1,12 +1,20 @@
 # Economics-as-Code: A Novel Programming Paradigm for Sustainable Computing
 
-<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!-- SPDX-License-Identifier: PMPL-1.0-or-later -->
 <!-- SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell -->
 
 **Version:** 1.0
 **Date:** December 2025
 **Authors:** Jonathan D.A. Jewell
 **Status:** Research Preview
+
+> **Implementation note (2026-02-09):** This whitepaper describes the
+> theoretical foundation and design goals for Eclexia. As of this date,
+> the compiler implements the core type system (Hindley-Milner with
+> dimensional analysis) and a bytecode VM, but adaptive function dispatch,
+> carbon-aware scheduling, and shadow price optimisation are stub
+> implementations. The performance claims in Section 11 (Evaluation) are
+> **projected**, not measured — no benchmarks have been run yet.
 
 ---
 
@@ -1165,7 +1173,7 @@ See ALGORITHMS.md for implementation details and complexity analysis.
 
 **Document Version:** 1.0
 **Last Updated:** December 2025
-**License:** AGPL-3.0-or-later
+**License:** PMPL-1.0-or-later
 **Citation:**
 
 ```bibtex

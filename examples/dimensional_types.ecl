@@ -1,86 +1,89 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
-// Dimensional Type Checking Example
+// Dimensional type system — demonstrates resource-typed computation.
+//
+// Eclexia tracks physical dimensions (energy, time, carbon, memory)
+// as first-class types. Functions declare resource constraints via
+// @requires annotations; the type checker verifies dimensional consistency.
 
-// Example 1: Energy calculations with proper dimensions
-fn calculate_power_consumption() -> Float[kg·m^2/s^3] {
-    let energy: Float[kg·m^2/s^2] = 100.0  // 100 Joules
-    let time: Float[s] = 10.0              // 10 seconds
-
-    // Energy / Time = Power (kg·m²/s³)
-    energy / time  // Returns power in Watts
+// Pure math: no resource annotations needed
+fn calculate_power(energy: Float, time: Float) -> Float {
+    // Power = Energy / Time (Watts)
+    energy / time
 }
 
-// Example 2: This would cause a dimension mismatch error
-fn incorrect_addition() {
-    let energy: Float[kg·m^2/s^2] = 50.0   // Energy in Joules
-    let time: Float[s] = 5.0                // Time in seconds
-
-    // ERROR: Cannot add energy and time (different dimensions)
-    // let result = energy + time
+fn calculate_kinetic_energy(mass: Float, velocity: Float) -> Float {
+    // KE = 0.5 * m * v^2
+    0.5 * mass * velocity * velocity
 }
 
-// Example 3: Adaptive function with resource constraints
-adaptive fn fibonacci(n: Int) -> Int
-    @requires time < 1s
-    @requires energy < 100J
-    @optimize minimize(energy)
+// A function with tight energy and carbon constraints
+def efficient_compute(n: Int) -> Int
+    @requires: energy < 5J
+    @requires: carbon < 1gCO2e
 {
-    solution iterative
-        @when n < 30
-        @provides energy = 10J, time = 50ms
-    {
-        let mut a = 0
-        let mut b = 1
-        let mut i = 0
+    // O(1) closed-form — minimal resource usage
+    n * (n + 1) / 2
+}
 
-        while i < n {
-            let temp = a + b
-            a = b
-            b = temp
-            i = i + 1
-        }
+// Adaptive: choose algorithm based on resource budget
+adaptive def fibonacci(n: Int) -> Int
+    @requires: energy < 100J
+    @optimize: minimize energy
+{
+    @solution "tail_recursive":
+        @when: true
+        @provides: energy: 5J, latency: 10ms, carbon: 1gCO2e
+    {
+        fib_tail(n, 0, 1)
+    }
+
+    @solution "naive_recursive":
+        @when: true
+        @provides: energy: 80J, latency: 500ms, carbon: 10gCO2e
+    {
+        fib_naive(n)
+    }
+}
+
+fn fib_tail(n: Int, a: Int, b: Int) -> Int {
+    if n <= 0 {
         a
-    }
-
-    solution recursive
-        @when n >= 30
-        @provides energy = 80J, time = 500ms
-    {
-        if n <= 1 {
-            n
-        } else {
-            fibonacci(n - 1) + fibonacci(n - 2)
-        }
+    } else {
+        fib_tail(n - 1, b, a + b)
     }
 }
 
-// Example 4: Correct dimensional arithmetic
-fn dimensional_algebra() {
-    let distance: Float[m] = 100.0         // 100 meters
-    let time: Float[s] = 10.0              // 10 seconds
-
-    // distance / time = velocity (m/s)
-    let velocity = distance / time
-
-    // velocity * time = distance (m)
-    let distance_check = velocity * time
-
-    // acceleration = velocity / time (m/s²)
-    let acceleration = velocity / time
-
-    println("Distance: {}m", distance)
-    println("Velocity: {}m/s", velocity)
-    println("Acceleration: {}m/s²", acceleration)
+fn fib_naive(n: Int) -> Int {
+    if n <= 1 {
+        n
+    } else {
+        fib_naive(n - 1) + fib_naive(n - 2)
+    }
 }
 
-// Example 5: Scalar multiplication preserves dimensions
-fn scalar_operations() {
-    let energy: Float[kg·m^2/s^2] = 50.0   // 50 Joules
-    let scale = 2.0                         // Dimensionless scalar
+fn main() {
+    println("=== Dimensional Types Demo ===");
 
-    // Scalar multiplication preserves dimension
-    let doubled_energy = energy * scale    // Still in Joules
+    // Pure calculations
+    let power = calculate_power(100.0, 10.0);
+    println("Power (100J / 10s):", power, "W");
 
-    // Division by scalar also preserves dimension
-    let halved_energy = energy / scale     // Still in Joules
+    let ke = calculate_kinetic_energy(2.0, 3.0);
+    println("Kinetic energy (2kg, 3m/s):", ke, "J");
+
+    // Tight-budget computation
+    let sum = efficient_compute(100);
+    println("Sum 1..100 =", sum);
+
+    // Adaptive fibonacci
+    println("");
+    println("Adaptive fibonacci (minimize energy):");
+    println("  fib(0) =", fibonacci(0));
+    println("  fib(5) =", fibonacci(5));
+    println("  fib(10) =", fibonacci(10));
+
+    println("");
+    println("Resource constraints enforced:");
+    println("  efficient_compute: energy < 5J, carbon < 1gCO2e");
+    println("  fibonacci: energy < 100J, optimize minimize energy")
 }

@@ -12,6 +12,12 @@ repository.workspace = true
 
 [dependencies]
 eclexia-ast = { path = "../../compiler/eclexia-ast" }
+eclexia-carbon = { path = "../eclexia-carbon" }
+eclexia-shadow = { path = "../eclexia-shadow" }
 smol_str = { workspace = true }
 rustc-hash = { workspace = true }
 tokio = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+quickcheck = { workspace = true }

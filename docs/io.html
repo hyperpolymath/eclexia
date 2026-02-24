@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>io - Eclexia Documentation</title>
+<style>
+/* SPDX-License-Identifier: PMPL-1.0-or-later */
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #f5f5f5;
+    color: #333;
+}
+
+h1 {
+    color: #2c3e50;
+    border-bottom: 3px solid #3498db;
+    padding-bottom: 10px;
+}
+
+h2 {
+    color: #34495e;
+    border-bottom: 2px solid #95a5a6;
+    padding-bottom: 5px;
+    margin-top: 30px;
+}
+
+h3 {
+    color: #2980b9;
+}
+
+.item {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.signature {
+    background: #f8f8f8;
+    border-left: 4px solid #3498db;
+    padding: 15px;
+    font-family: "Fira Code", "Source Code Pro", monospace;
+    font-size: 14px;
+    overflow-x: auto;
+    border-radius: 3px;
+}
+
+.doc-comment {
+    margin-top: 15px;
+    color: #555;
+}
+
+.doc-comment p {
+    margin: 10px 0;
+}
+
+.doc-comment code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.doc-comment pre {
+    background: #282c34;
+    color: #abb2bf;
+    padding: 15px;
+    border-radius: 5px;
+    overflow-x: auto;
+}
+
+.doc-comment pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+}
+
+ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+ul li {
+    padding: 5px 0;
+}
+
+a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+</style>
+</head>
+<body>
+<h1>Module: io</h1>
+<h2>Table of Contents</h2>
+<ul>
+<li><a href="#read_json">read_json</a> - Function</li>
+<li><a href="#write_json">write_json</a> - Function</li>
+</ul>
+<div class="item" id="read_json">
+<h3>read_json</h3>
+<pre class="signature">fn read_json(path: Idx::<Type>(11)) -> Idx::<Type>(12)</pre>
+<div class="doc-comment">
+<p>Read a JSON file and parse it.</p>
+<p></p>
+<p># Example</p>
+<pre><code>
+let config = read_json("config.json");
+</pre>
+</div>
+</div>
+<div class="item" id="write_json">
+<h3>write_json</h3>
+<pre class="signature">fn write_json(path: Idx::<Type>(13), value: Idx::<Type>(14)) -> Idx::<Type>(15)</pre>
+<div class="doc-comment">
+<p>Write a value to a JSON file.</p>
+<p></p>
+<p># Example</p>
+<pre><code>
+write_json("output.json", {"result": 42});
+</pre>
+</div>
+</div>
+</body>
+</html>

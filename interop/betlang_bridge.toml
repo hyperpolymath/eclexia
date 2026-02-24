@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Eclexia ↔ betlang interop bridge configuration
+
+[language]
+name = "betlang"
+repo = "nextgen-languages/betlang"
+build_system = "racket"
+ffi_mechanism = "racket-ffi-unsafe"
+
+[existing_ffi]
+# betlang has rich stdlib: bayesian, distributions, sampling, optimization
+core_dsl = "core/betlang.rkt"
+libraries = ["bayesian", "distributions", "markov", "optimization", "sampling", "statistics", "ternary"]
+
+[eclexia_exports]
+resource_tracker = true
+shadow_prices = true
+carbon_monitor = true
+
+[bridge]
+target_file = "lib/eclexia.rkt"
+header = "generated/abi/eclexia_ffi.h"
+
+[use_cases]
+description = """
+Resource budgets for probabilistic inference.
+Energy-aware Bayesian sampling.
+Shadow price-weighted ternary decisions.
+Adaptive algorithm selection based on resource availability.
+"""

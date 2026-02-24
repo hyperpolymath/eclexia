@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Eclexia Intentfile - declared forward intent and invariants trajectory
+
+version: 1
+
+future:
+  trust-engine:
+    - "Replace pending Trustfile key/signature placeholders with operational key material."
+    - "Add automated trustfile integrity verification in CI release jobs."
+
+  security-and-analysis:
+    - "Keep Hypatia scanning active on pull requests and scheduled runs."
+    - "Keep panic-attack scanning in the local and CI quality loop."
+    - "Escalate critical/high findings to blocking status until remediated."
+
+  quality-gates:
+    - "Preserve unit, conformance, integration, p2p, and e2e test gates in Mustfile/Justfile."
+    - "Maintain benchmark smoke checks and publish reproducible benchmark snapshots."
+
+  boundary-purity:
+    - "Enforce Zig-only FFI sources under ffi/."
+    - "Enforce Idris2-only ABI definitions under src/abi/."
+
+  documentation:
+    - "Keep machine_read and machine_readable documents synchronized with implementation status."
+    - "Keep human-readable docs and wiki pages in sync with actual command behavior and maturity state."

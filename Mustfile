@@ -1,13 +1,66 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
-# Mustfile - hyperpolymath mandatory checks
-# See: https://github.com/hyperpolymath/mustfile
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Mustfile - eclexia invariants and quality gates
 
 version: 1
 
+metadata:
+  name: eclexia-invariants
+  spec: v1
+  description: "Invariant checks for code quality, documentation state, security workflows, and FFI/ABI boundaries."
+
 checks:
-  - name: security
-    run: just lint
-  - name: tests
-    run: just test
   - name: format
-    run: just fmt
+    run: "just fmt-check"
+
+  - name: lint
+    run: "just lint"
+
+  - name: unit-tests
+    run: "just test-unit"
+
+  - name: integration-tests
+    run: "just test-integration"
+
+  - name: conformance-tests
+    run: "just test-conformance"
+
+  - name: p2p-tests
+    run: "just test-p2p"
+
+  - name: e2e-smoke
+    run: "just test-e2e"
+
+  - name: bench-smoke
+    run: "just bench-smoke"
+
+  - name: security-scan
+    run: "just panic-attack"
+
+  - name: machine-readable-docs-present
+    run: "bash -euo pipefail -c 'test -f .machine_readable/STATE.scm && test -f .machine_readable/META.scm && test -f .machine_readable/ECOSYSTEM.scm'"
+
+  - name: human-readable-docs-present
+    run: "bash -euo pipefail -c 'test -f README.adoc && test -f QUICK_STATUS.md && test -f SPECIFICATION.md && test -f docs/README.md && test -f docs/wiki/Home.md'"
+
+  - name: hypatia-workflow-present
+    run: "test -f .github/workflows/hypatia-scan.yml"
+
+  - name: gitbot-fleet-integration-present
+    run: "bash -euo pipefail -c 'rg -q gitbot-fleet .github/workflows/hypatia-scan.yml'"
+
+  - name: trustfile-present
+    run: "test -f .machine_readable/contractiles/trust/Trustfile.a2ml"
+
+  - name: intentfile-present
+    run: "test -f .machine_readable/contractiles/lust/Intentfile"
+
+  - name: docs-check
+    run: "just docs-check"
+
+  - name: ffi-pure-zig
+    run: >
+      bash -euo pipefail -c 'if find ffi -type f ! -name "*.zig" | grep -q .; then echo "non-zig file found under ffi/"; find ffi -type f ! -name "*.zig"; exit 1; fi'
+
+  - name: abi-pure-idris2
+    run: >
+      bash -euo pipefail -c 'if find src/abi -type f ! -name "*.idr" | grep -q .; then echo "non-idris file found under src/abi/"; find src/abi -type f ! -name "*.idr"; exit 1; fi'

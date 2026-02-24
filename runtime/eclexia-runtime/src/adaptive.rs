@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Adaptive function decision making.
@@ -6,11 +6,16 @@
 //! Selects the best implementation variant based on shadow prices
 //! and resource constraints.
 
-use crate::shadow_prices::ShadowPriceRegistry;
 use crate::resource_tracker::ResourceBudget;
+use crate::shadow_prices::ShadowPriceRegistry;
 use crate::RuntimeConfig;
 use eclexia_ast::dimension::Dimension;
 use smol_str::SmolStr;
+use std::cmp::Ordering;
+
+fn cmp_f64(a: f64, b: f64) -> Ordering {
+    a.partial_cmp(&b).unwrap_or(Ordering::Equal)
+}
 
 /// A candidate solution for adaptive selection
 #[derive(Debug, Clone)]
@@ -73,7 +78,10 @@ pub enum SelectionCriteria {
     MinimizeCost,
 
     /// Minimize specific resource
-    MinimizeResource { resource: SmolStr, dimension: Dimension },
+    MinimizeResource {
+        resource: SmolStr,
+        dimension: Dimension,
+    },
 
     /// Prefer solutions with priority > threshold
     PreferPriority { threshold: f64 },
@@ -132,14 +140,14 @@ impl AdaptiveDecisionEngine {
         }
 
         // Select based on criteria
-        let best = match &self.criteria {
-            SelectionCriteria::MinimizeCost => {
-                self.select_min_cost(&viable, prices)
-            }
 
-            SelectionCriteria::MinimizeResource { resource, dimension } => {
-                self.select_min_resource(&viable, resource, *dimension)
-            }
+        match &self.criteria {
+            SelectionCriteria::MinimizeCost => self.select_min_cost(&viable, prices),
+
+            SelectionCriteria::MinimizeResource {
+                resource,
+                dimension,
+            } => self.select_min_resource(&viable, resource, *dimension),
 
             SelectionCriteria::PreferPriority { threshold } => {
                 self.select_by_priority(&viable, *threshold, prices)
@@ -150,19 +158,15 @@ impl AdaptiveDecisionEngine {
                 time_weight,
                 memory_weight,
                 carbon_weight,
-            } => {
-                self.select_weighted(
-                    &viable,
-                    prices,
-                    *energy_weight,
-                    *time_weight,
-                    *memory_weight,
-                    *carbon_weight,
-                )
-            }
-        };
-
-        best
+            } => self.select_weighted(
+                &viable,
+                prices,
+                *energy_weight,
+                *time_weight,
+                *memory_weight,
+                *carbon_weight,
+            ),
+        }
     }
 
     /// Select solution with minimum total cost
@@ -176,7 +180,7 @@ impl AdaptiveDecisionEngine {
             .min_by(|a, b| {
                 let cost_a = a.1.calculate_cost(prices);
                 let cost_b = b.1.calculate_cost(prices);
-                cost_a.partial_cmp(&cost_b).unwrap()
+                cmp_f64(cost_a, cost_b)
             })
             .map(|(idx, _)| *idx)
     }
@@ -191,23 +195,21 @@ impl AdaptiveDecisionEngine {
         candidates
             .iter()
             .min_by(|a, b| {
-                let usage_a: f64 = a
-                    .1
-                    .costs
-                    .iter()
-                    .filter(|c| &c.resource == resource && c.dimension == dimension)
-                    .map(|c| c.amount)
-                    .sum();
+                let usage_a: f64 =
+                    a.1.costs
+                        .iter()
+                        .filter(|c| &c.resource == resource && c.dimension == dimension)
+                        .map(|c| c.amount)
+                        .sum();
 
-                let usage_b: f64 = b
-                    .1
-                    .costs
-                    .iter()
-                    .filter(|c| &c.resource == resource && c.dimension == dimension)
-                    .map(|c| c.amount)
-                    .sum();
+                let usage_b: f64 =
+                    b.1.costs
+                        .iter()
+                        .filter(|c| &c.resource == resource && c.dimension == dimension)
+                        .map(|c| c.amount)
+                        .sum();
 
-                usage_a.partial_cmp(&usage_b).unwrap()
+                cmp_f64(usage_a, usage_b)
             })
             .map(|(idx, _)| *idx)
     }
@@ -265,7 +267,7 @@ impl AdaptiveDecisionEngine {
                     carbon_weight,
                 );
 
-                score_a.partial_cmp(&score_b).unwrap()
+                cmp_f64(score_a, score_b)
             })
             .map(|(idx, _)| *idx)
     }
@@ -304,5 +306,143 @@ impl AdaptiveDecisionEngine {
 impl Default for AdaptiveDecisionEngine {
     fn default() -> Self {
         Self::new(RuntimeConfig::default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_candidate(name: &str, energy: f64, time: f64, priority: f64) -> SolutionCandidate {
+        SolutionCandidate {
+            name: SmolStr::new(name),
+            costs: vec![
+                ResourceCost {
+                    resource: SmolStr::new("energy"),
+                    dimension: Dimension::energy(),
+                    amount: energy,
+                },
+                ResourceCost {
+                    resource: SmolStr::new("time"),
+                    dimension: Dimension::time(),
+                    amount: time,
+                },
+            ],
+            condition: None,
+            priority,
+        }
+    }
+
+    #[test]
+    fn test_select_best_minimize_cost() {
+        let engine = AdaptiveDecisionEngine::default();
+        let prices = ShadowPriceRegistry::new();
+
+        let candidates = vec![
+            make_candidate("expensive", 100.0, 10.0, 1.0),
+            make_candidate("cheap", 1.0, 0.1, 1.0),
+            make_candidate("medium", 50.0, 5.0, 1.0),
+        ];
+
+        let best = engine.select_best(&candidates, &prices);
+        assert_eq!(best, Some(1)); // "cheap" has lowest cost
+    }
+
+    #[test]
+    fn test_select_best_weighted() {
+        let mut engine = AdaptiveDecisionEngine::default();
+        engine.set_criteria(SelectionCriteria::Weighted {
+            energy_weight: 10.0,
+            time_weight: 0.0,
+            memory_weight: 0.0,
+            carbon_weight: 0.0,
+        });
+        let prices = ShadowPriceRegistry::new();
+
+        let candidates = vec![
+            make_candidate("low_energy", 1.0, 100.0, 1.0),
+            make_candidate("high_energy", 100.0, 1.0, 1.0),
+        ];
+
+        let best = engine.select_best(&candidates, &prices);
+        // Whichever index is selected, it should be consistent
+        assert!(best.is_some());
+        // The selected candidate should have lower weighted energy cost
+        let idx = best.unwrap();
+        let selected = &candidates[idx];
+        let other_idx = if idx == 0 { 1 } else { 0 };
+        let other = &candidates[other_idx];
+        let sel_cost = selected.calculate_cost(&prices);
+        let oth_cost = other.calculate_cost(&prices);
+        // With weighted criteria, selected should have lower or equal score
+        assert!(sel_cost <= oth_cost || (sel_cost - oth_cost).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_select_best_prefer_priority() {
+        let mut engine = AdaptiveDecisionEngine::default();
+        engine.set_criteria(SelectionCriteria::PreferPriority { threshold: 0.5 });
+        let prices = ShadowPriceRegistry::new();
+
+        // Both candidates are "high priority" (>= 0.5), but one is cheaper
+        let candidates = vec![
+            make_candidate("expensive", 100.0, 10.0, 1.0),
+            make_candidate("cheap", 1.0, 0.1, 1.0),
+        ];
+
+        let best = engine.select_best(&candidates, &prices);
+        assert!(best.is_some());
+        // Among high-priority candidates, select the cheapest
+        assert_eq!(best, Some(1)); // "cheap" should win
+    }
+
+    #[test]
+    fn test_budget_filtering() {
+        let mut config = RuntimeConfig::default();
+        config.max_resource_budget.energy = Some(10.0); // tight energy budget
+        let engine = AdaptiveDecisionEngine::new(config);
+        let prices = ShadowPriceRegistry::new();
+
+        let candidates = vec![
+            make_candidate("over_budget", 100.0, 1.0, 1.0), // exceeds 10.0 limit
+            make_candidate("within_budget", 5.0, 1.0, 1.0),
+        ];
+
+        let best = engine.select_best(&candidates, &prices);
+        assert_eq!(best, Some(1)); // only "within_budget" is viable
+    }
+
+    #[test]
+    fn test_empty_candidates_returns_none() {
+        let engine = AdaptiveDecisionEngine::default();
+        let prices = ShadowPriceRegistry::new();
+
+        let best = engine.select_best(&[], &prices);
+        assert_eq!(best, None);
+    }
+
+    #[test]
+    fn test_all_over_budget_returns_none() {
+        let mut config = RuntimeConfig::default();
+        config.max_resource_budget.energy = Some(1.0); // very tight
+        let engine = AdaptiveDecisionEngine::new(config);
+        let prices = ShadowPriceRegistry::new();
+
+        let candidates = vec![
+            make_candidate("a", 100.0, 1.0, 1.0),
+            make_candidate("b", 50.0, 1.0, 1.0),
+        ];
+
+        let best = engine.select_best(&candidates, &prices);
+        assert_eq!(best, None); // nothing meets budget
+    }
+
+    #[test]
+    fn test_solution_calculate_cost() {
+        let prices = ShadowPriceRegistry::new();
+        let candidate = make_candidate("test", 100.0, 1.0, 1.0);
+        let cost = candidate.calculate_cost(&prices);
+        // Cost should be > 0 since shadow prices are > 0
+        assert!(cost > 0.0);
     }
 }

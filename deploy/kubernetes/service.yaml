@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+apiVersion: v1
+kind: Service
+metadata:
+  name: eclexia
+  namespace: eclexia
+  labels:
+    app.kubernetes.io/name: eclexia
+    app.kubernetes.io/component: service
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: eclexia
+    app.kubernetes.io/component: runtime
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: metrics
+    protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 hours
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eclexia-headless
+  namespace: eclexia
+  labels:
+    app.kubernetes.io/name: eclexia
+    app.kubernetes.io/component: service-headless
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: eclexia
+    app.kubernetes.io/component: runtime
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+    protocol: TCP

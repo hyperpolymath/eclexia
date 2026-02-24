@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Bytecode virtual machine.
@@ -7,19 +7,43 @@
 
 use crate::bytecode::{BytecodeModule, Instruction};
 use eclexia_ast::dimension::Dimension;
+use eclexia_ast::types::{PrimitiveTy, Ty};
 use smol_str::SmolStr;
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::rc::Rc;
+
+const TAG_FIELD: &str = "__eclexia_tag";
 
 /// A value on the VM stack
 #[derive(Debug, Clone)]
 pub enum Value {
+    /// Unit value (no data)
     Unit,
+    /// Boolean value
     Bool(bool),
+    /// 64-bit signed integer
     Int(i64),
+    /// 64-bit floating-point number
     Float(f64),
+    /// Heap-allocated string
     String(String),
+    /// Array value
+    Array(Rc<RefCell<Vec<Value>>>),
+    /// HashMap value (string-keyed)
+    HashMap(Rc<RefCell<HashMap<String, Value>>>),
+    /// SortedMap value (string-keyed, ordered)
+    SortedMap(Rc<RefCell<BTreeMap<String, Value>>>),
+    /// Struct-like map
+    Struct(HashMap<SmolStr, Value>),
+    /// Unicode character
     Char(char),
-    Function(usize), // Function index
+    /// Function reference by index into the module's function table
+    Function(usize),
+    /// Exclusive range (start..end)
+    Range(i64, i64),
+    /// Inclusive range (start..=end)
+    RangeInclusive(i64, i64),
 }
 
 impl Value {
@@ -104,28 +128,48 @@ impl std::error::Error for VmError {}
 
 /// Call frame for function calls
 #[derive(Debug, Clone)]
-struct CallFrame {
+pub struct CallFrame {
     /// Function being executed
-    function_idx: usize,
+    pub function_idx: usize,
 
     /// Instruction pointer
-    ip: usize,
+    pub ip: usize,
 
     /// Base pointer for local variables
-    bp: usize,
+    pub bp: usize,
 }
 
 /// Resource tracking entry
 #[derive(Debug, Clone)]
-struct ResourceUsage {
+pub struct ResourceUsage {
     /// Resource name
-    resource: SmolStr,
+    pub resource: SmolStr,
 
     /// Dimension
-    dimension: Dimension,
+    pub dimension: Dimension,
 
     /// Amount consumed
-    amount: f64,
+    pub amount: f64,
+}
+
+/// Debug event
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DebugEvent {
+    /// Hit a breakpoint
+    Breakpoint,
+    /// Single step
+    Step,
+}
+
+/// Action to take after a debug event
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DebugAction {
+    /// Continue execution
+    Continue,
+    /// Step to next instruction
+    Step,
+    /// Pause execution (return from execute)
+    Pause,
 }
 
 /// Virtual machine state
@@ -150,6 +194,87 @@ pub struct VirtualMachine {
 
     /// Call stack depth limit
     call_limit: usize,
+
+    /// Debug mode enabled
+    debug_mode: bool,
+
+    /// Breakpoints (function_idx, instruction_idx)
+    breakpoints: HashSet<(usize, usize)>,
+
+    /// Single-step mode
+    single_step: bool,
+
+    /// Paused at current instruction
+    paused: bool,
+
+    /// In-memory DOM state (native simulation)
+    dom_state: DomState,
+}
+
+#[derive(Debug, Default)]
+struct DomState {
+    elements: HashMap<i64, DomElementState>,
+    selector_index: HashMap<String, Vec<i64>>,
+}
+
+#[derive(Debug, Clone)]
+struct DomElementState {
+    selector: String,
+    html: String,
+    text_content: String,
+    classes: HashSet<String>,
+    attributes: HashMap<String, String>,
+}
+
+fn strip_html_tags(html: &str) -> String {
+    let mut out = String::new();
+    let mut in_tag = false;
+    for ch in html.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(ch),
+            _ => {}
+        }
+    }
+    out
+}
+
+impl DomState {
+    fn add_element(&mut self, selector: String, html: String) -> i64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        selector.hash(&mut hasher);
+        let mut id = hasher.finish() as i64;
+        while self.elements.contains_key(&id) {
+            id = id.wrapping_add(1);
+        }
+
+        let text_content = strip_html_tags(&html);
+        let element = DomElementState {
+            selector: selector.clone(),
+            html,
+            text_content,
+            classes: HashSet::new(),
+            attributes: HashMap::new(),
+        };
+        self.elements.insert(id, element);
+        self.selector_index.entry(selector).or_default().push(id);
+        id
+    }
+
+    fn remove_element(&mut self, id: i64) {
+        if let Some(element) = self.elements.remove(&id) {
+            if let Some(list) = self.selector_index.get_mut(&element.selector) {
+                list.retain(|existing| *existing != id);
+                if list.is_empty() {
+                    self.selector_index.remove(&element.selector);
+                }
+            }
+        }
+    }
 }
 
 impl VirtualMachine {
@@ -163,13 +288,109 @@ impl VirtualMachine {
             resources: Vec::new(),
             stack_limit: 10000,
             call_limit: 1000,
+            debug_mode: false,
+            breakpoints: HashSet::new(),
+            single_step: false,
+            paused: false,
+            dom_state: DomState::default(),
         }
+    }
+
+    /// Enable debug mode
+    pub fn enable_debug(&mut self) {
+        self.debug_mode = true;
+    }
+
+    /// Disable debug mode
+    pub fn disable_debug(&mut self) {
+        self.debug_mode = false;
+        self.single_step = false;
+    }
+
+    /// Set a breakpoint at the given function and instruction
+    pub fn set_breakpoint(&mut self, func_idx: usize, inst_idx: usize) {
+        self.breakpoints.insert((func_idx, inst_idx));
+    }
+
+    /// Remove a breakpoint
+    pub fn remove_breakpoint(&mut self, func_idx: usize, inst_idx: usize) {
+        self.breakpoints.remove(&(func_idx, inst_idx));
+    }
+
+    /// Clear all breakpoints
+    pub fn clear_breakpoints(&mut self) {
+        self.breakpoints.clear();
+    }
+
+    /// Enable single-step mode
+    pub fn enable_single_step(&mut self) {
+        self.single_step = true;
+    }
+
+    /// Disable single-step mode
+    pub fn disable_single_step(&mut self) {
+        self.single_step = false;
+    }
+
+    /// Check if execution is paused
+    pub fn is_paused(&self) -> bool {
+        self.paused
+    }
+
+    /// Resume execution
+    pub fn resume(&mut self) {
+        self.paused = false;
+    }
+
+    /// Step one instruction (enables single-step and resumes)
+    pub fn step_one(&mut self) {
+        self.single_step = true;
+        self.paused = false;
+    }
+
+    /// Continue execution after a debug pause.
+    /// Returns the final value when the program finishes, or `Value::Unit` if paused again.
+    pub fn continue_running(&mut self) -> Result<Value, VmError> {
+        self.paused = false;
+        self.execute()
+    }
+
+    /// Step one instruction and return.
+    /// Returns `Value::Unit` if paused (normal), or the final value if the program ends.
+    pub fn step_instruction(&mut self) -> Result<Value, VmError> {
+        self.single_step = true;
+        self.paused = false;
+        self.execute()
+    }
+
+    /// Get current stack
+    pub fn get_stack(&self) -> &[Value] {
+        &self.stack
+    }
+
+    /// Get current locals
+    pub fn get_locals(&self) -> &[Value] {
+        &self.locals
+    }
+
+    /// Get current call stack
+    pub fn get_call_stack(&self) -> &[CallFrame] {
+        &self.call_stack
+    }
+
+    /// Get current resource usage
+    pub fn get_resources(&self) -> &[ResourceUsage] {
+        &self.resources
+    }
+
+    /// Get module
+    pub fn get_module(&self) -> &BytecodeModule {
+        &self.module
     }
 
     /// Execute the module's entry point
     pub fn run(&mut self) -> Result<Value, VmError> {
-        let entry_idx = self.module.entry_point
-            .ok_or_else(|| VmError::MissingFunction(0))?;
+        let entry_idx = self.module.entry_point.ok_or(VmError::MissingFunction(0))?;
 
         self.call_function(entry_idx, &[])?;
         self.execute()
@@ -219,6 +440,21 @@ impl VirtualMachine {
             let ip = frame.ip;
             let call_depth_before = self.call_stack.len();
 
+            // Check for breakpoint or single-step mode
+            if self.debug_mode && !self.paused {
+                let at_breakpoint = self.breakpoints.contains(&(func_idx, ip));
+                if at_breakpoint || self.single_step {
+                    // Pause execution
+                    self.paused = true;
+                    // If single-stepping, disable it so we pause at next instruction
+                    if self.single_step {
+                        self.single_step = false;
+                    }
+                    // Return control to debugger
+                    return Ok(Value::Unit);
+                }
+            }
+
             // Clone the instruction to avoid borrow conflicts
             let inst = {
                 let func = &self.module.functions[func_idx];
@@ -229,8 +465,17 @@ impl VirtualMachine {
             };
 
             // Debug
-            eprintln!("Exec: func={}, ip={}, inst={:?}, stack={}, locals={}, call_depth={}",
-                     func_idx, ip, inst, self.stack.len(), self.locals.len(), call_depth_before);
+            if self.debug_mode {
+                eprintln!(
+                    "Exec: func={}, ip={}, inst={:?}, stack={}, locals={}, call_depth={}",
+                    func_idx,
+                    ip,
+                    inst,
+                    self.stack.len(),
+                    self.locals.len(),
+                    call_depth_before
+                );
+            }
 
             // Execute instruction
             match self.execute_instruction(&inst)? {
@@ -278,11 +523,73 @@ impl VirtualMachine {
         }
     }
 
+    /// Execute until returning to the target call depth.
+    fn execute_until_depth(&mut self, target_depth: usize) -> Result<(), VmError> {
+        loop {
+            let frame = self.call_stack.last().ok_or(VmError::StackUnderflow)?;
+            let func_idx = frame.function_idx;
+            let ip = frame.ip;
+            let call_depth_before = self.call_stack.len();
+
+            let inst = {
+                let func = &self.module.functions[func_idx];
+                if ip >= func.instructions.len() {
+                    return Err(VmError::InvalidJump(ip));
+                }
+                func.instructions[ip].clone()
+            };
+
+            match self.execute_instruction(&inst)? {
+                ExecutionResult::Continue => {
+                    let call_depth_after = self.call_stack.len();
+                    if call_depth_after == call_depth_before {
+                        if let Some(frame) = self.call_stack.last_mut() {
+                            frame.ip += 1;
+                        }
+                    }
+                }
+                ExecutionResult::Jump(target) => {
+                    if let Some(frame) = self.call_stack.last_mut() {
+                        frame.ip = target;
+                    }
+                }
+                ExecutionResult::Return(value) => {
+                    self.call_stack.pop();
+
+                    if self.call_stack.is_empty() {
+                        self.locals.clear();
+                        self.push(value)?;
+                        return Ok(());
+                    }
+
+                    if self.call_stack.len() == target_depth {
+                        if let Some(frame) = self.call_stack.last() {
+                            let caller_func = &self.module.functions[frame.function_idx];
+                            let caller_locals_end = frame.bp + caller_func.local_count as usize;
+                            self.locals.truncate(caller_locals_end);
+                        }
+                        self.push(value)?;
+                        return Ok(());
+                    }
+
+                    if let Some(frame) = self.call_stack.last() {
+                        let caller_func = &self.module.functions[frame.function_idx];
+                        let caller_locals_end = frame.bp + caller_func.local_count as usize;
+                        self.locals.truncate(caller_locals_end);
+                    }
+
+                    self.push(value)?;
+
+                    if let Some(frame) = self.call_stack.last_mut() {
+                        frame.ip += 1;
+                    }
+                }
+            }
+        }
+    }
+
     /// Execute a single instruction
-    fn execute_instruction(
-        &mut self,
-        inst: &Instruction,
-    ) -> Result<ExecutionResult, VmError> {
+    fn execute_instruction(&mut self, inst: &Instruction) -> Result<ExecutionResult, VmError> {
         match inst {
             // Stack operations
             Instruction::PushInt(i) => {
@@ -301,8 +608,10 @@ impl VirtualMachine {
             }
 
             Instruction::PushString(idx) => {
-                let s = self.module.strings.get(*idx)
-                    .ok_or_else(|| VmError::OutOfBounds { index: *idx, size: self.module.strings.len() })?;
+                let s = self.module.strings.get(*idx).ok_or(VmError::OutOfBounds {
+                    index: *idx,
+                    size: self.module.strings.len(),
+                })?;
                 self.push(Value::String(s.clone()))?;
                 Ok(ExecutionResult::Continue)
             }
@@ -316,8 +625,13 @@ impl VirtualMachine {
                 let bp = self.call_stack.last().ok_or(VmError::StackUnderflow)?.bp;
                 let local_idx = bp + (*idx as usize);
 
-                let value = self.locals.get(local_idx)
-                    .ok_or_else(|| VmError::OutOfBounds { index: local_idx, size: self.locals.len() })?
+                let value = self
+                    .locals
+                    .get(local_idx)
+                    .ok_or(VmError::OutOfBounds {
+                        index: local_idx,
+                        size: self.locals.len(),
+                    })?
                     .clone();
 
                 self.push(value)?;
@@ -330,7 +644,10 @@ impl VirtualMachine {
                 let local_idx = bp + (*idx as usize);
 
                 if local_idx >= self.locals.len() {
-                    return Err(VmError::OutOfBounds { index: local_idx, size: self.locals.len() });
+                    return Err(VmError::OutOfBounds {
+                        index: local_idx,
+                        size: self.locals.len(),
+                    });
                 }
 
                 self.locals[local_idx] = value;
@@ -350,9 +667,32 @@ impl VirtualMachine {
 
             // Arithmetic - Integer
             Instruction::AddInt => {
-                let b = self.pop()?.as_int()?;
-                let a = self.pop()?.as_int()?;
-                self.push(Value::Int(a.wrapping_add(b)))?;
+                let b = self.pop()?;
+                let a = self.pop()?;
+                match (a, b) {
+                    (Value::String(a), Value::String(b)) => {
+                        self.push(Value::String(format!("{}{}", a, b)))?;
+                    }
+                    (Value::String(a), other) => {
+                        self.push(Value::String(format!(
+                            "{}{}",
+                            a,
+                            self.display_value(&other)
+                        )))?;
+                    }
+                    (other, Value::String(b)) => {
+                        self.push(Value::String(format!(
+                            "{}{}",
+                            self.display_value(&other),
+                            b
+                        )))?;
+                    }
+                    (a, b) => {
+                        let a = a.as_int()?;
+                        let b = b.as_int()?;
+                        self.push(Value::Int(a.wrapping_add(b)))?;
+                    }
+                }
                 Ok(ExecutionResult::Continue)
             }
 
@@ -433,16 +773,18 @@ impl VirtualMachine {
 
             // Comparison - Integer
             Instruction::EqInt => {
-                let b = self.pop()?.as_int()?;
-                let a = self.pop()?.as_int()?;
-                self.push(Value::Bool(a == b))?;
+                let b = self.pop()?;
+                let a = self.pop()?;
+                let result = self.values_equal(&a, &b);
+                self.push(Value::Bool(result))?;
                 Ok(ExecutionResult::Continue)
             }
 
             Instruction::NeInt => {
-                let b = self.pop()?.as_int()?;
-                let a = self.pop()?.as_int()?;
-                self.push(Value::Bool(a != b))?;
+                let b = self.pop()?;
+                let a = self.pop()?;
+                let result = !self.values_equal(&a, &b);
+                self.push(Value::Bool(result))?;
                 Ok(ExecutionResult::Continue)
             }
 
@@ -580,10 +922,23 @@ impl VirtualMachine {
                 Ok(ExecutionResult::Continue)
             }
 
-            // Control flow
-            Instruction::Jump(target) => {
-                Ok(ExecutionResult::Jump(*target))
+            // Range
+            Instruction::Range => {
+                let end = self.pop()?.as_int()?;
+                let start = self.pop()?.as_int()?;
+                self.push(Value::Range(start, end))?;
+                Ok(ExecutionResult::Continue)
             }
+
+            Instruction::RangeInclusive => {
+                let end = self.pop()?.as_int()?;
+                let start = self.pop()?.as_int()?;
+                self.push(Value::RangeInclusive(start, end))?;
+                Ok(ExecutionResult::Continue)
+            }
+
+            // Control flow
+            Instruction::Jump(target) => Ok(ExecutionResult::Jump(*target)),
 
             Instruction::JumpIf(target) => {
                 let cond = self.pop()?.as_bool()?;
@@ -603,9 +958,7 @@ impl VirtualMachine {
                 }
             }
 
-            Instruction::Return => {
-                Ok(ExecutionResult::Return(Value::Unit))
-            }
+            Instruction::Return => Ok(ExecutionResult::Return(Value::Unit)),
 
             Instruction::ReturnValue => {
                 let value = self.pop()?;
@@ -624,12 +977,70 @@ impl VirtualMachine {
                 Ok(ExecutionResult::Continue)
             }
 
-            Instruction::CallIndirect(_arg_count) => {
-                Err(VmError::InvalidInstruction("CallIndirect not yet implemented".to_string()))
+            Instruction::CallIndirect(arg_count) => {
+                let func_val = self.pop()?;
+                let (func_idx, mut captured) = match func_val {
+                    Value::Function(idx) => (idx, Vec::new()),
+                    Value::Array(items) => {
+                        let borrowed = items.borrow();
+                        if borrowed.is_empty() {
+                            return Err(VmError::TypeError(
+                                "CallIndirect requires a Function value on the stack".to_string(),
+                            ));
+                        }
+                        let first = borrowed[0].clone();
+                        let captured: Vec<Value> = borrowed.iter().skip(1).cloned().collect();
+                        match first {
+                            Value::Function(idx) => (idx, captured),
+                            _ => {
+                                return Err(VmError::TypeError(
+                                    "CallIndirect requires a Function value on the stack"
+                                        .to_string(),
+                                ))
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "CallIndirect requires a Function value on the stack".to_string(),
+                        ))
+                    }
+                };
+
+                let mut args = Vec::new();
+                for _ in 0..*arg_count {
+                    args.push(self.pop()?);
+                }
+                args.reverse();
+
+                if !captured.is_empty() {
+                    let mut all_args = Vec::with_capacity(captured.len() + args.len());
+                    all_args.append(&mut captured);
+                    all_args.extend(args);
+                    self.call_function(func_idx, &all_args)?;
+                } else {
+                    self.call_function(func_idx, &args)?;
+                }
+                Ok(ExecutionResult::Continue)
+            }
+
+            Instruction::CallBuiltin(name, arg_count) => {
+                let mut args = Vec::new();
+                for _ in 0..*arg_count {
+                    args.push(self.pop()?);
+                }
+                args.reverse();
+
+                let result = self.execute_builtin(name, &args)?;
+                self.push(result)?;
+                Ok(ExecutionResult::Continue)
             }
 
             // Resource tracking
-            Instruction::TrackResource { resource, dimension } => {
+            Instruction::TrackResource {
+                resource,
+                dimension,
+            } => {
                 let amount = self.pop()?.as_float()?;
                 self.resources.push(ResourceUsage {
                     resource: resource.clone(),
@@ -639,15 +1050,73 @@ impl VirtualMachine {
                 Ok(ExecutionResult::Continue)
             }
 
-            Instruction::ShadowPriceHook { resource: _, dimension: _ } => {
+            Instruction::ShadowPriceHook {
+                resource: _,
+                dimension: _,
+            } => {
                 // Shadow price hook - in a real implementation, this would
                 // query the runtime for current shadow prices
                 Ok(ExecutionResult::Continue)
             }
 
             // Type operations
-            Instruction::Cast { from: _, to: _ } => {
-                // Type casts - for now, values are already in the right form
+            Instruction::Cast { from: _, to } => {
+                let value = self.pop()?;
+                let converted = match to {
+                    Ty::Primitive(PrimitiveTy::Int) => Value::Int(value.as_int()?),
+                    Ty::Primitive(PrimitiveTy::Float) => Value::Float(value.as_float()?),
+                    Ty::Primitive(PrimitiveTy::Bool) => Value::Bool(value.as_bool()?),
+                    Ty::Primitive(PrimitiveTy::String) => {
+                        let s = match &value {
+                            Value::Int(i) => format!("{}", i),
+                            Value::Float(f) => format!("{}", f),
+                            Value::Bool(b) => format!("{}", b),
+                            Value::Char(c) => format!("{}", c),
+                            Value::String(s) => s.clone(),
+                            Value::Array(items) => {
+                                let borrowed = items.borrow();
+                                let parts: Vec<String> =
+                                    borrowed.iter().map(|v| self.display_value(v)).collect();
+                                format!("[{}]", parts.join(", "))
+                            }
+                            Value::HashMap(map) => {
+                                let borrowed = map.borrow();
+                                let mut parts: Vec<String> = borrowed
+                                    .iter()
+                                    .map(|(k, v)| format!("{}: {}", k, self.display_value(v)))
+                                    .collect();
+                                parts.sort();
+                                format!("{{{}}}", parts.join(", "))
+                            }
+                            Value::SortedMap(map) => {
+                                let borrowed = map.borrow();
+                                let parts: Vec<String> = borrowed
+                                    .iter()
+                                    .map(|(k, v)| format!("{}: {}", k, self.display_value(v)))
+                                    .collect();
+                                format!("{{{}}}", parts.join(", "))
+                            }
+                            Value::Struct(fields) => {
+                                let mut parts: Vec<String> = fields
+                                    .iter()
+                                    .map(|(k, v)| format!("{}: {}", k, self.display_value(v)))
+                                    .collect();
+                                parts.sort();
+                                format!("{{{}}}", parts.join(", "))
+                            }
+                            Value::Unit => "()".to_string(),
+                            Value::Function(idx) => format!("<function {}>", idx),
+                            Value::Range(start, end) => format!("{}..{}", start, end),
+                            Value::RangeInclusive(start, end) => format!("{}..={}", start, end),
+                        };
+                        Value::String(s)
+                    }
+                    _ => {
+                        // For unsupported or identity casts, pass through
+                        value
+                    }
+                };
+                self.push(converted)?;
                 Ok(ExecutionResult::Continue)
             }
 
@@ -655,6 +1124,157 @@ impl VirtualMachine {
             Instruction::DebugPrint => {
                 let value = self.peek()?;
                 println!("DEBUG: {:?}", value);
+                Ok(ExecutionResult::Continue)
+            }
+
+            // Push function reference
+            Instruction::PushFunction(idx) => {
+                self.push(Value::Function(*idx))?;
+                Ok(ExecutionResult::Continue)
+            }
+
+            // Field access (simplified: fields not resolved in VM yet, leave base on stack)
+            Instruction::FieldAccess(field) => {
+                let base = self.pop()?;
+                match base {
+                    Value::Struct(fields) => {
+                        if let Some(val) = fields.get(field) {
+                            self.push(val.clone())?;
+                            Ok(ExecutionResult::Continue)
+                        } else {
+                            Err(VmError::TypeError(format!("No such field: {}", field)))
+                        }
+                    }
+                    Value::Array(items) if field.as_str() == "len" => {
+                        self.push(Value::Int(items.borrow().len() as i64))?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    Value::String(s) if field.as_str() == "len" => {
+                        self.push(Value::Int(s.len() as i64))?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    Value::Range(start, end) if field.as_str() == "len" => {
+                        let len = end.saturating_sub(start).max(0);
+                        self.push(Value::Int(len))?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    Value::RangeInclusive(start, end) if field.as_str() == "len" => {
+                        let len = end.saturating_sub(start).max(0) + 1;
+                        self.push(Value::Int(len))?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    other => Err(VmError::TypeError(format!(
+                        "Field access not supported on {}",
+                        self.display_value(&other)
+                    ))),
+                }
+            }
+
+            // Index access (simplified: pop index and base, push base back)
+            Instruction::IndexAccess => {
+                let index = self.pop()?.as_int()? as usize;
+                let base = self.pop()?;
+                match base {
+                    Value::Array(items) => {
+                        let borrowed = items.borrow();
+                        let value = borrowed.get(index).cloned().ok_or(VmError::OutOfBounds {
+                            index,
+                            size: borrowed.len(),
+                        })?;
+                        self.push(value)?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    Value::String(s) => {
+                        let ch = s.chars().nth(index).ok_or(VmError::OutOfBounds {
+                            index,
+                            size: s.len(),
+                        })?;
+                        self.push(Value::Char(ch))?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    Value::Range(start, end) => {
+                        let value = start + index as i64;
+                        if value >= end {
+                            return Err(VmError::OutOfBounds {
+                                index,
+                                size: (end - start).max(0) as usize,
+                            });
+                        }
+                        self.push(Value::Int(value))?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    Value::RangeInclusive(start, end) => {
+                        let value = start + index as i64;
+                        if value > end {
+                            return Err(VmError::OutOfBounds {
+                                index,
+                                size: (end - start + 1).max(0) as usize,
+                            });
+                        }
+                        self.push(Value::Int(value))?;
+                        Ok(ExecutionResult::Continue)
+                    }
+                    _ => Err(VmError::TypeError(
+                        "Index access requires array or string".to_string(),
+                    )),
+                }
+            }
+
+            // Set a field on a struct-like value
+            Instruction::SetField(field) => {
+                let value = self.pop()?;
+                let base = self.pop()?;
+                let mut fields = match base {
+                    Value::Struct(fields) => fields,
+                    Value::Unit => HashMap::new(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "SetField requires a struct-like value".to_string(),
+                        ))
+                    }
+                };
+                fields.insert(field.clone(), value);
+                self.push(Value::Struct(fields))?;
+                Ok(ExecutionResult::Continue)
+            }
+
+            // Set an index on an array-like value
+            Instruction::SetIndex => {
+                let value = self.pop()?;
+                let index = self.pop()?.as_int()? as usize;
+                let base = self.pop()?;
+                let items = match base {
+                    Value::Array(items) => items,
+                    Value::Unit => Rc::new(RefCell::new(Vec::new())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "SetIndex requires an array value".to_string(),
+                        ))
+                    }
+                };
+                {
+                    let mut borrowed = items.borrow_mut();
+                    if index >= borrowed.len() {
+                        borrowed.resize(index + 1, Value::Unit);
+                    }
+                    borrowed[index] = value;
+                }
+                self.push(Value::Array(items))?;
+                Ok(ExecutionResult::Continue)
+            }
+
+            // Exponentiation
+            Instruction::PowInt => {
+                let b = self.pop()?.as_int()?;
+                let a = self.pop()?.as_int()?;
+                self.push(Value::Int(a.wrapping_pow(b as u32)))?;
+                Ok(ExecutionResult::Continue)
+            }
+
+            Instruction::PowFloat => {
+                let b = self.pop()?.as_float()?;
+                let a = self.pop()?.as_float()?;
+                self.push(Value::Float(a.powf(b)))?;
                 Ok(ExecutionResult::Continue)
             }
 
@@ -681,6 +1301,2666 @@ impl VirtualMachine {
         self.stack.last().ok_or(VmError::StackUnderflow)
     }
 
+    /// Execute a builtin function by name
+    fn execute_builtin(&mut self, name: &SmolStr, args: &[Value]) -> Result<Value, VmError> {
+        match name.as_str() {
+            "println" => {
+                let parts: Vec<String> = args.iter().map(|a| self.display_value(a)).collect();
+                println!("{}", parts.join(" "));
+                Ok(Value::Unit)
+            }
+            "print" => {
+                let parts: Vec<String> = args.iter().map(|a| self.display_value(a)).collect();
+                print!("{}", parts.join(" "));
+                Ok(Value::Unit)
+            }
+            "to_string" => {
+                if args.is_empty() {
+                    return Ok(Value::String(String::new()));
+                }
+                Ok(Value::String(self.display_value(&args[0])))
+            }
+            "len" => match args.first() {
+                Some(Value::String(s)) => Ok(Value::Int(s.len() as i64)),
+                Some(Value::Array(items)) => Ok(Value::Int(items.borrow().len() as i64)),
+                Some(Value::HashMap(map)) => Ok(Value::Int(map.borrow().len() as i64)),
+                Some(Value::SortedMap(map)) => Ok(Value::Int(map.borrow().len() as i64)),
+                _ => Ok(Value::Int(0)),
+            },
+            "abs" => match args.first() {
+                Some(Value::Int(i)) => Ok(Value::Int(i.abs())),
+                Some(Value::Float(f)) => Ok(Value::Float(f.abs())),
+                _ => Ok(Value::Int(0)),
+            },
+            "min" => match (args.first(), args.get(1)) {
+                (Some(Value::Int(a)), Some(Value::Int(b))) => Ok(Value::Int(*a.min(b))),
+                (Some(Value::Float(a)), Some(Value::Float(b))) => Ok(Value::Float(a.min(*b))),
+                _ => Ok(Value::Int(0)),
+            },
+            "max" => match (args.first(), args.get(1)) {
+                (Some(Value::Int(a)), Some(Value::Int(b))) => Ok(Value::Int(*a.max(b))),
+                (Some(Value::Float(a)), Some(Value::Float(b))) => Ok(Value::Float(a.max(*b))),
+                _ => Ok(Value::Int(0)),
+            },
+            "sqrt" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.sqrt())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).sqrt())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "cbrt" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.cbrt())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).cbrt())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "sin" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.sin())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).sin())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "cos" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.cos())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).cos())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "tan" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.tan())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).tan())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "asin" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.asin())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).asin())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "acos" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.acos())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).acos())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "atan" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.atan())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).atan())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "atan2" => match (args.first(), args.get(1)) {
+                (Some(Value::Float(y)), Some(Value::Float(x))) => Ok(Value::Float(y.atan2(*x))),
+                (Some(Value::Int(y)), Some(Value::Int(x))) => {
+                    Ok(Value::Float((*y as f64).atan2(*x as f64)))
+                }
+                (Some(Value::Float(y)), Some(Value::Int(x))) => {
+                    Ok(Value::Float(y.atan2(*x as f64)))
+                }
+                (Some(Value::Int(y)), Some(Value::Float(x))) => {
+                    Ok(Value::Float((*y as f64).atan2(*x)))
+                }
+                _ => Ok(Value::Float(0.0)),
+            },
+            "sinh" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.sinh())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).sinh())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "cosh" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.cosh())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).cosh())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "tanh" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.tanh())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).tanh())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "floor" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Int(f.floor() as i64)),
+                Some(Value::Int(i)) => Ok(Value::Int(*i)),
+                _ => Ok(Value::Int(0)),
+            },
+            "ceil" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Int(f.ceil() as i64)),
+                Some(Value::Int(i)) => Ok(Value::Int(*i)),
+                _ => Ok(Value::Int(0)),
+            },
+            "round" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Int(f.round() as i64)),
+                Some(Value::Int(i)) => Ok(Value::Int(*i)),
+                _ => Ok(Value::Int(0)),
+            },
+            "trunc" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Int(f.trunc() as i64)),
+                Some(Value::Int(i)) => Ok(Value::Int(*i)),
+                _ => Ok(Value::Int(0)),
+            },
+            "pow" => match (args.first(), args.get(1)) {
+                (Some(Value::Int(a)), Some(Value::Int(b))) => {
+                    Ok(Value::Int(a.wrapping_pow(*b as u32)))
+                }
+                (Some(Value::Float(a)), Some(Value::Float(b))) => Ok(Value::Float(a.powf(*b))),
+                _ => Ok(Value::Int(0)),
+            },
+            "log" | "ln" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.ln())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).ln())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "log10" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.log10())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).log10())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "log2" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.log2())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).log2())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "exp" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::Float(f.exp())),
+                Some(Value::Int(i)) => Ok(Value::Float((*i as f64).exp())),
+                _ => Ok(Value::Float(0.0)),
+            },
+            "assert" => match args.first() {
+                Some(Value::Bool(true)) => Ok(Value::Unit),
+                Some(Value::Bool(false)) => Err(VmError::TypeError("Assertion failed".to_string())),
+                _ => Err(VmError::TypeError("assert requires a boolean".to_string())),
+            },
+            "panic" => {
+                let msg = args
+                    .first()
+                    .map(|a| self.display_value(a))
+                    .unwrap_or_default();
+                Err(VmError::TypeError(format!("panic: {}", msg)))
+            }
+            "range" => {
+                let (start, end) = match (args.first(), args.get(1)) {
+                    (Some(Value::Int(a)), Some(Value::Int(b))) => (*a, *b),
+                    (Some(Value::Int(end)), None) => (0, *end),
+                    _ => return Ok(Value::Unit),
+                };
+                let mut items = Vec::new();
+                for i in start..end {
+                    items.push(Value::Int(i));
+                }
+                Ok(Value::Array(Rc::new(RefCell::new(items))))
+            }
+            "file_exists" => match args.first() {
+                Some(Value::String(path)) => Ok(Value::Bool(std::path::Path::new(path).exists())),
+                _ => Err(VmError::TypeError(
+                    "file_exists expects a string path".to_string(),
+                )),
+            },
+            "str_trim" => match args.first() {
+                Some(Value::String(s)) => Ok(Value::String(s.trim().to_string())),
+                _ => Err(VmError::TypeError(
+                    "str_trim expects a string argument".to_string(),
+                )),
+            },
+            "str_split" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "str_split expects 2 string arguments".to_string(),
+                    ));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::String(s), Value::String(delimiter)) => {
+                        let parts: Vec<Value> = s
+                            .split(delimiter)
+                            .map(|p| Value::String(p.to_string()))
+                            .collect();
+                        Ok(Value::Array(Rc::new(RefCell::new(parts))))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "str_split expects two string arguments".to_string(),
+                    )),
+                }
+            }
+            "str_contains" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "str_contains expects 2 string arguments".to_string(),
+                    ));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::String(s), Value::String(sub)) => Ok(Value::Bool(s.contains(sub))),
+                    _ => Err(VmError::TypeError(
+                        "str_contains expects two string arguments".to_string(),
+                    )),
+                }
+            }
+            "str_to_lowercase" | "lowercase" => match args.first() {
+                Some(Value::String(s)) => Ok(Value::String(s.to_lowercase())),
+                _ => Err(VmError::TypeError(
+                    "str_to_lowercase expects a string argument".to_string(),
+                )),
+            },
+            "str_to_uppercase" | "uppercase" => match args.first() {
+                Some(Value::String(s)) => Ok(Value::String(s.to_uppercase())),
+                _ => Err(VmError::TypeError(
+                    "str_to_uppercase expects a string argument".to_string(),
+                )),
+            },
+            "str_replace" | "replace" => {
+                if args.len() != 3 {
+                    return Err(VmError::TypeError(
+                        "str_replace expects 3 string arguments".to_string(),
+                    ));
+                }
+                match (&args[0], &args[1], &args[2]) {
+                    (Value::String(s), Value::String(from), Value::String(to)) => {
+                        Ok(Value::String(s.replace(from, to)))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "str_replace expects three string arguments".to_string(),
+                    )),
+                }
+            }
+            "starts_with" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "starts_with expects 2 string arguments".to_string(),
+                    ));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::String(s), Value::String(prefix)) => {
+                        Ok(Value::Bool(s.starts_with(prefix)))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "starts_with expects two string arguments".to_string(),
+                    )),
+                }
+            }
+            "ends_with" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "ends_with expects 2 string arguments".to_string(),
+                    ));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::String(s), Value::String(suffix)) => {
+                        Ok(Value::Bool(s.ends_with(suffix)))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "ends_with expects two string arguments".to_string(),
+                    )),
+                }
+            }
+            "string_len" => match args.first() {
+                Some(Value::String(s)) => Ok(Value::Int(s.len() as i64)),
+                _ => Err(VmError::TypeError(
+                    "string_len expects a string argument".to_string(),
+                )),
+            },
+            "string_concat" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "string_concat expects 2 string arguments".to_string(),
+                    ));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::String(a), Value::String(b)) => {
+                        Ok(Value::String(format!("{}{}", a, b)))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "string_concat expects two string arguments".to_string(),
+                    )),
+                }
+            }
+            "string_substring" | "substring" => {
+                if args.len() != 3 {
+                    return Err(VmError::TypeError(
+                        "string_substring expects (string, start, end)".to_string(),
+                    ));
+                }
+                let s = match &args[0] {
+                    Value::String(s) => s,
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "string_substring expects a string argument".to_string(),
+                        ))
+                    }
+                };
+                let start = args[1].as_int()?;
+                let end = args[2].as_int()?;
+                if start < 0 || end < start {
+                    return Err(VmError::TypeError(
+                        "string_substring requires 0 <= start <= end".to_string(),
+                    ));
+                }
+                let start = start as usize;
+                let end = end as usize;
+                let chars: Vec<char> = s.chars().collect();
+                if end > chars.len() {
+                    return Err(VmError::TypeError(
+                        "string_substring range out of bounds".to_string(),
+                    ));
+                }
+                let substr: String = chars[start..end].iter().collect();
+                Ok(Value::String(substr))
+            }
+            "int_to_string" => match args.first() {
+                Some(Value::Int(n)) => Ok(Value::String(n.to_string())),
+                _ => Err(VmError::TypeError(
+                    "int_to_string expects an integer argument".to_string(),
+                )),
+            },
+            "float_to_string" => match args.first() {
+                Some(Value::Float(f)) => Ok(Value::String(f.to_string())),
+                Some(Value::Int(i)) => Ok(Value::String((*i as f64).to_string())),
+                _ => Err(VmError::TypeError(
+                    "float_to_string expects a float argument".to_string(),
+                )),
+            },
+            "string_to_int" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "string_to_int expects a single string argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::String(s) => match s.trim().parse::<i64>() {
+                        Ok(n) => Ok(self.make_result_ok(Value::Int(n))),
+                        Err(e) => Ok(self.make_result_err(Value::String(e.to_string()))),
+                    },
+                    _ => Err(VmError::TypeError(
+                        "string_to_int expects a string argument".to_string(),
+                    )),
+                }
+            }
+            "string_to_float" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "string_to_float expects a single string argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::String(s) => match s.trim().parse::<f64>() {
+                        Ok(n) => Ok(self.make_result_ok(Value::Float(n))),
+                        Err(e) => Ok(self.make_result_err(Value::String(e.to_string()))),
+                    },
+                    _ => Err(VmError::TypeError(
+                        "string_to_float expects a string argument".to_string(),
+                    )),
+                }
+            }
+            "array_len" => match args.first() {
+                Some(Value::Array(items)) => Ok(Value::Int(items.borrow().len() as i64)),
+                _ => Err(VmError::TypeError(
+                    "array_len expects an array argument".to_string(),
+                )),
+            },
+            "array_sum" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "array_sum expects 1 array argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::Array(arr) => {
+                        let borrowed = arr.borrow();
+                        let mut sum_int: i64 = 0;
+                        let mut sum_float: f64 = 0.0;
+                        let mut has_float = false;
+
+                        for val in borrowed.iter() {
+                            match val {
+                                Value::Int(n) => {
+                                    if has_float {
+                                        sum_float += *n as f64;
+                                    } else {
+                                        sum_int += n;
+                                    }
+                                }
+                                Value::Float(f) => {
+                                    if !has_float {
+                                        sum_float = sum_int as f64;
+                                        has_float = true;
+                                    }
+                                    sum_float += f;
+                                }
+                                _ => {
+                                    return Err(VmError::TypeError(
+                                        "array_sum expects an array of numbers".to_string(),
+                                    ))
+                                }
+                            }
+                        }
+
+                        if has_float {
+                            Ok(Value::Float(sum_float))
+                        } else {
+                            Ok(Value::Int(sum_int))
+                        }
+                    }
+                    _ => Err(VmError::TypeError(
+                        "array_sum expects an array argument".to_string(),
+                    )),
+                }
+            }
+            "array_get" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "array_get expects (array, index)".to_string(),
+                    ));
+                }
+                let index = args[1].as_int()?;
+                if index < 0 {
+                    return Err(VmError::TypeError(
+                        "array_get index must be non-negative".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::Array(arr) => {
+                        let borrowed = arr.borrow();
+                        Ok(borrowed.get(index as usize).cloned().unwrap_or(Value::Unit))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "array_get expects an array argument".to_string(),
+                    )),
+                }
+            }
+            "array_set" => {
+                if args.len() != 3 {
+                    return Err(VmError::TypeError(
+                        "array_set expects (array, index, value)".to_string(),
+                    ));
+                }
+                let index = args[1].as_int()?;
+                if index < 0 {
+                    return Err(VmError::TypeError(
+                        "array_set index must be non-negative".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::Array(arr) => {
+                        let mut borrowed = arr.borrow_mut();
+                        let idx = index as usize;
+                        if idx >= borrowed.len() {
+                            borrowed.resize(idx + 1, Value::Unit);
+                        }
+                        borrowed[idx] = args[2].clone();
+                        Ok(Value::Unit)
+                    }
+                    _ => Err(VmError::TypeError(
+                        "array_set expects an array argument".to_string(),
+                    )),
+                }
+            }
+            "array_push" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "array_push expects (array, value)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::Array(arr) => {
+                        arr.borrow_mut().push(args[1].clone());
+                        Ok(Value::Unit)
+                    }
+                    _ => Err(VmError::TypeError(
+                        "array_push expects an array argument".to_string(),
+                    )),
+                }
+            }
+            "array_pop" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "array_pop expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::Array(arr) => arr
+                        .borrow_mut()
+                        .pop()
+                        .ok_or(VmError::TypeError("pop from empty array".to_string())),
+                    _ => Err(VmError::TypeError(
+                        "array_pop expects an array argument".to_string(),
+                    )),
+                }
+            }
+            "array_with_capacity" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "array_with_capacity expects 1 argument".to_string(),
+                    ));
+                }
+                let cap = args[0].as_int()?;
+                if cap < 0 {
+                    return Err(VmError::TypeError(
+                        "array_with_capacity requires non-negative capacity".to_string(),
+                    ));
+                }
+                Ok(self.make_array(Vec::with_capacity(cap as usize)))
+            }
+            "array_remove_at" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "array_remove_at expects (array, index)".to_string(),
+                    ));
+                }
+                let index = args[1].as_int()?;
+                if index < 0 {
+                    return Err(VmError::TypeError(
+                        "array_remove_at index must be non-negative".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::Array(arr) => {
+                        let mut borrowed = arr.borrow_mut();
+                        let idx = index as usize;
+                        if idx >= borrowed.len() {
+                            return Err(VmError::OutOfBounds {
+                                index: idx,
+                                size: borrowed.len(),
+                            });
+                        }
+                        borrowed.remove(idx);
+                        Ok(Value::Unit)
+                    }
+                    _ => Err(VmError::TypeError(
+                        "array_remove_at expects an array argument".to_string(),
+                    )),
+                }
+            }
+            "array_map" => Err(VmError::TypeError(
+                "array_map requires closure support (not yet available)".to_string(),
+            )),
+            "array_filter" => Err(VmError::TypeError(
+                "array_filter requires closure support (not yet available)".to_string(),
+            )),
+            "hash" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError("hash expects 1 argument".to_string()));
+                }
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut hasher = DefaultHasher::new();
+                match &args[0] {
+                    Value::String(s) => s.hash(&mut hasher),
+                    Value::Int(n) => n.hash(&mut hasher),
+                    Value::Float(f) => f.to_bits().hash(&mut hasher),
+                    Value::Bool(b) => b.hash(&mut hasher),
+                    Value::Char(c) => c.hash(&mut hasher),
+                    other => {
+                        return Err(VmError::TypeError(format!(
+                            "hash expects string/int/float/bool/char, got {}",
+                            self.display_value(other)
+                        )))
+                    }
+                }
+                Ok(Value::Int(hasher.finish() as i64))
+            }
+            "hashmap_new" => Ok(self.make_hashmap()),
+            "hashmap_insert" => {
+                if args.len() != 3 {
+                    return Err(VmError::TypeError(
+                        "hashmap_insert expects (map, key, value)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::HashMap(map) => {
+                        let key = self.value_to_key(&args[1])?;
+                        map.borrow_mut().insert(key, args[2].clone());
+                        Ok(Value::Unit)
+                    }
+                    _ => Err(VmError::TypeError(
+                        "hashmap_insert expects a HashMap".to_string(),
+                    )),
+                }
+            }
+            "hashmap_get" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "hashmap_get expects (map, key)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::HashMap(map) => {
+                        let key = self.value_to_key(&args[1])?;
+                        Ok(map.borrow().get(&key).cloned().unwrap_or(Value::Unit))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "hashmap_get expects a HashMap".to_string(),
+                    )),
+                }
+            }
+            "hashmap_remove" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "hashmap_remove expects (map, key)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::HashMap(map) => {
+                        let key = self.value_to_key(&args[1])?;
+                        Ok(map.borrow_mut().remove(&key).unwrap_or(Value::Unit))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "hashmap_remove expects a HashMap".to_string(),
+                    )),
+                }
+            }
+            "hashmap_contains" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "hashmap_contains expects (map, key)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::HashMap(map) => {
+                        let key = self.value_to_key(&args[1])?;
+                        Ok(Value::Bool(map.borrow().contains_key(&key)))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "hashmap_contains expects a HashMap".to_string(),
+                    )),
+                }
+            }
+            "hashmap_len" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "hashmap_len expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::HashMap(map) => Ok(Value::Int(map.borrow().len() as i64)),
+                    _ => Err(VmError::TypeError(
+                        "hashmap_len expects a HashMap".to_string(),
+                    )),
+                }
+            }
+            "hashmap_keys" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "hashmap_keys expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::HashMap(map) => {
+                        let keys: Vec<Value> = map
+                            .borrow()
+                            .keys()
+                            .map(|k| Value::String(k.clone()))
+                            .collect();
+                        Ok(self.make_array(keys))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "hashmap_keys expects a HashMap".to_string(),
+                    )),
+                }
+            }
+            "hashmap_values" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "hashmap_values expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::HashMap(map) => {
+                        let values: Vec<Value> = map.borrow().values().cloned().collect();
+                        Ok(self.make_array(values))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "hashmap_values expects a HashMap".to_string(),
+                    )),
+                }
+            }
+            "hashmap_entries" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "hashmap_entries expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::HashMap(map) => {
+                        let entries: Vec<Value> = map
+                            .borrow()
+                            .iter()
+                            .map(|(k, v)| {
+                                self.make_array(vec![Value::String(k.clone()), v.clone()])
+                            })
+                            .collect();
+                        Ok(self.make_array(entries))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "hashmap_entries expects a HashMap".to_string(),
+                    )),
+                }
+            }
+            "sortedmap_new" => Ok(self.make_sortedmap()),
+            "sortedmap_insert" => {
+                if args.len() != 3 {
+                    return Err(VmError::TypeError(
+                        "sortedmap_insert expects (map, key, value)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::SortedMap(map) => {
+                        let key = self.value_to_key(&args[1])?;
+                        map.borrow_mut().insert(key, args[2].clone());
+                        Ok(Value::Unit)
+                    }
+                    _ => Err(VmError::TypeError(
+                        "sortedmap_insert expects a SortedMap".to_string(),
+                    )),
+                }
+            }
+            "sortedmap_get" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "sortedmap_get expects (map, key)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::SortedMap(map) => {
+                        let key = self.value_to_key(&args[1])?;
+                        Ok(map.borrow().get(&key).cloned().unwrap_or(Value::Unit))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "sortedmap_get expects a SortedMap".to_string(),
+                    )),
+                }
+            }
+            "sortedmap_remove" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "sortedmap_remove expects (map, key)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::SortedMap(map) => {
+                        let key = self.value_to_key(&args[1])?;
+                        Ok(map.borrow_mut().remove(&key).unwrap_or(Value::Unit))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "sortedmap_remove expects a SortedMap".to_string(),
+                    )),
+                }
+            }
+            "sortedmap_len" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "sortedmap_len expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::SortedMap(map) => Ok(Value::Int(map.borrow().len() as i64)),
+                    _ => Err(VmError::TypeError(
+                        "sortedmap_len expects a SortedMap".to_string(),
+                    )),
+                }
+            }
+            "sortedmap_keys" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "sortedmap_keys expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::SortedMap(map) => {
+                        let keys: Vec<Value> = map
+                            .borrow()
+                            .keys()
+                            .map(|k| Value::String(k.clone()))
+                            .collect();
+                        Ok(self.make_array(keys))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "sortedmap_keys expects a SortedMap".to_string(),
+                    )),
+                }
+            }
+            "sortedmap_min_key" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "sortedmap_min_key expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::SortedMap(map) => {
+                        let borrowed = map.borrow();
+                        match borrowed.iter().next() {
+                            Some((k, v)) => {
+                                Ok(self.make_array(vec![Value::String(k.clone()), v.clone()]))
+                            }
+                            None => Ok(Value::Unit),
+                        }
+                    }
+                    _ => Err(VmError::TypeError(
+                        "sortedmap_min_key expects a SortedMap".to_string(),
+                    )),
+                }
+            }
+            "sortedmap_max_key" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "sortedmap_max_key expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::SortedMap(map) => {
+                        let borrowed = map.borrow();
+                        match borrowed.iter().next_back() {
+                            Some((k, v)) => {
+                                Ok(self.make_array(vec![Value::String(k.clone()), v.clone()]))
+                            }
+                            None => Ok(Value::Unit),
+                        }
+                    }
+                    _ => Err(VmError::TypeError(
+                        "sortedmap_max_key expects a SortedMap".to_string(),
+                    )),
+                }
+            }
+            "sortedmap_range" => {
+                if args.len() != 3 {
+                    return Err(VmError::TypeError(
+                        "sortedmap_range expects (map, from_key, to_key)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::SortedMap(map) => {
+                        let from = self.value_to_key(&args[1])?;
+                        let to = self.value_to_key(&args[2])?;
+                        let borrowed = map.borrow();
+                        let entries: Vec<Value> = borrowed
+                            .range(from..=to)
+                            .map(|(k, v)| {
+                                self.make_array(vec![Value::String(k.clone()), v.clone()])
+                            })
+                            .collect();
+                        Ok(self.make_array(entries))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "sortedmap_range expects a SortedMap".to_string(),
+                    )),
+                }
+            }
+            "queue_new" => Ok(self.make_array(Vec::new())),
+            "queue_enqueue" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "queue_enqueue expects (queue, value)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::Array(arr) => {
+                        arr.borrow_mut().push(args[1].clone());
+                        Ok(Value::Unit)
+                    }
+                    _ => Err(VmError::TypeError(
+                        "queue_enqueue expects a queue (array)".to_string(),
+                    )),
+                }
+            }
+            "queue_dequeue" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "queue_dequeue expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::Array(arr) => {
+                        let mut borrowed = arr.borrow_mut();
+                        if borrowed.is_empty() {
+                            Err(VmError::TypeError("dequeue from empty queue".to_string()))
+                        } else {
+                            Ok(borrowed.remove(0))
+                        }
+                    }
+                    _ => Err(VmError::TypeError(
+                        "queue_dequeue expects a queue (array)".to_string(),
+                    )),
+                }
+            }
+            "queue_peek" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "queue_peek expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::Array(arr) => Ok(arr.borrow().first().cloned().unwrap_or(Value::Unit)),
+                    _ => Err(VmError::TypeError(
+                        "queue_peek expects a queue (array)".to_string(),
+                    )),
+                }
+            }
+            "queue_len" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "queue_len expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::Array(arr) => Ok(Value::Int(arr.borrow().len() as i64)),
+                    _ => Err(VmError::TypeError(
+                        "queue_len expects a queue (array)".to_string(),
+                    )),
+                }
+            }
+            "queue_is_empty" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "queue_is_empty expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::Array(arr) => Ok(Value::Bool(arr.borrow().is_empty())),
+                    _ => Err(VmError::TypeError(
+                        "queue_is_empty expects a queue (array)".to_string(),
+                    )),
+                }
+            }
+            "priority_queue_new" => Ok(self.make_sortedmap()),
+            "priority_queue_push" => {
+                if args.len() != 3 {
+                    return Err(VmError::TypeError(
+                        "priority_queue_push expects (queue, priority, value)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::SortedMap(map) => {
+                        let priority = match &args[1] {
+                            Value::Int(n) => format!("{:020}", n),
+                            Value::Float(f) => format!("{:020.10}", f),
+                            other => {
+                                return Err(VmError::TypeError(format!(
+                                    "priority_queue_push expects numeric priority, got {}",
+                                    self.display_value(other)
+                                )))
+                            }
+                        };
+                        let mut borrowed = map.borrow_mut();
+                        let entry = borrowed
+                            .entry(priority)
+                            .or_insert_with(|| self.make_array(Vec::new()));
+                        match entry {
+                            Value::Array(arr) => {
+                                arr.borrow_mut().push(args[2].clone());
+                                Ok(Value::Unit)
+                            }
+                            _ => Err(VmError::TypeError(
+                                "priority queue entry is not an array".to_string(),
+                            )),
+                        }
+                    }
+                    _ => Err(VmError::TypeError(
+                        "priority_queue_push expects a PriorityQueue (SortedMap)".to_string(),
+                    )),
+                }
+            }
+            "priority_queue_pop" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "priority_queue_pop expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::SortedMap(map) => {
+                        let mut borrowed = map.borrow_mut();
+                        let first_key = borrowed.keys().next().cloned();
+                        match first_key {
+                            Some(key) => {
+                                let result = {
+                                    let entry =
+                                        borrowed.get_mut(&key).ok_or(VmError::TypeError(
+                                            "priority queue entry missing".to_string(),
+                                        ))?;
+                                    match entry {
+                                        Value::Array(arr) => {
+                                            let mut arr_borrowed = arr.borrow_mut();
+                                            if arr_borrowed.is_empty() {
+                                                None
+                                            } else {
+                                                Some(arr_borrowed.remove(0))
+                                            }
+                                        }
+                                        _ => {
+                                            return Err(VmError::TypeError(
+                                                "priority queue entry is not an array".to_string(),
+                                            ))
+                                        }
+                                    }
+                                };
+                                if let Some(Value::Array(arr)) = borrowed.get(&key) {
+                                    if arr.borrow().is_empty() {
+                                        borrowed.remove(&key);
+                                    }
+                                }
+                                match result {
+                                    Some(val) => Ok(val),
+                                    None => Err(VmError::TypeError(
+                                        "pop from empty priority queue".to_string(),
+                                    )),
+                                }
+                            }
+                            None => Err(VmError::TypeError(
+                                "pop from empty priority queue".to_string(),
+                            )),
+                        }
+                    }
+                    _ => Err(VmError::TypeError(
+                        "priority_queue_pop expects a PriorityQueue (SortedMap)".to_string(),
+                    )),
+                }
+            }
+            "priority_queue_peek" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "priority_queue_peek expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::SortedMap(map) => {
+                        let borrowed = map.borrow();
+                        match borrowed.iter().next() {
+                            Some((_key, Value::Array(arr))) => {
+                                Ok(arr.borrow().first().cloned().unwrap_or(Value::Unit))
+                            }
+                            _ => Ok(Value::Unit),
+                        }
+                    }
+                    _ => Err(VmError::TypeError(
+                        "priority_queue_peek expects a PriorityQueue (SortedMap)".to_string(),
+                    )),
+                }
+            }
+            "priority_queue_len" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "priority_queue_len expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::SortedMap(map) => {
+                        let borrowed = map.borrow();
+                        let total: usize = borrowed
+                            .values()
+                            .map(|v| match v {
+                                Value::Array(arr) => arr.borrow().len(),
+                                _ => 1,
+                            })
+                            .sum();
+                        Ok(Value::Int(total as i64))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "priority_queue_len expects a PriorityQueue (SortedMap)".to_string(),
+                    )),
+                }
+            }
+            "set_union" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "set_union expects (set_a, set_b)".to_string(),
+                    ));
+                }
+                let set_a = self.array_to_string_set(&args[0])?;
+                let set_b = self.array_to_string_set(&args[1])?;
+                let union: HashSet<String> = set_a.union(&set_b).cloned().collect();
+                let mut result = self.values_in_set(&args[0], &union)?;
+                let a_reprs: HashSet<String> =
+                    result.iter().map(|v| self.display_value(v)).collect();
+                if let Value::Array(arr_b) = &args[1] {
+                    for v in arr_b.borrow().iter() {
+                        let repr = self.display_value(v);
+                        if union.contains(&repr) && !a_reprs.contains(&repr) {
+                            result.push(v.clone());
+                        }
+                    }
+                }
+                Ok(self.make_array(result))
+            }
+            "set_intersection" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "set_intersection expects (set_a, set_b)".to_string(),
+                    ));
+                }
+                let set_a = self.array_to_string_set(&args[0])?;
+                let set_b = self.array_to_string_set(&args[1])?;
+                let intersection: HashSet<String> = set_a.intersection(&set_b).cloned().collect();
+                let result = self.values_in_set(&args[0], &intersection)?;
+                Ok(self.make_array(result))
+            }
+            "set_difference" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "set_difference expects (set_a, set_b)".to_string(),
+                    ));
+                }
+                let set_a = self.array_to_string_set(&args[0])?;
+                let set_b = self.array_to_string_set(&args[1])?;
+                let diff: HashSet<String> = set_a.difference(&set_b).cloned().collect();
+                let result = self.values_in_set(&args[0], &diff)?;
+                Ok(self.make_array(result))
+            }
+            "set_symmetric_difference" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "set_symmetric_difference expects (set_a, set_b)".to_string(),
+                    ));
+                }
+                let set_a = self.array_to_string_set(&args[0])?;
+                let set_b = self.array_to_string_set(&args[1])?;
+                let sym_diff: HashSet<String> =
+                    set_a.symmetric_difference(&set_b).cloned().collect();
+                let mut result = self.values_in_set(&args[0], &sym_diff)?;
+                let a_reprs: HashSet<String> =
+                    result.iter().map(|v| self.display_value(v)).collect();
+                if let Value::Array(arr_b) = &args[1] {
+                    for v in arr_b.borrow().iter() {
+                        let repr = self.display_value(v);
+                        if sym_diff.contains(&repr) && !a_reprs.contains(&repr) {
+                            result.push(v.clone());
+                        }
+                    }
+                }
+                Ok(self.make_array(result))
+            }
+            "set_is_subset" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "set_is_subset expects (subset, superset)".to_string(),
+                    ));
+                }
+                let set_a = self.array_to_string_set(&args[0])?;
+                let set_b = self.array_to_string_set(&args[1])?;
+                Ok(Value::Bool(set_a.is_subset(&set_b)))
+            }
+            "set_from_array" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "set_from_array expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::Array(arr) => {
+                        let borrowed = arr.borrow();
+                        let mut seen = HashSet::new();
+                        let mut result = Vec::new();
+                        for v in borrowed.iter() {
+                            let repr = self.display_value(v);
+                            if seen.insert(repr) {
+                                result.push(v.clone());
+                            }
+                        }
+                        Ok(self.make_array(result))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "set_from_array expects an array".to_string(),
+                    )),
+                }
+            }
+            "shadow_price" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "shadow_price expects 1 argument".to_string(),
+                    ));
+                }
+                let resource = match &args[0] {
+                    Value::String(s) => s.as_str(),
+                    other => {
+                        return Err(VmError::TypeError(format!(
+                            "shadow_price expects string resource name, got {}",
+                            self.display_value(other)
+                        )))
+                    }
+                };
+                let price = match resource {
+                    "energy" => 1.0,
+                    "time" => 0.1,
+                    "carbon" => 50.0,
+                    "memory" => 0.001,
+                    _ => 0.0,
+                };
+                Ok(Value::Float(price))
+            }
+            "current_energy" => Ok(Value::Float(0.0)),
+            "current_carbon" => Ok(Value::Float(0.0)),
+            "gpu_available" => Ok(Value::Bool(false)),
+            "cpu_cores" => Ok(Value::Int(
+                std::thread::available_parallelism()
+                    .map(|p| p.get() as i64)
+                    .unwrap_or(1),
+            )),
+            "time_now_ms" => {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|e| VmError::TypeError(format!("Time error: {}", e)))?;
+                Ok(Value::Int(now.as_millis() as i64))
+            }
+            "time_unix_timestamp" => {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|e| VmError::TypeError(format!("Time error: {}", e)))?;
+                Ok(Value::Int(now.as_secs() as i64))
+            }
+            "time_now" => {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|e| VmError::TypeError(format!("Time error: {}", e)))?;
+                Ok(Value::Float(now.as_secs_f64()))
+            }
+            "time_sleep_ms" | "sleep" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "sleep expects 1 argument (milliseconds)".to_string(),
+                    ));
+                }
+                let millis = args[0].as_int()?;
+                if millis < 0 {
+                    return Err(VmError::TypeError(
+                        "sleep duration must be non-negative".to_string(),
+                    ));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(millis as u64));
+                Ok(Value::Unit)
+            }
+            "time_hour" => {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|e| VmError::TypeError(format!("Time error: {}", e)))?;
+                let secs = now.as_secs();
+                let hour = (secs / 3600) % 24;
+                Ok(Value::Int(hour as i64))
+            }
+            "time_day_of_week" => {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|e| VmError::TypeError(format!("Time error: {}", e)))?;
+                let days = now.as_secs() / 86400;
+                let day_of_week = (days + 4) % 7; // 1970-01-01 was Thursday
+                Ok(Value::Int(day_of_week as i64))
+            }
+            "time_to_iso8601" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "time_to_iso8601 expects 1 argument".to_string(),
+                    ));
+                }
+                let timestamp = args[0].as_int()?;
+                let secs = timestamp as u64;
+                let days = secs / 86400;
+                let year = 1970 + (days / 365);
+                let iso = format!("{:04}-01-01T00:00:00Z", year);
+                Ok(Value::String(iso))
+            }
+            "time_from_iso8601" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "time_from_iso8601 expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::String(iso) => {
+                        if let Some(year_str) = iso.split('-').next() {
+                            if let Ok(year) = year_str.parse::<i64>() {
+                                let timestamp = (year - 1970) * 365 * 86400;
+                                return Ok(Value::Int(timestamp));
+                            }
+                        }
+                        Err(VmError::TypeError("Invalid ISO 8601 format".to_string()))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "time_from_iso8601 expects a string argument".to_string(),
+                    )),
+                }
+            }
+            "task_sleep" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "task_sleep expects 1 argument (milliseconds)".to_string(),
+                    ));
+                }
+                let millis = args[0].as_int()?;
+                if millis < 0 {
+                    return Err(VmError::TypeError(
+                        "task_sleep duration must be non-negative".to_string(),
+                    ));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(millis as u64));
+                Ok(Value::Unit)
+            }
+            "task_spawn" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "task_spawn expects 1 argument (callable)".to_string(),
+                    ));
+                }
+                let result = self.call_callable(&args[0], &[])?;
+                Ok(self.make_enum_value("Task", Some(result)))
+            }
+            "task_await" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "task_await expects 1 argument (Task)".to_string(),
+                    ));
+                }
+                self.extract_enum_payload(&args[0], "Task")
+            }
+            "task_yield" => {
+                if !args.is_empty() {
+                    return Err(VmError::TypeError(
+                        "task_yield expects 0 arguments".to_string(),
+                    ));
+                }
+                Ok(Value::Unit)
+            }
+            "channel_create" => {
+                if !args.is_empty() {
+                    return Err(VmError::TypeError(
+                        "channel_create expects 0 arguments".to_string(),
+                    ));
+                }
+                let queue = self.make_array(Vec::new());
+                let sender = self.make_enum_value("Sender", Some(queue.clone()));
+                let receiver = self.make_enum_value("Receiver", Some(queue));
+                Ok(self.make_array(vec![sender, receiver]))
+            }
+            "channel_send" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "channel_send expects (sender, value)".to_string(),
+                    ));
+                }
+                let queue = self.extract_channel_queue(&args[0], "Sender")?;
+                queue.borrow_mut().push(args[1].clone());
+                Ok(Value::Unit)
+            }
+            "channel_recv" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "channel_recv expects 1 argument (receiver)".to_string(),
+                    ));
+                }
+                let queue = self.extract_channel_queue(&args[0], "Receiver")?;
+                let mut borrowed = queue.borrow_mut();
+                if borrowed.is_empty() {
+                    return Err(VmError::TypeError(
+                        "channel_recv would block on empty channel".to_string(),
+                    ));
+                }
+                Ok(borrowed.remove(0))
+            }
+            "channel_try_recv" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "channel_try_recv expects 1 argument (receiver)".to_string(),
+                    ));
+                }
+                let queue = self.extract_channel_queue(&args[0], "Receiver")?;
+                let mut borrowed = queue.borrow_mut();
+                if borrowed.is_empty() {
+                    Ok(self.make_option_none())
+                } else {
+                    Ok(self.make_option_some(borrowed.remove(0)))
+                }
+            }
+            "channel_select" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "channel_select expects 1 argument (receivers array)".to_string(),
+                    ));
+                }
+                let receivers = match &args[0] {
+                    Value::Array(items) => items.borrow().clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "channel_select expects an array of receivers".to_string(),
+                        ))
+                    }
+                };
+                for (idx, recv) in receivers.iter().enumerate() {
+                    let queue = self.extract_channel_queue(recv, "Receiver")?;
+                    let mut borrowed = queue.borrow_mut();
+                    if !borrowed.is_empty() {
+                        let value = borrowed.remove(0);
+                        return Ok(self.make_array(vec![Value::Int(idx as i64), value]));
+                    }
+                }
+                Err(VmError::TypeError(
+                    "channel_select would block on empty channels".to_string(),
+                ))
+            }
+            "parallel_all" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "parallel_all expects 1 argument (tasks array)".to_string(),
+                    ));
+                }
+                let tasks = match &args[0] {
+                    Value::Array(items) => items.borrow().clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "parallel_all expects an array of callables".to_string(),
+                        ))
+                    }
+                };
+                let mut results = Vec::with_capacity(tasks.len());
+                for task in tasks {
+                    results.push(self.call_callable(&task, &[])?);
+                }
+                Ok(self.make_array(results))
+            }
+            "parallel_race" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "parallel_race expects 1 argument (tasks array)".to_string(),
+                    ));
+                }
+                let tasks = match &args[0] {
+                    Value::Array(items) => items.borrow().clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "parallel_race expects an array of callables".to_string(),
+                        ))
+                    }
+                };
+                let Some(first) = tasks.first() else {
+                    return Err(VmError::TypeError(
+                        "parallel_race expects at least one task".to_string(),
+                    ));
+                };
+                self.call_callable(first, &[])
+            }
+            "tea_render" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "tea_render expects 1 argument (Html)".to_string(),
+                    ));
+                }
+                let rendered = self.render_html(&args[0])?;
+                Ok(Value::String(rendered))
+            }
+            "tea_program_run" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "tea_program_run expects 1 argument (App)".to_string(),
+                    ));
+                }
+                match self.render_html(&args[0]) {
+                    Ok(html) => println!("{}", html),
+                    Err(_) => eprintln!("Warning: tea_program_run could not render Html"),
+                }
+                Ok(Value::Unit)
+            }
+            "tea_program_mount" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "tea_program_mount expects (App, selector)".to_string(),
+                    ));
+                }
+                let selector = self.value_to_string(&args[1]);
+                match self.render_html(&args[0]) {
+                    Ok(html) => println!("Mount {}:\n{}", selector, html),
+                    Err(_) => eprintln!("Warning: tea_program_mount could not render Html"),
+                }
+                Ok(Value::Unit)
+            }
+            "dom_element" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "dom_element expects 1 argument".to_string(),
+                    ));
+                }
+                let id = args[0].as_int()?;
+                Ok(self.make_dom_element(id))
+            }
+            "dom_validate_selector" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "dom_validate_selector expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::String(selector) => match eclexia_dom::validate_selector(selector) {
+                        Ok(validated) => Ok(self.make_result_ok(
+                            self.make_validated_selector(validated.as_str().to_string()),
+                        )),
+                        Err(msg) => Ok(self.make_result_err(Value::String(msg))),
+                    },
+                    _ => Err(VmError::TypeError(
+                        "dom_validate_selector expects a string argument".to_string(),
+                    )),
+                }
+            }
+            "dom_validate_html" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "dom_validate_html expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::String(html) => match eclexia_dom::validate_html(html) {
+                        Ok(validated) => Ok(self.make_result_ok(
+                            self.make_validated_html(validated.as_str().to_string()),
+                        )),
+                        Err(msg) => Ok(self.make_result_err(Value::String(msg))),
+                    },
+                    _ => Err(VmError::TypeError(
+                        "dom_validate_html expects a string argument".to_string(),
+                    )),
+                }
+            }
+            "dom_mount" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "dom_mount expects (selector, html)".to_string(),
+                    ));
+                }
+                let selector = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "dom_mount expects selector as string".to_string(),
+                        ))
+                    }
+                };
+                let html = match &args[1] {
+                    Value::String(s) => s.clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "dom_mount expects html as string".to_string(),
+                        ))
+                    }
+                };
+                if let Err(msg) = eclexia_dom::validate_selector(&selector) {
+                    return Ok(self.make_enum_value("InvalidSelector", Some(Value::String(msg))));
+                }
+                if let Err(msg) = eclexia_dom::validate_html(&html) {
+                    return Ok(self.make_enum_value("InvalidHtml", Some(Value::String(msg))));
+                }
+                let id = self.dom_state.add_element(selector, html);
+                Ok(self.make_enum_value("Mounted", Some(self.make_dom_element(id))))
+            }
+            "dom_mount_validated" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "dom_mount_validated expects (selector, html)".to_string(),
+                    ));
+                }
+                let selector =
+                    self.extract_struct_string_field(&args[0], "raw", "ValidatedSelector")?;
+                let html = self.extract_struct_string_field(&args[1], "raw", "ValidatedHtml")?;
+                if let Err(msg) = eclexia_dom::validate_selector(&selector) {
+                    return Ok(self.make_enum_value("InvalidSelector", Some(Value::String(msg))));
+                }
+                if let Err(msg) = eclexia_dom::validate_html(&html) {
+                    return Ok(self.make_enum_value("InvalidHtml", Some(Value::String(msg))));
+                }
+                let id = self.dom_state.add_element(selector, html);
+                Ok(self.make_enum_value("Mounted", Some(self.make_dom_element(id))))
+            }
+            "dom_mount_batch" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "dom_mount_batch expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::Array(specs) => {
+                        let borrowed = specs.borrow();
+                        let mut elements = Vec::with_capacity(borrowed.len());
+                        for spec in borrowed.iter() {
+                            let selector =
+                                self.extract_struct_string_field(spec, "selector", "MountSpec")?;
+                            let html =
+                                self.extract_struct_string_field(spec, "html", "MountSpec")?;
+                            if let Err(msg) = eclexia_dom::validate_selector(&selector) {
+                                return Ok(self.make_result_err(Value::String(format!(
+                                    "Invalid selector '{}': {}",
+                                    selector, msg
+                                ))));
+                            }
+                            if let Err(msg) = eclexia_dom::validate_html(&html) {
+                                return Ok(self.make_result_err(Value::String(format!(
+                                    "Invalid HTML for '{}': {}",
+                                    selector, msg
+                                ))));
+                            }
+                            let id = self.dom_state.add_element(selector, html);
+                            elements.push(self.make_dom_element(id));
+                        }
+                        Ok(self.make_result_ok(self.make_array(elements)))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "dom_mount_batch expects a list of MountSpec".to_string(),
+                    )),
+                }
+            }
+            "dom_mount_safe" | "dom_mount_when_ready" => {
+                if args.len() != 4 {
+                    return Err(VmError::TypeError(
+                        "dom_mount_safe expects (selector, html, on_success, on_error)".to_string(),
+                    ));
+                }
+                let selector = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "dom_mount_safe expects selector as string".to_string(),
+                        ))
+                    }
+                };
+                let html = match &args[1] {
+                    Value::String(s) => s.clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "dom_mount_safe expects html as string".to_string(),
+                        ))
+                    }
+                };
+                if eclexia_dom::validate_selector(&selector).is_ok()
+                    && eclexia_dom::validate_html(&html).is_ok()
+                {
+                    let _ = self.dom_state.add_element(selector, html);
+                } else {
+                    eprintln!(
+                        "Warning: dom_mount_safe validation failed; callbacks ignored in bytecode VM"
+                    );
+                }
+                Ok(Value::Unit)
+            }
+            "dom_inner_html" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "dom_inner_html expects 1 argument".to_string(),
+                    ));
+                }
+                let id = self.dom_element_id(&args[0])?;
+                match self.dom_state.elements.get(&id) {
+                    Some(element) => Ok(Value::String(element.html.clone())),
+                    None => Err(VmError::TypeError("Unknown DOM element".to_string())),
+                }
+            }
+            "dom_set_inner_html" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "dom_set_inner_html expects (element, html)".to_string(),
+                    ));
+                }
+                let id = self.dom_element_id(&args[0])?;
+                let html = match &args[1] {
+                    Value::String(s) => s.clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "dom_set_inner_html expects html as string".to_string(),
+                        ))
+                    }
+                };
+                if let Err(msg) = eclexia_dom::validate_html(&html) {
+                    return Ok(self.make_result_err(Value::String(msg)));
+                }
+                match self.dom_state.elements.get_mut(&id) {
+                    Some(element) => {
+                        element.html = html.clone();
+                        element.text_content = strip_html_tags(&html);
+                        Ok(self.make_result_ok(Value::Unit))
+                    }
+                    None => {
+                        Ok(self.make_result_err(Value::String("Unknown DOM element".to_string())))
+                    }
+                }
+            }
+            "dom_text_content" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "dom_text_content expects 1 argument".to_string(),
+                    ));
+                }
+                let id = self.dom_element_id(&args[0])?;
+                match self.dom_state.elements.get(&id) {
+                    Some(element) => Ok(Value::String(element.text_content.clone())),
+                    None => Err(VmError::TypeError("Unknown DOM element".to_string())),
+                }
+            }
+            "dom_set_text_content" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "dom_set_text_content expects (element, text)".to_string(),
+                    ));
+                }
+                let id = self.dom_element_id(&args[0])?;
+                let text = match &args[1] {
+                    Value::String(s) => s.clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "dom_set_text_content expects text as string".to_string(),
+                        ))
+                    }
+                };
+                match self.dom_state.elements.get_mut(&id) {
+                    Some(element) => {
+                        element.text_content = text.clone();
+                        element.html = text;
+                        Ok(Value::Unit)
+                    }
+                    None => Err(VmError::TypeError("Unknown DOM element".to_string())),
+                }
+            }
+            "dom_add_class" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "dom_add_class expects (element, class)".to_string(),
+                    ));
+                }
+                let id = self.dom_element_id(&args[0])?;
+                let class = match &args[1] {
+                    Value::String(s) => s.clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "dom_add_class expects class name as string".to_string(),
+                        ))
+                    }
+                };
+                match self.dom_state.elements.get_mut(&id) {
+                    Some(element) => {
+                        element.classes.insert(class);
+                        Ok(Value::Unit)
+                    }
+                    None => Err(VmError::TypeError("Unknown DOM element".to_string())),
+                }
+            }
+            "dom_remove_class" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "dom_remove_class expects (element, class)".to_string(),
+                    ));
+                }
+                let id = self.dom_element_id(&args[0])?;
+                let class = match &args[1] {
+                    Value::String(s) => s.clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "dom_remove_class expects class name as string".to_string(),
+                        ))
+                    }
+                };
+                match self.dom_state.elements.get_mut(&id) {
+                    Some(element) => {
+                        element.classes.remove(&class);
+                        Ok(Value::Unit)
+                    }
+                    None => Err(VmError::TypeError("Unknown DOM element".to_string())),
+                }
+            }
+            "dom_toggle_class" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "dom_toggle_class expects (element, class)".to_string(),
+                    ));
+                }
+                let id = self.dom_element_id(&args[0])?;
+                let class = match &args[1] {
+                    Value::String(s) => s.clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "dom_toggle_class expects class name as string".to_string(),
+                        ))
+                    }
+                };
+                match self.dom_state.elements.get_mut(&id) {
+                    Some(element) => {
+                        if element.classes.remove(&class) {
+                            Ok(Value::Bool(false))
+                        } else {
+                            element.classes.insert(class);
+                            Ok(Value::Bool(true))
+                        }
+                    }
+                    None => Err(VmError::TypeError("Unknown DOM element".to_string())),
+                }
+            }
+            "dom_set_attribute" => {
+                if args.len() != 3 {
+                    return Err(VmError::TypeError(
+                        "dom_set_attribute expects (element, name, value)".to_string(),
+                    ));
+                }
+                let id = self.dom_element_id(&args[0])?;
+                let name = match &args[1] {
+                    Value::String(s) => s.clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "dom_set_attribute expects name as string".to_string(),
+                        ))
+                    }
+                };
+                let value = match &args[2] {
+                    Value::String(s) => s.clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "dom_set_attribute expects value as string".to_string(),
+                        ))
+                    }
+                };
+                match self.dom_state.elements.get_mut(&id) {
+                    Some(element) => {
+                        element.attributes.insert(name, value);
+                        Ok(Value::Unit)
+                    }
+                    None => Err(VmError::TypeError("Unknown DOM element".to_string())),
+                }
+            }
+            "dom_get_attribute" => {
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "dom_get_attribute expects (element, name)".to_string(),
+                    ));
+                }
+                let id = self.dom_element_id(&args[0])?;
+                let name = match &args[1] {
+                    Value::String(s) => s.clone(),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "dom_get_attribute expects name as string".to_string(),
+                        ))
+                    }
+                };
+                match self.dom_state.elements.get(&id) {
+                    Some(element) => match element.attributes.get(&name) {
+                        Some(value) => Ok(self.make_option_some(Value::String(value.clone()))),
+                        None => Ok(self.make_option_none()),
+                    },
+                    None => Err(VmError::TypeError("Unknown DOM element".to_string())),
+                }
+            }
+            "dom_remove" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "dom_remove expects 1 argument".to_string(),
+                    ));
+                }
+                let id = self.dom_element_id(&args[0])?;
+                self.dom_state.remove_element(id);
+                Ok(Value::Unit)
+            }
+            "dom_query_selector" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "dom_query_selector expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::String(selector) => match self.dom_state.selector_index.get(selector) {
+                        Some(list) => match list.first() {
+                            Some(id) => Ok(self.make_option_some(self.make_dom_element(*id))),
+                            None => Ok(self.make_option_none()),
+                        },
+                        None => Ok(self.make_option_none()),
+                    },
+                    _ => Err(VmError::TypeError(
+                        "dom_query_selector expects selector as string".to_string(),
+                    )),
+                }
+            }
+            "dom_query_selector_all" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "dom_query_selector_all expects 1 argument".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Value::String(selector) => {
+                        let ids = self
+                            .dom_state
+                            .selector_index
+                            .get(selector)
+                            .cloned()
+                            .unwrap_or_default();
+                        let mut elements = Vec::new();
+                        for id in ids {
+                            if self.dom_state.elements.contains_key(&id) {
+                                elements.push(self.make_dom_element(id));
+                            }
+                        }
+                        Ok(self.make_array(elements))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "dom_query_selector_all expects selector as string".to_string(),
+                    )),
+                }
+            }
+            "parse_json" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError(
+                        "parse_json expects 1 argument".to_string(),
+                    ));
+                }
+                #[cfg(feature = "serde")]
+                {
+                    match &args[0] {
+                        Value::String(s) => {
+                            let json: serde_json::Value = serde_json::from_str(s).map_err(|e| {
+                                VmError::TypeError(format!("JSON parse error: {}", e))
+                            })?;
+                            Ok(self.json_to_value(&json))
+                        }
+                        _ => Err(VmError::TypeError(
+                            "parse_json expects a string argument".to_string(),
+                        )),
+                    }
+                }
+                #[cfg(not(feature = "serde"))]
+                {
+                    Err(VmError::TypeError(
+                        "parse_json requires serde feature".to_string(),
+                    ))
+                }
+            }
+            "to_json" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError("to_json expects 1 argument".to_string()));
+                }
+                #[cfg(feature = "serde")]
+                {
+                    let json_val = self.value_to_json(&args[0])?;
+                    let s = serde_json::to_string(&json_val).map_err(|e| {
+                        VmError::TypeError(format!("JSON serialization error: {}", e))
+                    })?;
+                    Ok(Value::String(s))
+                }
+                #[cfg(not(feature = "serde"))]
+                {
+                    Err(VmError::TypeError(
+                        "to_json requires serde feature".to_string(),
+                    ))
+                }
+            }
+            "Some" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError("Some expects 1 argument".to_string()));
+                }
+                Ok(self.make_option_some(args[0].clone()))
+            }
+            "None" => {
+                if !args.is_empty() {
+                    return Err(VmError::TypeError("None expects 0 arguments".to_string()));
+                }
+                Ok(self.make_option_none())
+            }
+            "Ok" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError("Ok expects 1 argument".to_string()));
+                }
+                Ok(self.make_result_ok(args[0].clone()))
+            }
+            "Err" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError("Err expects 1 argument".to_string()));
+                }
+                Ok(self.make_result_err(args[0].clone()))
+            }
+            "is_some" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError("is_some expects 1 argument".to_string()));
+                }
+                match &args[0] {
+                    Value::Struct(fields) => match fields.get(TAG_FIELD) {
+                        Some(Value::String(tag)) if tag == "Some" => Ok(Value::Bool(true)),
+                        Some(Value::String(tag)) if tag == "None" => Ok(Value::Bool(false)),
+                        _ => Err(VmError::TypeError(
+                            "is_some expects an Option value".to_string(),
+                        )),
+                    },
+                    _ => Err(VmError::TypeError(
+                        "is_some expects an Option value".to_string(),
+                    )),
+                }
+            }
+            "is_none" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError("is_none expects 1 argument".to_string()));
+                }
+                match &args[0] {
+                    Value::Struct(fields) => match fields.get(TAG_FIELD) {
+                        Some(Value::String(tag)) if tag == "None" => Ok(Value::Bool(true)),
+                        Some(Value::String(tag)) if tag == "Some" => Ok(Value::Bool(false)),
+                        _ => Err(VmError::TypeError(
+                            "is_none expects an Option value".to_string(),
+                        )),
+                    },
+                    _ => Err(VmError::TypeError(
+                        "is_none expects an Option value".to_string(),
+                    )),
+                }
+            }
+            "is_ok" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError("is_ok expects 1 argument".to_string()));
+                }
+                match &args[0] {
+                    Value::Struct(fields) => match fields.get(TAG_FIELD) {
+                        Some(Value::String(tag)) if tag == "Ok" => Ok(Value::Bool(true)),
+                        Some(Value::String(tag)) if tag == "Err" => Ok(Value::Bool(false)),
+                        _ => Err(VmError::TypeError(
+                            "is_ok expects a Result value".to_string(),
+                        )),
+                    },
+                    _ => Err(VmError::TypeError(
+                        "is_ok expects a Result value".to_string(),
+                    )),
+                }
+            }
+            "is_err" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError("is_err expects 1 argument".to_string()));
+                }
+                match &args[0] {
+                    Value::Struct(fields) => match fields.get(TAG_FIELD) {
+                        Some(Value::String(tag)) if tag == "Err" => Ok(Value::Bool(true)),
+                        Some(Value::String(tag)) if tag == "Ok" => Ok(Value::Bool(false)),
+                        _ => Err(VmError::TypeError(
+                            "is_err expects a Result value".to_string(),
+                        )),
+                    },
+                    _ => Err(VmError::TypeError(
+                        "is_err expects a Result value".to_string(),
+                    )),
+                }
+            }
+            "unwrap" => {
+                if args.len() != 1 {
+                    return Err(VmError::TypeError("unwrap expects 1 argument".to_string()));
+                }
+                match &args[0] {
+                    Value::Struct(fields) => match fields.get(TAG_FIELD) {
+                        Some(Value::String(tag)) if tag == "Some" || tag == "Ok" => fields
+                            .get("_0")
+                            .cloned()
+                            .ok_or(VmError::TypeError("unwrap missing value".to_string())),
+                        Some(Value::String(tag)) if tag == "None" => Err(VmError::TypeError(
+                            "called unwrap on None value".to_string(),
+                        )),
+                        Some(Value::String(tag)) if tag == "Err" => {
+                            Err(VmError::TypeError("called unwrap on Err value".to_string()))
+                        }
+                        _ => Err(VmError::TypeError(
+                            "unwrap expects an Option or Result value".to_string(),
+                        )),
+                    },
+                    _ => Err(VmError::TypeError(
+                        "unwrap expects an Option or Result value".to_string(),
+                    )),
+                }
+            }
+            "read_file" => match args.first() {
+                Some(Value::String(path)) => std::fs::read_to_string(path)
+                    .map(Value::String)
+                    .map_err(|e| VmError::TypeError(format!("read_file failed: {}", e))),
+                _ => Err(VmError::TypeError(
+                    "read_file expects a string path".to_string(),
+                )),
+            },
+            "write_file" => {
+                if args.len() < 2 {
+                    return Err(VmError::TypeError(
+                        "write_file expects (path, content)".to_string(),
+                    ));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::String(path), Value::String(content)) => {
+                        std::fs::write(path, content)
+                            .map_err(|e| VmError::TypeError(format!("write_file failed: {}", e)))?;
+                        Ok(Value::Unit)
+                    }
+                    _ => Err(VmError::TypeError(
+                        "write_file expects (string, string)".to_string(),
+                    )),
+                }
+            }
+            _ => {
+                // Unknown builtin — return Unit rather than crash
+                eprintln!("Warning: unknown builtin '{}', returning Unit", name);
+                Ok(Value::Unit)
+            }
+        }
+    }
+
+    fn resolve_callable(&self, func_val: &Value) -> Result<(usize, Vec<Value>), VmError> {
+        match func_val {
+            Value::Function(idx) => Ok((*idx, Vec::new())),
+            Value::Array(items) => {
+                let borrowed = items.borrow();
+                if borrowed.is_empty() {
+                    return Err(VmError::TypeError("Callable closure is empty".to_string()));
+                }
+                let first = borrowed[0].clone();
+                let captured: Vec<Value> = borrowed.iter().skip(1).cloned().collect();
+                match first {
+                    Value::Function(idx) => Ok((idx, captured)),
+                    _ => Err(VmError::TypeError(
+                        "Callable closure missing function reference".to_string(),
+                    )),
+                }
+            }
+            _ => Err(VmError::TypeError(
+                "Expected a function or closure value".to_string(),
+            )),
+        }
+    }
+
+    fn call_callable(&mut self, func_val: &Value, args: &[Value]) -> Result<Value, VmError> {
+        let (func_idx, mut captured) = self.resolve_callable(func_val)?;
+        let mut all_args = Vec::with_capacity(captured.len() + args.len());
+        all_args.append(&mut captured);
+        all_args.extend_from_slice(args);
+
+        let target_depth = self.call_stack.len();
+        self.call_function(func_idx, &all_args)?;
+        self.execute_until_depth(target_depth)?;
+        self.pop()
+    }
+
+    fn extract_enum_payload(&self, value: &Value, expected_tag: &str) -> Result<Value, VmError> {
+        match value {
+            Value::Struct(fields) => match fields.get(TAG_FIELD) {
+                Some(Value::String(tag)) if tag == expected_tag => fields
+                    .get("_0")
+                    .cloned()
+                    .ok_or_else(|| VmError::TypeError("enum payload missing".to_string())),
+                Some(Value::String(tag)) => Err(VmError::TypeError(format!(
+                    "expected {} enum, got {}",
+                    expected_tag, tag
+                ))),
+                _ => Err(VmError::TypeError("enum value missing tag".to_string())),
+            },
+            _ => Err(VmError::TypeError(
+                "expected enum-encoded struct".to_string(),
+            )),
+        }
+    }
+
+    fn extract_channel_queue(
+        &self,
+        value: &Value,
+        expected_tag: &str,
+    ) -> Result<Rc<RefCell<Vec<Value>>>, VmError> {
+        match self.extract_enum_payload(value, expected_tag)? {
+            Value::Array(items) => Ok(items),
+            _ => Err(VmError::TypeError(
+                "channel payload is not a queue".to_string(),
+            )),
+        }
+    }
+
+    fn render_html(&self, value: &Value) -> Result<String, VmError> {
+        match value {
+            Value::Struct(fields) => match fields.get(TAG_FIELD) {
+                Some(Value::String(tag)) if tag == "Element" => {
+                    let tag_name = match fields.get("tag") {
+                        Some(Value::String(s)) => s.clone(),
+                        Some(other) => self.value_to_string(other),
+                        None => {
+                            return Err(VmError::TypeError(
+                                "Html Element missing tag field".to_string(),
+                            ))
+                        }
+                    };
+                    let attrs_rendered = match fields.get("attrs") {
+                        Some(value) => self.render_html_attrs(value)?,
+                        None => String::new(),
+                    };
+                    let children_rendered = match fields.get("children") {
+                        Some(value) => self.render_html_children(value)?,
+                        None => String::new(),
+                    };
+                    Ok(format!(
+                        "<{}{}>{}</{}>",
+                        tag_name, attrs_rendered, children_rendered, tag_name
+                    ))
+                }
+                Some(Value::String(tag)) if tag == "Text" => {
+                    let text_val = fields.get("_0").or_else(|| fields.get("text"));
+                    let text = text_val
+                        .map(|v| self.value_to_string(v))
+                        .unwrap_or_default();
+                    Ok(self.escape_html(&text))
+                }
+                Some(Value::String(tag)) if tag == "Empty" => Ok(String::new()),
+                Some(Value::String(tag)) => {
+                    Err(VmError::TypeError(format!("Unknown Html tag {}", tag)))
+                }
+                _ => Err(VmError::TypeError("Html value missing tag".to_string())),
+            },
+            Value::String(s) => Ok(self.escape_html(s)),
+            Value::Unit => Ok(String::new()),
+            _ => Err(VmError::TypeError(
+                "tea_render expects an Html value".to_string(),
+            )),
+        }
+    }
+
+    fn render_html_attrs(&self, attrs: &Value) -> Result<String, VmError> {
+        let items = match attrs {
+            Value::Array(items) => items.borrow(),
+            Value::Unit => return Ok(String::new()),
+            _ => {
+                return Err(VmError::TypeError(
+                    "Html attributes must be an array".to_string(),
+                ))
+            }
+        };
+
+        let mut rendered = String::new();
+        for item in items.iter() {
+            let (key, value) = self.render_attr_pair(item)?;
+            if key.is_empty() {
+                continue;
+            }
+            rendered.push(' ');
+            rendered.push_str(&key);
+            rendered.push_str("=\"");
+            rendered.push_str(&self.escape_html(&value));
+            rendered.push('"');
+        }
+        Ok(rendered)
+    }
+
+    fn render_html_children(&self, children: &Value) -> Result<String, VmError> {
+        match children {
+            Value::Array(items) => {
+                let mut rendered = String::new();
+                for child in items.borrow().iter() {
+                    rendered.push_str(&self.render_html(child)?);
+                }
+                Ok(rendered)
+            }
+            Value::Unit => Ok(String::new()),
+            other => self.render_html(other),
+        }
+    }
+
+    fn render_attr_pair(&self, pair: &Value) -> Result<(String, String), VmError> {
+        match pair {
+            Value::Array(items) => {
+                let borrowed = items.borrow();
+                if borrowed.len() < 2 {
+                    return Err(VmError::TypeError(
+                        "Html attribute pair must have 2 elements".to_string(),
+                    ));
+                }
+                let key = self.value_to_string(&borrowed[0]);
+                let value = self.value_to_string(&borrowed[1]);
+                Ok((key, value))
+            }
+            Value::Struct(fields) => {
+                let key = fields.get("_0").map(|v| self.value_to_string(v));
+                let value = fields.get("_1").map(|v| self.value_to_string(v));
+                match (key, value) {
+                    (Some(k), Some(v)) => Ok((k, v)),
+                    _ => Err(VmError::TypeError(
+                        "Html attribute pair must have 2 elements".to_string(),
+                    )),
+                }
+            }
+            _ => Err(VmError::TypeError(
+                "Html attribute pair must be a tuple/array".to_string(),
+            )),
+        }
+    }
+
+    fn value_to_string(&self, value: &Value) -> String {
+        match value {
+            Value::String(s) => s.clone(),
+            _ => self.display_value(value),
+        }
+    }
+
+    fn escape_html(&self, input: &str) -> String {
+        let mut out = String::new();
+        for ch in input.chars() {
+            match ch {
+                '&' => out.push_str("&amp;"),
+                '<' => out.push_str("&lt;"),
+                '>' => out.push_str("&gt;"),
+                '"' => out.push_str("&quot;"),
+                '\'' => out.push_str("&#39;"),
+                _ => out.push(ch),
+            }
+        }
+        out
+    }
+
+    fn make_array(&self, items: Vec<Value>) -> Value {
+        Value::Array(Rc::new(RefCell::new(items)))
+    }
+
+    fn make_hashmap(&self) -> Value {
+        Value::HashMap(Rc::new(RefCell::new(HashMap::new())))
+    }
+
+    fn make_sortedmap(&self) -> Value {
+        Value::SortedMap(Rc::new(RefCell::new(BTreeMap::new())))
+    }
+
+    fn make_enum_value(&self, tag: &str, payload: Option<Value>) -> Value {
+        let mut fields = HashMap::new();
+        fields.insert(SmolStr::new(TAG_FIELD), Value::String(tag.to_string()));
+        if let Some(value) = payload {
+            fields.insert(SmolStr::new("_0"), value);
+        }
+        Value::Struct(fields)
+    }
+
+    fn make_result_ok(&self, value: Value) -> Value {
+        self.make_enum_value("Ok", Some(value))
+    }
+
+    fn make_result_err(&self, value: Value) -> Value {
+        self.make_enum_value("Err", Some(value))
+    }
+
+    fn make_option_some(&self, value: Value) -> Value {
+        self.make_enum_value("Some", Some(value))
+    }
+
+    fn make_option_none(&self) -> Value {
+        self.make_enum_value("None", None)
+    }
+
+    fn make_dom_element(&self, id: i64) -> Value {
+        let mut fields = HashMap::new();
+        fields.insert(SmolStr::new("_ref"), Value::Int(id));
+        Value::Struct(fields)
+    }
+
+    fn dom_element_id(&self, val: &Value) -> Result<i64, VmError> {
+        match val {
+            Value::Struct(fields) => match fields.get(&SmolStr::new("_ref")) {
+                Some(Value::Int(id)) => Ok(*id),
+                _ => Err(VmError::TypeError(
+                    "Expected Element with _ref Int field".to_string(),
+                )),
+            },
+            _ => Err(VmError::TypeError(
+                "Expected Element struct value".to_string(),
+            )),
+        }
+    }
+
+    fn make_validated_selector(&self, raw: String) -> Value {
+        let mut fields = HashMap::new();
+        fields.insert(SmolStr::new("raw"), Value::String(raw));
+        Value::Struct(fields)
+    }
+
+    fn make_validated_html(&self, raw: String) -> Value {
+        let mut fields = HashMap::new();
+        fields.insert(SmolStr::new("raw"), Value::String(raw));
+        Value::Struct(fields)
+    }
+
+    fn extract_struct_string_field(
+        &self,
+        val: &Value,
+        field: &str,
+        type_name: &str,
+    ) -> Result<String, VmError> {
+        match val {
+            Value::Struct(fields) => match fields.get(&SmolStr::new(field)) {
+                Some(Value::String(s)) => Ok(s.clone()),
+                _ => Err(VmError::TypeError(format!(
+                    "{} expects '{}' field to be a string",
+                    type_name, field
+                ))),
+            },
+            _ => Err(VmError::TypeError(format!(
+                "{} expects a struct value",
+                type_name
+            ))),
+        }
+    }
+
+    fn value_to_key(&self, val: &Value) -> Result<String, VmError> {
+        match val {
+            Value::String(s) => Ok(s.clone()),
+            Value::Int(n) => Ok(n.to_string()),
+            Value::Float(f) => Ok(f.to_string()),
+            Value::Bool(b) => Ok(b.to_string()),
+            Value::Char(c) => Ok(c.to_string()),
+            other => Err(VmError::TypeError(format!(
+                "Expected string, int, float, bool, or char for key, got {}",
+                self.display_value(other)
+            ))),
+        }
+    }
+
+    fn array_to_string_set(&self, val: &Value) -> Result<HashSet<String>, VmError> {
+        match val {
+            Value::Array(arr) => {
+                let borrowed = arr.borrow();
+                let mut set = HashSet::new();
+                for v in borrowed.iter() {
+                    set.insert(self.display_value(v));
+                }
+                Ok(set)
+            }
+            other => Err(VmError::TypeError(format!(
+                "Expected array for set operation, got {}",
+                self.display_value(other)
+            ))),
+        }
+    }
+
+    fn values_in_set(&self, source: &Value, set: &HashSet<String>) -> Result<Vec<Value>, VmError> {
+        match source {
+            Value::Array(arr) => {
+                let borrowed = arr.borrow();
+                let mut result = Vec::new();
+                let mut seen = HashSet::new();
+                for v in borrowed.iter() {
+                    let repr = self.display_value(v);
+                    if set.contains(&repr) && seen.insert(repr) {
+                        result.push(v.clone());
+                    }
+                }
+                Ok(result)
+            }
+            other => Err(VmError::TypeError(format!(
+                "Expected array for set operation, got {}",
+                self.display_value(other)
+            ))),
+        }
+    }
+
+    #[cfg(feature = "serde")]
+    fn json_to_value(&self, json: &serde_json::Value) -> Value {
+        use serde_json::Value as J;
+        match json {
+            J::Null => Value::Unit,
+            J::Bool(b) => Value::Bool(*b),
+            J::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Value::Int(i)
+                } else if let Some(f) = n.as_f64() {
+                    Value::Float(f)
+                } else {
+                    Value::Float(0.0)
+                }
+            }
+            J::String(s) => Value::String(s.clone()),
+            J::Array(arr) => {
+                let values: Vec<Value> = arr.iter().map(|v| self.json_to_value(v)).collect();
+                self.make_array(values)
+            }
+            J::Object(obj) => {
+                let pairs: Vec<Value> = obj
+                    .iter()
+                    .map(|(k, v)| {
+                        self.make_array(vec![Value::String(k.clone()), self.json_to_value(v)])
+                    })
+                    .collect();
+                self.make_array(pairs)
+            }
+        }
+    }
+
+    #[cfg(feature = "serde")]
+    fn value_to_json(&self, val: &Value) -> Result<serde_json::Value, VmError> {
+        use serde_json::Value as J;
+        match val {
+            Value::Unit => Ok(J::Null),
+            Value::Bool(b) => Ok(J::Bool(*b)),
+            Value::Int(i) => Ok(J::Number((*i).into())),
+            Value::Float(f) => serde_json::Number::from_f64(*f)
+                .map(J::Number)
+                .ok_or_else(|| VmError::TypeError(format!("Invalid float: {}", f))),
+            Value::String(s) => Ok(J::String(s.clone())),
+            Value::Array(arr) => {
+                let borrowed = arr.borrow();
+                let mut values = Vec::with_capacity(borrowed.len());
+                for v in borrowed.iter() {
+                    values.push(self.value_to_json(v)?);
+                }
+                Ok(J::Array(values))
+            }
+            Value::HashMap(map) => {
+                let borrowed = map.borrow();
+                let mut obj = serde_json::Map::new();
+                for (k, v) in borrowed.iter() {
+                    obj.insert(k.clone(), self.value_to_json(v)?);
+                }
+                Ok(J::Object(obj))
+            }
+            Value::SortedMap(map) => {
+                let borrowed = map.borrow();
+                let mut obj = serde_json::Map::new();
+                for (k, v) in borrowed.iter() {
+                    obj.insert(k.clone(), self.value_to_json(v)?);
+                }
+                Ok(J::Object(obj))
+            }
+            _ => Err(VmError::TypeError(format!(
+                "Cannot convert {} to JSON",
+                self.display_value(val)
+            ))),
+        }
+    }
+
+    fn values_equal(&self, a: &Value, b: &Value) -> bool {
+        match (a, b) {
+            (Value::Unit, Value::Unit) => true,
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Int(a), Value::Float(b)) => (*a as f64) == *b,
+            (Value::Float(a), Value::Int(b)) => *a == (*b as f64),
+            (Value::Char(a), Value::Char(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Array(a), Value::Array(b)) => {
+                let a_borrowed = a.borrow();
+                let b_borrowed = b.borrow();
+                if a_borrowed.len() != b_borrowed.len() {
+                    return false;
+                }
+                a_borrowed
+                    .iter()
+                    .zip(b_borrowed.iter())
+                    .all(|(x, y)| self.values_equal(x, y))
+            }
+            (Value::HashMap(a), Value::HashMap(b)) => {
+                let a_borrowed = a.borrow();
+                let b_borrowed = b.borrow();
+                if a_borrowed.len() != b_borrowed.len() {
+                    return false;
+                }
+                a_borrowed.iter().all(|(k, v)| {
+                    b_borrowed
+                        .get(k)
+                        .map(|other| self.values_equal(v, other))
+                        .unwrap_or(false)
+                })
+            }
+            (Value::SortedMap(a), Value::SortedMap(b)) => {
+                let a_borrowed = a.borrow();
+                let b_borrowed = b.borrow();
+                if a_borrowed.len() != b_borrowed.len() {
+                    return false;
+                }
+                a_borrowed
+                    .iter()
+                    .zip(b_borrowed.iter())
+                    .all(|((ka, va), (kb, vb))| ka == kb && self.values_equal(va, vb))
+            }
+            (Value::Struct(a), Value::Struct(b)) => {
+                let tag_a = a.get(TAG_FIELD);
+                let tag_b = b.get(TAG_FIELD);
+                let tags_match = match (tag_a, tag_b) {
+                    (None, None) => true,
+                    (Some(lhs), Some(rhs)) => self.values_equal(lhs, rhs),
+                    _ => false,
+                };
+                if !tags_match {
+                    return false;
+                }
+                let mut filtered_a: Vec<(&SmolStr, &Value)> =
+                    a.iter().filter(|(k, _)| k.as_str() != TAG_FIELD).collect();
+                let mut filtered_b: Vec<(&SmolStr, &Value)> =
+                    b.iter().filter(|(k, _)| k.as_str() != TAG_FIELD).collect();
+                if filtered_a.len() != filtered_b.len() {
+                    return false;
+                }
+                filtered_a.sort_by(|(ka, _), (kb, _)| ka.cmp(kb));
+                filtered_b.sort_by(|(ka, _), (kb, _)| ka.cmp(kb));
+                filtered_a
+                    .iter()
+                    .zip(filtered_b.iter())
+                    .all(|((ka, va), (kb, vb))| ka == kb && self.values_equal(va, vb))
+            }
+            _ => false,
+        }
+    }
+
+    /// Format a value for display
+    fn display_value(&self, value: &Value) -> String {
+        match value {
+            Value::Unit => "()".to_string(),
+            Value::Bool(b) => b.to_string(),
+            Value::Int(i) => i.to_string(),
+            Value::Float(f) => format!("{}", f),
+            Value::String(s) => s.clone(),
+            Value::Char(c) => c.to_string(),
+            Value::Array(items) => {
+                let borrowed = items.borrow();
+                let parts: Vec<String> = borrowed.iter().map(|v| self.display_value(v)).collect();
+                format!("[{}]", parts.join(", "))
+            }
+            Value::HashMap(map) => {
+                let borrowed = map.borrow();
+                let mut parts: Vec<String> = borrowed
+                    .iter()
+                    .map(|(k, v)| format!("{}: {}", k, self.display_value(v)))
+                    .collect();
+                parts.sort();
+                format!("{{{}}}", parts.join(", "))
+            }
+            Value::SortedMap(map) => {
+                let borrowed = map.borrow();
+                let parts: Vec<String> = borrowed
+                    .iter()
+                    .map(|(k, v)| format!("{}: {}", k, self.display_value(v)))
+                    .collect();
+                format!("{{{}}}", parts.join(", "))
+            }
+            Value::Struct(fields) => {
+                let mut parts: Vec<String> = fields
+                    .iter()
+                    .filter(|(k, _)| k.as_str() != TAG_FIELD)
+                    .map(|(k, v)| format!("{}: {}", k, self.display_value(v)))
+                    .collect();
+                parts.sort();
+                format!("{{{}}}", parts.join(", "))
+            }
+            Value::Function(idx) => format!("<function {}>", idx),
+            Value::Range(a, b) => format!("{}..{}", a, b),
+            Value::RangeInclusive(a, b) => format!("{}..={}", a, b),
+        }
+    }
+
     /// Get resource usage statistics
     pub fn get_resource_usage(&self) -> HashMap<SmolStr, f64> {
         let mut usage = HashMap::new();
@@ -701,4 +3981,291 @@ enum ExecutionResult {
 
     /// Return from function
     Return(Value),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bytecode::BytecodeFunction;
+    use std::collections::HashMap;
+
+    fn make_module(instructions: Vec<Instruction>) -> BytecodeModule {
+        BytecodeModule {
+            functions: vec![BytecodeFunction {
+                name: SmolStr::new("main"),
+                param_count: 0,
+                local_count: 0,
+                return_ty: Ty::Primitive(PrimitiveTy::Int),
+                instructions,
+                labels: HashMap::new(),
+                resource_constraints: vec![],
+                is_adaptive: false,
+            }],
+            strings: vec![],
+            floats: vec![],
+            integers: vec![],
+            entry_point: Some(0),
+        }
+    }
+
+    #[test]
+    fn test_vm_add() {
+        let module = make_module(vec![
+            Instruction::PushInt(10),
+            Instruction::PushInt(20),
+            Instruction::AddInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(30)));
+    }
+
+    #[test]
+    fn test_vm_sub() {
+        let module = make_module(vec![
+            Instruction::PushInt(50),
+            Instruction::PushInt(20),
+            Instruction::SubInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(30)));
+    }
+
+    #[test]
+    fn test_vm_mul() {
+        let module = make_module(vec![
+            Instruction::PushInt(6),
+            Instruction::PushInt(7),
+            Instruction::MulInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(42)));
+    }
+
+    #[test]
+    fn test_vm_div() {
+        let module = make_module(vec![
+            Instruction::PushInt(100),
+            Instruction::PushInt(5),
+            Instruction::DivInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(20)));
+    }
+
+    #[test]
+    fn test_vm_rem() {
+        let module = make_module(vec![
+            Instruction::PushInt(17),
+            Instruction::PushInt(5),
+            Instruction::RemInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(2)));
+    }
+
+    #[test]
+    fn test_vm_compare() {
+        let module = make_module(vec![
+            Instruction::PushInt(5),
+            Instruction::PushInt(10),
+            Instruction::LtInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Bool(true)));
+    }
+
+    #[test]
+    fn test_vm_jump() {
+        // Push 1, jump over push 999, push 2, add, return → should get 3
+        let module = make_module(vec![
+            Instruction::PushInt(1),   // 0
+            Instruction::Jump(3),      // 1: skip to instruction 3
+            Instruction::PushInt(999), // 2: this should be skipped
+            Instruction::PushInt(2),   // 3
+            Instruction::AddInt,       // 4
+            Instruction::ReturnValue,  // 5
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(3)));
+    }
+
+    #[test]
+    fn test_vm_branch_true() {
+        // Push true, branch to instruction 3 if true, push 999, push 42, return
+        let module = make_module(vec![
+            Instruction::PushBool(true), // 0
+            Instruction::JumpIf(3),      // 1: jump to 3 if true
+            Instruction::PushInt(999),   // 2: skipped
+            Instruction::PushInt(42),    // 3
+            Instruction::ReturnValue,    // 4
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(42)));
+    }
+
+    #[test]
+    fn test_vm_division_by_zero() {
+        let module = make_module(vec![
+            Instruction::PushInt(1),
+            Instruction::PushInt(0),
+            Instruction::DivInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_vm_local_variables() {
+        let mut module = make_module(vec![
+            Instruction::PushInt(42),
+            Instruction::StoreLocal(0),
+            Instruction::LoadLocal(0),
+            Instruction::ReturnValue,
+        ]);
+        module.functions[0].local_count = 1;
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(42)));
+    }
+
+    #[test]
+    fn test_vm_float_arithmetic() {
+        let module = make_module(vec![
+            Instruction::PushFloat(3.14),
+            Instruction::PushFloat(2.0),
+            Instruction::MulFloat,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        match result {
+            Value::Float(f) => assert!((f - 6.28).abs() < 1e-10),
+            other => panic!("Expected Float, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_vm_boolean_logic() {
+        let module = make_module(vec![
+            Instruction::PushBool(true),
+            Instruction::PushBool(false),
+            Instruction::Or,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Bool(true)));
+    }
+
+    #[test]
+    fn test_vm_negation() {
+        let module = make_module(vec![
+            Instruction::PushInt(42),
+            Instruction::NegInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(-42)));
+    }
+
+    #[test]
+    fn test_vm_string_push() {
+        let mut module = make_module(vec![Instruction::PushString(0), Instruction::ReturnValue]);
+        module.strings = vec!["hello".to_string()];
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        match result {
+            Value::String(s) => assert_eq!(s, "hello"),
+            other => panic!("Expected String, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_vm_dup_and_pop() {
+        let module = make_module(vec![
+            Instruction::PushInt(10),
+            Instruction::Dup,
+            Instruction::AddInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(20)));
+    }
+
+    #[test]
+    fn test_vm_jump_if_not() {
+        // Push false, JumpIfNot skips over push 999, push 42, return
+        let module = make_module(vec![
+            Instruction::PushBool(false), // 0
+            Instruction::JumpIfNot(3),    // 1: jump to 3 if false
+            Instruction::PushInt(999),    // 2: skipped
+            Instruction::PushInt(42),     // 3
+            Instruction::ReturnValue,     // 4
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Int(42)));
+    }
+
+    #[test]
+    fn test_vm_return_unit() {
+        let module = make_module(vec![Instruction::Return]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Unit));
+    }
+
+    #[test]
+    fn test_vm_comparison_operators() {
+        // Test EqInt
+        let module = make_module(vec![
+            Instruction::PushInt(5),
+            Instruction::PushInt(5),
+            Instruction::EqInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Bool(true)));
+
+        // Test NeInt
+        let module = make_module(vec![
+            Instruction::PushInt(5),
+            Instruction::PushInt(3),
+            Instruction::NeInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Bool(true)));
+
+        // Test GeInt
+        let module = make_module(vec![
+            Instruction::PushInt(10),
+            Instruction::PushInt(5),
+            Instruction::GeInt,
+            Instruction::ReturnValue,
+        ]);
+        let mut vm = VirtualMachine::new(module);
+        let result = vm.run().unwrap();
+        assert!(matches!(result, Value::Bool(true)));
+    }
 }

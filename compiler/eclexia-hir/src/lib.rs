@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! High-level Intermediate Representation (HIR) for Eclexia.
@@ -21,7 +21,7 @@ pub use lower::{lower_source_file, LoweringContext};
 
 use eclexia_ast::dimension::Dimension;
 use eclexia_ast::span::Span;
-use eclexia_ast::types::{Ty, PrimitiveTy};
+use eclexia_ast::types::{PrimitiveTy, Ty};
 use la_arena::{Arena, Idx};
 use smol_str::SmolStr;
 
@@ -39,6 +39,7 @@ pub struct HirFile {
 }
 
 impl HirFile {
+    /// Create a new empty HIR file
     pub fn new() -> Self {
         Self {
             items: Vec::new(),
@@ -71,161 +72,246 @@ pub enum Item {
     TypeDef(TypeDef),
     /// Constant definition
     Const(Const),
+    /// Trait declaration (placeholder for future use)
+    TraitDecl { span: Span, name: SmolStr },
+    /// Impl block (placeholder for future use)
+    ImplBlock { span: Span, self_ty_name: SmolStr },
+    /// Module declaration
+    Module {
+        span: Span,
+        name: SmolStr,
+        items: Vec<Item>,
+    },
+    /// Static variable
+    Static {
+        span: Span,
+        name: SmolStr,
+        ty: Ty,
+        value: ExprId,
+        mutable: bool,
+    },
+    /// Error placeholder from resilient parsing
+    Error(Span),
 }
 
 /// A function definition
 #[derive(Debug, Clone)]
 pub struct Function {
+    /// Source span of the function
     pub span: Span,
+    /// Function name
     pub name: SmolStr,
+    /// Function parameters
     pub params: Vec<Param>,
+    /// Return type
     pub return_ty: Ty,
+    /// Resource constraints on this function
     pub constraints: Vec<ResourceConstraint>,
+    /// Function body
     pub body: Body,
 }
 
 /// An adaptive function with multiple solution implementations
 #[derive(Debug, Clone)]
 pub struct AdaptiveFunction {
+    /// Source span
     pub span: Span,
+    /// Function name
     pub name: SmolStr,
+    /// Function parameters
     pub params: Vec<Param>,
+    /// Return type
     pub return_ty: Ty,
+    /// Resource constraints on this function
     pub constraints: Vec<ResourceConstraint>,
+    /// Optimization objectives to satisfy
     pub optimize: Vec<Objective>,
+    /// Solution branches
     pub solutions: Vec<Solution>,
 }
 
 /// A solution branch in an adaptive function
 #[derive(Debug, Clone)]
 pub struct Solution {
+    /// Source span
     pub span: Span,
+    /// Solution name
     pub name: SmolStr,
+    /// Optional guard condition for this solution
     pub when_clause: Option<ExprId>,
+    /// Resources provided by this solution
     pub provides: Vec<ResourceProvision>,
+    /// Solution body
     pub body: Body,
 }
 
 /// Function parameter
 #[derive(Debug, Clone)]
 pub struct Param {
+    /// Source span
     pub span: Span,
+    /// Parameter name
     pub name: SmolStr,
+    /// Parameter type
     pub ty: Ty,
+    /// Local variable binding for this parameter
     pub local: LocalId,
 }
 
 /// Function body
 #[derive(Debug, Clone)]
 pub struct Body {
+    /// Statements in the body
     pub stmts: Vec<StmtId>,
+    /// Optional trailing expression (implicit return value)
     pub expr: Option<ExprId>,
 }
 
 /// A local variable
 #[derive(Debug, Clone)]
 pub struct Local {
+    /// Source span
     pub span: Span,
+    /// Variable name
     pub name: SmolStr,
+    /// Variable type
     pub ty: Ty,
+    /// Whether this variable is mutable
     pub mutable: bool,
 }
 
 /// Resource constraint on a function
 #[derive(Debug, Clone)]
 pub struct ResourceConstraint {
+    /// Source span
     pub span: Span,
+    /// Resource name (e.g., "energy", "time")
     pub resource: SmolStr,
+    /// Physical dimension of the resource
     pub dimension: Dimension,
+    /// Comparison operator
     pub op: ConstraintOp,
+    /// Upper or lower bound value
     pub bound: f64,
+    /// Optional unit label
     pub unit: Option<SmolStr>,
 }
 
 /// Resource provision in a solution
 #[derive(Debug, Clone)]
 pub struct ResourceProvision {
+    /// Source span
     pub span: Span,
+    /// Resource name
     pub resource: SmolStr,
+    /// Physical dimension of the resource
     pub dimension: Dimension,
+    /// Amount of resource provided
     pub amount: f64,
+    /// Optional unit label
     pub unit: Option<SmolStr>,
 }
 
 /// Optimization objective
 #[derive(Debug, Clone)]
 pub struct Objective {
+    /// Source span
     pub span: Span,
+    /// Minimize or maximize
     pub direction: OptimizeDirection,
+    /// Target metric name
     pub target: SmolStr,
 }
 
+/// Direction for optimization objectives
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OptimizeDirection {
+    /// Minimize the target metric
     Minimize,
+    /// Maximize the target metric
     Maximize,
 }
 
+/// Comparison operator for resource constraints
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConstraintOp {
+    /// Less than
     Lt,
+    /// Less than or equal
     Le,
+    /// Greater than
     Gt,
+    /// Greater than or equal
     Ge,
+    /// Equal
     Eq,
+    /// Not equal
     Ne,
 }
 
 /// Type definition
 #[derive(Debug, Clone)]
 pub struct TypeDef {
+    /// Source span
     pub span: Span,
+    /// Type name
     pub name: SmolStr,
+    /// Kind of type definition (struct, enum, or alias)
     pub kind: TypeDefKind,
 }
 
+/// The kind of a type definition
 #[derive(Debug, Clone)]
 pub enum TypeDefKind {
-    Struct {
-        fields: Vec<Field>,
-    },
-    Enum {
-        variants: Vec<Variant>,
-    },
-    Alias {
-        target: Ty,
-    },
+    /// Struct with named fields
+    Struct { fields: Vec<Field> },
+    /// Enum with variant constructors
+    Enum { variants: Vec<Variant> },
+    /// Type alias pointing to another type
+    Alias { target: Ty },
 }
 
 /// Struct field
 #[derive(Debug, Clone)]
 pub struct Field {
+    /// Source span
     pub span: Span,
+    /// Field name
     pub name: SmolStr,
+    /// Field type
     pub ty: Ty,
 }
 
 /// Enum variant
 #[derive(Debug, Clone)]
 pub struct Variant {
+    /// Source span
     pub span: Span,
+    /// Variant name
     pub name: SmolStr,
+    /// Positional field types
     pub fields: Vec<Ty>,
 }
 
 /// Constant definition
 #[derive(Debug, Clone)]
 pub struct Const {
+    /// Source span
     pub span: Span,
+    /// Constant name
     pub name: SmolStr,
+    /// Constant type
     pub ty: Ty,
+    /// Constant value expression
     pub value: ExprId,
 }
 
 /// A statement
 #[derive(Debug, Clone)]
 pub struct Stmt {
+    /// Source span
     pub span: Span,
+    /// Statement kind
     pub kind: StmtKind,
 }
 
@@ -237,14 +323,22 @@ pub enum StmtKind {
         init: Option<ExprId>,
     },
     /// Assignment
-    Assign {
-        place: Place,
-        value: ExprId,
-    },
+    Assign { place: Place, value: ExprId },
     /// Expression statement
     Expr(ExprId),
     /// Return from function
     Return(Option<ExprId>),
+    /// Infinite loop
+    InfiniteLoop { label: Option<SmolStr>, body: Body },
+    /// Break from loop
+    Break {
+        label: Option<SmolStr>,
+        value: Option<ExprId>,
+    },
+    /// Continue loop
+    Continue { label: Option<SmolStr> },
+    /// Error placeholder from resilient parsing
+    Error,
 }
 
 /// A place (lvalue)
@@ -253,23 +347,33 @@ pub enum Place {
     /// Local variable
     Local(LocalId),
     /// Field access
-    Field {
-        base: Box<Place>,
-        field: SmolStr,
-    },
+    Field { base: Box<Place>, field: SmolStr },
     /// Index access
-    Index {
-        base: Box<Place>,
-        index: ExprId,
-    },
+    Index { base: Box<Place>, index: ExprId },
 }
 
 /// An expression
 #[derive(Debug, Clone)]
 pub struct Expr {
+    /// Source span
     pub span: Span,
+    /// Resolved type of this expression
     pub ty: Ty,
+    /// Expression kind
     pub kind: ExprKind,
+}
+
+/// Select arm for channel select expressions
+#[derive(Debug, Clone)]
+pub struct SelectArm {
+    /// Source location
+    pub span: Span,
+    /// Channel expression to receive from
+    pub channel: ExprId,
+    /// Variable to bind the received value
+    pub binding: Option<SmolStr>,
+    /// Body expression to evaluate when this arm fires
+    pub body: ExprId,
 }
 
 #[derive(Debug, Clone)]
@@ -288,16 +392,10 @@ pub enum ExprKind {
     },
 
     /// Unary operation
-    Unary {
-        op: UnaryOp,
-        operand: ExprId,
-    },
+    Unary { op: UnaryOp, operand: ExprId },
 
     /// Function call
-    Call {
-        func: ExprId,
-        args: Vec<ExprId>,
-    },
+    Call { func: ExprId, args: Vec<ExprId> },
 
     /// If expression
     If {
@@ -307,10 +405,7 @@ pub enum ExprKind {
     },
 
     /// While loop
-    Loop {
-        condition: ExprId,
-        body: Body,
-    },
+    Loop { condition: ExprId, body: Body },
 
     /// Block expression
     Block(Body),
@@ -322,22 +417,13 @@ pub enum ExprKind {
     Array(Vec<ExprId>),
 
     /// Field access
-    Field {
-        expr: ExprId,
-        field: SmolStr,
-    },
+    Field { expr: ExprId, field: SmolStr },
 
     /// Index access
-    Index {
-        expr: ExprId,
-        index: ExprId,
-    },
+    Index { expr: ExprId, index: ExprId },
 
     /// Lambda function
-    Lambda {
-        params: Vec<Param>,
-        body: Body,
-    },
+    Lambda { params: Vec<Param>, body: Body },
 
     /// Struct construction
     Struct {
@@ -346,20 +432,77 @@ pub enum ExprKind {
     },
 
     /// Type cast
-    Cast {
-        expr: ExprId,
-        target_ty: Ty,
+    Cast { expr: ExprId, target_ty: Ty },
+
+    /// Assignment
+    Assign { target: LocalId, value: ExprId },
+
+    /// Try operator (expr?)
+    Try(ExprId),
+
+    /// Borrow (&expr or &mut expr)
+    Borrow { expr: ExprId, mutable: bool },
+
+    /// Dereference (*expr)
+    Deref(ExprId),
+
+    /// Array repeat [value; count]
+    ArrayRepeat { value: ExprId, count: ExprId },
+
+    /// Infinite loop as expression
+    InfiniteLoop { label: Option<SmolStr>, body: Body },
+
+    /// Return as expression
+    ReturnExpr(Option<ExprId>),
+
+    /// Break as expression
+    BreakExpr {
+        label: Option<SmolStr>,
+        value: Option<ExprId>,
     },
+
+    /// Continue as expression
+    ContinueExpr { label: Option<SmolStr> },
+
+    /// Spawn expression (concurrency primitive)
+    Spawn { body: ExprId },
+
+    /// Channel creation (concurrency primitive)
+    Channel {
+        elem_ty: Option<Ty>,
+        capacity: Option<ExprId>,
+    },
+
+    /// Send on channel (concurrency primitive)
+    Send { channel: ExprId, value: ExprId },
+
+    /// Receive from channel (concurrency primitive)
+    Recv { channel: ExprId },
+
+    /// Select expression (concurrency primitive)
+    Select { arms: Vec<SelectArm> },
+
+    /// Yield expression (concurrency primitive)
+    Yield { value: Option<ExprId> },
+
+    /// Macro call
+    MacroCall { name: SmolStr, args: Vec<ExprId> },
 }
 
 /// Literal value
 #[derive(Debug, Clone)]
 pub enum Literal {
+    /// Integer literal
     Int(i64),
+    /// Floating-point literal
     Float(f64),
+    /// String literal
     String(SmolStr),
+    /// Character literal
     Char(char),
+    /// Boolean literal
     Bool(bool),
+    /// Unit literal `()`
     Unit,
     /// Resource literal with dimension
     Resource {
@@ -372,39 +515,62 @@ pub enum Literal {
 /// Binary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
-    // Arithmetic
+    /// Addition (`+`)
     Add,
+    /// Subtraction (`-`)
     Sub,
+    /// Multiplication (`*`)
     Mul,
+    /// Division (`/`)
     Div,
+    /// Remainder (`%`)
     Rem,
+    /// Exponentiation (`**`)
     Pow,
 
-    // Comparison
+    /// Equality comparison (`==`)
     Eq,
+    /// Inequality comparison (`!=`)
     Ne,
+    /// Less than (`<`)
     Lt,
+    /// Less than or equal (`<=`)
     Le,
+    /// Greater than (`>`)
     Gt,
+    /// Greater than or equal (`>=`)
     Ge,
 
-    // Logical
+    /// Logical AND (`&&`)
     And,
+    /// Logical OR (`||`)
     Or,
 
-    // Bitwise
+    /// Bitwise AND (`&`)
     BitAnd,
+    /// Bitwise OR (`|`)
     BitOr,
+    /// Bitwise XOR (`^`)
     BitXor,
+    /// Left shift (`<<`)
     Shl,
+    /// Right shift (`>>`)
     Shr,
+
+    /// Exclusive range (`..`)
+    Range,
+    /// Inclusive range (`..=`)
+    RangeInclusive,
 }
 
 /// Unary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOp {
+    /// Arithmetic negation (`-`)
     Neg,
+    /// Logical NOT (`!`)
     Not,
+    /// Bitwise NOT (`~`)
     BitNot,
 }
 
@@ -430,6 +596,8 @@ impl From<eclexia_ast::BinaryOp> for BinaryOp {
             eclexia_ast::BinaryOp::BitXor => BinaryOp::BitXor,
             eclexia_ast::BinaryOp::Shl => BinaryOp::Shl,
             eclexia_ast::BinaryOp::Shr => BinaryOp::Shr,
+            eclexia_ast::BinaryOp::Range => BinaryOp::Range,
+            eclexia_ast::BinaryOp::RangeInclusive => BinaryOp::RangeInclusive,
         }
     }
 }

@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Eclexia ↔ AffineScript interop bridge configuration
+
+[language]
+name = "AffineScript"
+repo = "nextgen-languages/affinescript"
+build_system = "dune"
+ffi_mechanism = "ocaml-ctypes"
+
+[existing_ffi]
+# AffineScript has: lexer (sedlex), AST, tokens, parser (menhir, in progress)
+compiler_stage = "parsing"
+completion = "80%"
+
+[eclexia_exports]
+resource_tracker = true
+shadow_prices = true
+adaptive_engine = true
+
+[bridge]
+target_file = "lib/eclexia_ffi.ml"
+target_mli = "lib/eclexia_ffi.mli"
+header = "generated/abi/eclexia_ffi.h"
+
+[use_cases]
+description = """
+Affine resource ownership (resources consumed exactly once).
+Dependent types prove resource budget sufficiency.
+Effect system tracks resource consumption.
+Compile-time resource safety via linear types.
+"""

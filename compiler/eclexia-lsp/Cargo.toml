@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: PMPL-1.0-or-later
 # SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 [package]
@@ -6,7 +6,7 @@ name = "eclexia-lsp"
 version = "0.1.0"
 edition = "2021"
 authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
-license = "AGPL-3.0-or-later"
+license = "PMPL-1.0-or-later"
 
 [[bin]]
 name = "eclexia-lsp"
@@ -25,6 +25,8 @@ dashmap = "5"
 eclexia-parser = { path = "../eclexia-parser" }
 eclexia-typeck = { path = "../eclexia-typeck" }
 eclexia-ast = { path = "../eclexia-ast" }
+eclexia-fmt = { path = "../eclexia-fmt" }
+eclexia-lint = { path = "../eclexia-lint" }
 
 [dev-dependencies]
 smol_str = "0.2"

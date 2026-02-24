@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Bytecode generation backend.
@@ -7,24 +7,28 @@
 
 use crate::{Backend, CodegenContext, CodegenError};
 use eclexia_ast::dimension::Dimension;
-use eclexia_ast::types::{Ty, PrimitiveTy};
+use eclexia_ast::types::{PrimitiveTy, Ty};
 use eclexia_mir::{
-    MirFile, Function, Instruction as MirInstruction,
-    InstructionKind, Terminator, Value, ConstantKind, BinaryOp, UnaryOp,
-    LocalId, BlockId,
+    BinaryOp, BlockId, ConstantKind, Function, Instruction as MirInstruction, InstructionKind,
+    LocalId, MirFile, Terminator, UnaryOp, Value,
 };
 use smol_str::SmolStr;
 use std::collections::HashMap;
 
 /// Bytecode instruction
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Instruction {
     // Stack manipulation
-    /// Push constant onto stack
+    /// Push an integer constant onto the stack
     PushInt(i64),
+    /// Push a float constant onto the stack
     PushFloat(f64),
+    /// Push a boolean constant onto the stack
     PushBool(bool),
-    PushString(usize), // Index into string pool
+    /// Push a string constant onto the stack (index into string pool)
+    PushString(usize),
+    /// Push the unit value onto the stack
     PushUnit,
 
     /// Load local variable
@@ -40,46 +44,90 @@ pub enum Instruction {
     Pop,
 
     // Arithmetic
+    /// Integer addition
     AddInt,
+    /// Integer subtraction
     SubInt,
+    /// Integer multiplication
     MulInt,
+    /// Integer division
     DivInt,
+    /// Integer remainder (modulo)
     RemInt,
+    /// Integer negation
     NegInt,
 
+    /// Float addition
     AddFloat,
+    /// Float subtraction
     SubFloat,
+    /// Float multiplication
     MulFloat,
+    /// Float division
     DivFloat,
+    /// Float negation
     NegFloat,
 
     // Comparison
+    /// Integer equality comparison
     EqInt,
+    /// Integer inequality comparison
     NeInt,
+    /// Integer less-than comparison
     LtInt,
+    /// Integer less-than-or-equal comparison
     LeInt,
+    /// Integer greater-than comparison
     GtInt,
+    /// Integer greater-than-or-equal comparison
     GeInt,
 
+    /// Float equality comparison
     EqFloat,
+    /// Float inequality comparison
     NeFloat,
+    /// Float less-than comparison
     LtFloat,
+    /// Float less-than-or-equal comparison
     LeFloat,
+    /// Float greater-than comparison
     GtFloat,
+    /// Float greater-than-or-equal comparison
     GeFloat,
 
     // Logical
+    /// Logical AND of two booleans
     And,
+    /// Logical OR of two booleans
     Or,
+    /// Logical NOT of a boolean
     Not,
 
     // Bitwise
+    /// Bitwise AND of two integers
     BitAnd,
+    /// Bitwise OR of two integers
     BitOr,
+    /// Bitwise XOR of two integers
     BitXor,
+    /// Bitwise left shift
     Shl,
+    /// Bitwise right shift
     Shr,
+    /// Bitwise NOT (complement) of an integer
     BitNot,
+
+    // Exponentiation
+    /// Integer power (a ** b)
+    PowInt,
+    /// Float power (a ** b)
+    PowFloat,
+
+    // Range
+    /// Create range (start..end)
+    Range,
+    /// Create inclusive range (start..=end)
+    RangeInclusive,
 
     // Control flow
     /// Jump to label
@@ -103,6 +151,24 @@ pub enum Instruction {
 
     /// Call indirect (function on stack)
     CallIndirect(u32), // arg_count
+
+    /// Call a builtin function by name
+    CallBuiltin(SmolStr, u32), // (builtin_name, arg_count)
+
+    /// Push a function reference onto the stack
+    PushFunction(usize), // function index
+
+    /// Access a field on the top-of-stack value
+    FieldAccess(SmolStr),
+
+    /// Set a field on the top-of-stack value (struct-like)
+    SetField(SmolStr),
+
+    /// Index into the top-of-stack value (index on top, base below)
+    IndexAccess,
+
+    /// Set an index on the top-of-stack value (base, index, value)
+    SetIndex,
 
     // Resource tracking
     /// Track resource consumption
@@ -131,6 +197,7 @@ pub enum Instruction {
 
 /// Bytecode module containing all compiled functions
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BytecodeModule {
     /// Functions in the module
     pub functions: Vec<BytecodeFunction>,
@@ -150,6 +217,7 @@ pub struct BytecodeModule {
 
 /// A compiled function
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BytecodeFunction {
     /// Function name
     pub name: SmolStr,
@@ -207,6 +275,7 @@ pub struct BytecodeGenerator {
 }
 
 impl BytecodeGenerator {
+    /// Create a new bytecode generator with empty state.
     pub fn new() -> Self {
         Self {
             context: CodegenContext::new(),
@@ -219,7 +288,11 @@ impl BytecodeGenerator {
     }
 
     /// Generate bytecode for a function
-    fn generate_function(&mut self, func: &Function, mir: &MirFile) -> Result<BytecodeFunction, CodegenError> {
+    fn generate_function(
+        &mut self,
+        func: &Function,
+        mir: &MirFile,
+    ) -> Result<BytecodeFunction, CodegenError> {
         // Initialize function
         let mut bytecode_func = BytecodeFunction {
             name: func.name.clone(),
@@ -228,7 +301,9 @@ impl BytecodeGenerator {
             return_ty: func.return_ty.clone(),
             instructions: Vec::new(),
             labels: HashMap::new(),
-            resource_constraints: func.resource_constraints.iter()
+            resource_constraints: func
+                .resource_constraints
+                .iter()
                 .map(|c| (c.resource.clone(), c.dimension, c.bound))
                 .collect(),
             is_adaptive: func.is_adaptive,
@@ -247,9 +322,9 @@ impl BytecodeGenerator {
 
         // Map locals
         for (idx, local) in func.locals.iter().enumerate() {
-            if !self.local_map.contains_key(&local.id) {
-                self.local_map.insert(local.id, (func.params.len() + idx) as u32);
-            }
+            self.local_map
+                .entry(local.id)
+                .or_insert_with(|| (func.params.len() + idx) as u32);
         }
 
         // Create labels for all blocks
@@ -291,7 +366,7 @@ impl BytecodeGenerator {
 
     /// Generate bytecode for a MIR instruction
     fn generate_instruction(
-        &self,
+        &mut self,
         inst: &MirInstruction,
         out: &mut Vec<Instruction>,
         mir: &MirFile,
@@ -302,12 +377,16 @@ impl BytecodeGenerator {
                 // Evaluate value onto stack
                 self.generate_value(value, out, mir, mir_func)?;
                 // Store to local
-                let local_idx = self.local_map.get(target)
-                    .ok_or_else(|| CodegenError::MissingLocal(*target))?;
+                let local_idx = self
+                    .local_map
+                    .get(target)
+                    .ok_or(CodegenError::MissingLocal(*target))?;
                 out.push(Instruction::StoreLocal(*local_idx));
             }
 
-            InstructionKind::Call { target, func, args, .. } => {
+            InstructionKind::Call {
+                target, func, args, ..
+            } => {
                 // Push arguments onto stack
                 for arg in args {
                     self.generate_value(arg, out, mir, mir_func)?;
@@ -317,11 +396,16 @@ impl BytecodeGenerator {
                 match func {
                     Value::Constant(const_id) => {
                         if let ConstantKind::Function(name) = &mir.constants[*const_id].kind {
-                            let func_idx = self.context.function_map.get(name)
-                                .ok_or_else(|| CodegenError::MissingFunction(name.clone()))?;
-                            out.push(Instruction::Call(*func_idx, args.len() as u32));
+                            if let Some(func_idx) = self.context.function_map.get(name) {
+                                out.push(Instruction::Call(*func_idx, args.len() as u32));
+                            } else {
+                                // Not a user function — emit as builtin call
+                                out.push(Instruction::CallBuiltin(name.clone(), args.len() as u32));
+                            }
                         } else {
-                            return Err(CodegenError::TypeError("Expected function constant".to_string()));
+                            return Err(CodegenError::TypeError(
+                                "Expected function constant".to_string(),
+                            ));
                         }
                     }
                     _ => {
@@ -333,8 +417,10 @@ impl BytecodeGenerator {
 
                 // Store result if target specified
                 if let Some(target) = target {
-                    let local_idx = self.local_map.get(target)
-                        .ok_or_else(|| CodegenError::MissingLocal(*target))?;
+                    let local_idx = self
+                        .local_map
+                        .get(target)
+                        .ok_or(CodegenError::MissingLocal(*target))?;
                     out.push(Instruction::StoreLocal(*local_idx));
                 } else {
                     // Discard result
@@ -342,7 +428,11 @@ impl BytecodeGenerator {
                 }
             }
 
-            InstructionKind::ResourceTrack { resource, dimension, amount } => {
+            InstructionKind::ResourceTrack {
+                resource,
+                dimension,
+                amount,
+            } => {
                 self.generate_value(amount, out, mir, mir_func)?;
                 out.push(Instruction::TrackResource {
                     resource: resource.clone(),
@@ -350,7 +440,10 @@ impl BytecodeGenerator {
                 });
             }
 
-            InstructionKind::ShadowPriceHook { resource, dimension } => {
+            InstructionKind::ShadowPriceHook {
+                resource,
+                dimension,
+            } => {
                 out.push(Instruction::ShadowPriceHook {
                     resource: resource.clone(),
                     dimension: *dimension,
@@ -361,9 +454,49 @@ impl BytecodeGenerator {
                 out.push(Instruction::Nop);
             }
 
-            InstructionKind::Store { .. } => {
-                return Err(CodegenError::UnsupportedFeature("Store instruction".to_string()));
-            }
+            InstructionKind::Store { ptr, value } => match ptr {
+                Value::Field { base, field } => {
+                    // Load base, then value, then set field
+                    self.generate_value(base, out, mir, mir_func)?;
+                    self.generate_value(value, out, mir, mir_func)?;
+                    out.push(Instruction::SetField(field.clone()));
+
+                    // If base is a local, store the updated struct back
+                    if let Value::Local(local_id) = &**base {
+                        let local_idx = self
+                            .local_map
+                            .get(local_id)
+                            .ok_or(CodegenError::MissingLocal(*local_id))?;
+                        out.push(Instruction::StoreLocal(*local_idx));
+                    } else {
+                        // Discard updated value if not stored
+                        out.push(Instruction::Pop);
+                    }
+                }
+                Value::Index { base, index } => {
+                    // Load base, index, and value, then set index
+                    self.generate_value(base, out, mir, mir_func)?;
+                    self.generate_value(index, out, mir, mir_func)?;
+                    self.generate_value(value, out, mir, mir_func)?;
+                    out.push(Instruction::SetIndex);
+
+                    if let Value::Local(local_id) = &**base {
+                        let local_idx = self
+                            .local_map
+                            .get(local_id)
+                            .ok_or(CodegenError::MissingLocal(*local_id))?;
+                        out.push(Instruction::StoreLocal(*local_idx));
+                    } else {
+                        out.push(Instruction::Pop);
+                    }
+                }
+                _ => {
+                    // Generate the value onto the stack, then emit a Nop since we
+                    // don't have memory addressing in the stack VM yet.
+                    self.generate_value(value, out, mir, mir_func)?;
+                    out.push(Instruction::Nop);
+                }
+            },
         }
 
         Ok(())
@@ -371,7 +504,7 @@ impl BytecodeGenerator {
 
     /// Generate bytecode for a value
     fn generate_value(
-        &self,
+        &mut self,
         value: &Value,
         out: &mut Vec<Instruction>,
         mir: &MirFile,
@@ -379,8 +512,10 @@ impl BytecodeGenerator {
     ) -> Result<(), CodegenError> {
         match value {
             Value::Local(local_id) => {
-                let local_idx = self.local_map.get(local_id)
-                    .ok_or_else(|| CodegenError::MissingLocal(*local_id))?;
+                let local_idx = self
+                    .local_map
+                    .get(local_id)
+                    .ok_or(CodegenError::MissingLocal(*local_id))?;
                 out.push(Instruction::LoadLocal(*local_idx));
             }
 
@@ -390,16 +525,23 @@ impl BytecodeGenerator {
                     ConstantKind::Int(i) => out.push(Instruction::PushInt(*i)),
                     ConstantKind::Float(f) => out.push(Instruction::PushFloat(*f)),
                     ConstantKind::Bool(b) => out.push(Instruction::PushBool(*b)),
-                    ConstantKind::String(_s) => {
-                        // This is a read-only borrow, we can't mutate context here
-                        // We'll need to handle this differently
-                        out.push(Instruction::PushString(0)); // Placeholder
+                    ConstantKind::String(s) => {
+                        let idx = self.context.intern_string(s);
+                        out.push(Instruction::PushString(idx));
                     }
                     ConstantKind::Char(c) => out.push(Instruction::PushInt(*c as i64)),
                     ConstantKind::Unit => out.push(Instruction::PushUnit),
-                    ConstantKind::Resource { value, .. } => out.push(Instruction::PushFloat(*value)),
-                    ConstantKind::Function(_) => {
-                        return Err(CodegenError::UnsupportedFeature("Function constant as value".to_string()));
+                    ConstantKind::Resource { value, .. } => {
+                        out.push(Instruction::PushFloat(*value))
+                    }
+                    ConstantKind::Function(name) => {
+                        if let Some(func_idx) = self.context.function_map.get(name) {
+                            out.push(Instruction::PushFunction(*func_idx));
+                        } else {
+                            // Builtin function — push unit as placeholder
+                            // (actual dispatch handled by CallBuiltin instruction)
+                            out.push(Instruction::PushUnit);
+                        }
                     }
                 }
             }
@@ -415,19 +557,31 @@ impl BytecodeGenerator {
                 self.generate_unary_op(*op, operand, mir_func, mir, out)?;
             }
 
-            Value::Load { ptr: _ } => {
-                return Err(CodegenError::UnsupportedFeature("Load instruction".to_string()));
+            Value::Load { ptr } => {
+                // Generate the pointer value onto the stack. In our stack-based
+                // VM model, the value is already represented on the stack.
+                self.generate_value(ptr, out, mir, mir_func)?;
             }
 
-            Value::Field { .. } | Value::Index { .. } => {
-                return Err(CodegenError::UnsupportedFeature("Field/Index access".to_string()));
+            Value::Field { base, field } => {
+                self.generate_value(base, out, mir, mir_func)?;
+                out.push(Instruction::FieldAccess(field.clone()));
+            }
+
+            Value::Index { base, index } => {
+                self.generate_value(base, out, mir, mir_func)?;
+                self.generate_value(index, out, mir, mir_func)?;
+                out.push(Instruction::IndexAccess);
             }
 
             Value::Cast { value, target_ty } => {
                 self.generate_value(value, out, mir, mir_func)?;
-                // Determine source type (would need type inference here)
+                // Determine source type from the value being cast
+                let from_ty = self
+                    .get_value_type(value, mir_func, mir)
+                    .unwrap_or(Ty::Primitive(PrimitiveTy::Int));
                 out.push(Instruction::Cast {
-                    from: Ty::Primitive(PrimitiveTy::Int), // Placeholder
+                    from: from_ty,
                     to: target_ty.clone(),
                 });
             }
@@ -467,7 +621,14 @@ impl BytecodeGenerator {
     }
 
     /// Generate binary operation (with type inference)
-    fn generate_binary_op(&self, op: BinaryOp, lhs: &Value, mir_func: &Function, mir: &MirFile, out: &mut Vec<Instruction>) -> Result<(), CodegenError> {
+    fn generate_binary_op(
+        &self,
+        op: BinaryOp,
+        lhs: &Value,
+        mir_func: &Function,
+        mir: &MirFile,
+        out: &mut Vec<Instruction>,
+    ) -> Result<(), CodegenError> {
         // Infer the type from the left operand
         let is_float = if let Some(ty) = self.get_value_type(lhs, mir_func, mir) {
             matches!(ty, Ty::Primitive(PrimitiveTy::Float))
@@ -485,6 +646,8 @@ impl BytecodeGenerator {
             (BinaryOp::Div, false) => Instruction::DivInt,
             (BinaryOp::Div, true) => Instruction::DivFloat,
             (BinaryOp::Rem, _) => Instruction::RemInt, // Remainder is int-only
+            (BinaryOp::Pow, false) => Instruction::PowInt,
+            (BinaryOp::Pow, true) => Instruction::PowFloat,
             (BinaryOp::Eq, false) => Instruction::EqInt,
             (BinaryOp::Eq, true) => Instruction::EqFloat,
             (BinaryOp::Ne, false) => Instruction::NeInt,
@@ -504,13 +667,22 @@ impl BytecodeGenerator {
             (BinaryOp::BitXor, _) => Instruction::BitXor,
             (BinaryOp::Shl, _) => Instruction::Shl,
             (BinaryOp::Shr, _) => Instruction::Shr,
+            (BinaryOp::Range, _) => Instruction::Range,
+            (BinaryOp::RangeInclusive, _) => Instruction::RangeInclusive,
         };
         out.push(inst);
         Ok(())
     }
 
     /// Generate unary operation (with type inference)
-    fn generate_unary_op(&self, op: UnaryOp, operand: &Value, mir_func: &Function, mir: &MirFile, out: &mut Vec<Instruction>) -> Result<(), CodegenError> {
+    fn generate_unary_op(
+        &self,
+        op: UnaryOp,
+        operand: &Value,
+        mir_func: &Function,
+        mir: &MirFile,
+        out: &mut Vec<Instruction>,
+    ) -> Result<(), CodegenError> {
         // Infer the type from the operand
         let is_float = if let Some(ty) = self.get_value_type(operand, mir_func, mir) {
             matches!(ty, Ty::Primitive(PrimitiveTy::Float))
@@ -529,7 +701,14 @@ impl BytecodeGenerator {
     }
 
     /// Generate terminator
-    fn generate_terminator(&mut self, term: &Terminator, out: &mut Vec<Instruction>, mir: &MirFile, mir_func: &Function, _current_block: BlockId) -> Result<(), CodegenError> {
+    fn generate_terminator(
+        &mut self,
+        term: &Terminator,
+        out: &mut Vec<Instruction>,
+        mir: &MirFile,
+        mir_func: &Function,
+        _current_block: BlockId,
+    ) -> Result<(), CodegenError> {
         match term {
             Terminator::Return(value) => {
                 if let Some(val) = value {
@@ -550,7 +729,11 @@ impl BytecodeGenerator {
                 });
             }
 
-            Terminator::Branch { condition, then_block, else_block } => {
+            Terminator::Branch {
+                condition,
+                then_block,
+                else_block,
+            } => {
                 // Generate condition onto stack
                 self.generate_value(condition, out, mir, mir_func)?;
 
@@ -571,8 +754,35 @@ impl BytecodeGenerator {
                 });
             }
 
-            Terminator::Switch { .. } => {
-                return Err(CodegenError::UnsupportedFeature("Switch terminator".to_string()));
+            Terminator::Switch {
+                value,
+                targets,
+                default,
+            } => {
+                // Generate the switch value onto the stack
+                self.generate_value(value, out, mir, mir_func)?;
+
+                // For each case target, emit: Dup, PushInt(case_value), EqInt, JumpIf(target)
+                for (case_val, target_block) in targets {
+                    out.push(Instruction::Dup);
+                    out.push(Instruction::PushInt(*case_val));
+                    out.push(Instruction::EqInt);
+                    let jump_idx = out.len();
+                    out.push(Instruction::JumpIf(0)); // Placeholder
+                    self.jump_fixups.push(JumpFixup {
+                        instruction_idx: jump_idx,
+                        target_block: *target_block,
+                    });
+                }
+
+                // Pop the remaining switch value and jump to default
+                out.push(Instruction::Pop);
+                let default_idx = out.len();
+                out.push(Instruction::Jump(0)); // Placeholder
+                self.jump_fixups.push(JumpFixup {
+                    instruction_idx: default_idx,
+                    target_block: *default,
+                });
             }
 
             Terminator::Unreachable => {
@@ -617,5 +827,85 @@ impl Backend for BytecodeGenerator {
 impl Default for BytecodeGenerator {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// ── .eclb bytecode file format ──────────────────────────────────────────────
+//
+// Header (8 bytes):
+//   [0..4]  magic: b"ECLB"
+//   [4]     format_version: u8 (currently 1)
+//   [5]     encoding: u8 (0 = JSON)
+//   [6..8]  reserved: [u8; 2]
+// Payload:
+//   JSON-encoded BytecodeModule
+
+/// Magic bytes identifying an .eclb file.
+pub const ECLB_MAGIC: &[u8; 4] = b"ECLB";
+
+/// Current format version.
+pub const ECLB_VERSION: u8 = 1;
+
+/// Encoding type for the payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum EclbEncoding {
+    Json = 0,
+}
+
+impl BytecodeModule {
+    /// Write this module to an .eclb file.
+    #[cfg(feature = "serde")]
+    pub fn write_eclb(&self, path: &std::path::Path) -> Result<(), String> {
+        let payload =
+            serde_json::to_vec(self).map_err(|e| format!("failed to serialize bytecode: {}", e))?;
+
+        let mut out = Vec::with_capacity(8 + payload.len());
+        out.extend_from_slice(ECLB_MAGIC);
+        out.push(ECLB_VERSION);
+        out.push(EclbEncoding::Json as u8);
+        out.extend_from_slice(&[0u8; 2]); // reserved
+        out.extend_from_slice(&payload);
+
+        std::fs::write(path, &out)
+            .map_err(|e| format!("failed to write {}: {}", path.display(), e))?;
+        Ok(())
+    }
+
+    /// Read a BytecodeModule from an .eclb file.
+    #[cfg(feature = "serde")]
+    pub fn read_eclb(path: &std::path::Path) -> Result<Self, String> {
+        let data =
+            std::fs::read(path).map_err(|e| format!("failed to read {}: {}", path.display(), e))?;
+
+        if data.len() < 8 {
+            return Err("file too small to be a valid .eclb".to_string());
+        }
+
+        if &data[0..4] != ECLB_MAGIC {
+            return Err("not a valid .eclb file (bad magic)".to_string());
+        }
+
+        let version = data[4];
+        if version != ECLB_VERSION {
+            return Err(format!(
+                "unsupported .eclb version {} (expected {})",
+                version, ECLB_VERSION
+            ));
+        }
+
+        let encoding = data[5];
+        if encoding != EclbEncoding::Json as u8 {
+            return Err(format!("unsupported .eclb encoding: {}", encoding));
+        }
+
+        let payload = &data[8..];
+        serde_json::from_slice(payload)
+            .map_err(|e| format!("failed to deserialize bytecode: {}", e))
+    }
+
+    /// Check if a file path looks like an .eclb bytecode file.
+    pub fn is_eclb_path(path: &std::path::Path) -> bool {
+        path.extension().and_then(|e| e.to_str()) == Some("eclb")
     }
 }

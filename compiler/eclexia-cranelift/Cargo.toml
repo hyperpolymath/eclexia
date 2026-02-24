@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+
+[package]
+name = "eclexia-cranelift"
+description = "Cranelift native code backend for Eclexia (fast compilation)"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+eclexia-ast = { path = "../eclexia-ast" }
+eclexia-mir = { path = "../eclexia-mir" }
+eclexia-codegen = { path = "../eclexia-codegen" }
+
+cranelift-codegen = "0.116"
+cranelift-frontend = "0.116"
+cranelift-module = "0.116"
+cranelift-jit = "0.116"
+cranelift-native = "0.116"
+target-lexicon = "0.12"
+
+smol_str = { workspace = true }
+rustc-hash = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+la-arena = { workspace = true }

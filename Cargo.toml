@@ -13,17 +13,59 @@ members = [
     "compiler/eclexia-mir",
     "compiler/eclexia-codegen",
     "compiler/eclexia-interp",
-    "runtime/eclexia-runtime", "compiler/eclexia-lsp",
+    "compiler/eclexia-fmt",
+    "compiler/eclexia-lint",
+    "compiler/eclexia-debugger",
+    "compiler/eclexia-doc",
+    "runtime/eclexia-runtime",
+    "compiler/eclexia-lsp",
+    "compiler/eclexia-db",
+    "compiler/eclexia-modules",
+    "compiler/eclexia-comptime",
+    "compiler/eclexia-absinterp",
+    "compiler/eclexia-effects",
+    "compiler/eclexia-specialize",
+    "compiler/eclexia-cranelift",
+    "compiler/eclexia-llvm",
+    "compiler/eclexia-wasm",
+    "compiler/eclexia-tiered",
+    "runtime/eclexia-async",
+    "runtime/eclexia-rt-native",
+    "runtime/eclexia-carbon",
+    "runtime/eclexia-web-server",
+    "runtime/eclexia-rest",
+    "runtime/eclexia-registry-server",
+    "runtime/eclexia-graphql",
+    "runtime/eclexia-grpc",
+    "runtime/eclexia-websocket",
+    "runtime/eclexia-queue",
+    "runtime/eclexia-cache",
+    "runtime/eclexia-orm",
+    "runtime/eclexia-auth",
+    "runtime/eclexia-template",
+    "runtime/eclexia-tea",
+    "runtime/eclexia-dom",
+    "runtime/eclexia-shadow",
+    "libraries/eclexia-uuid",
+    "libraries/eclexia-datetime",
+    "libraries/eclexia-encoding",
+    "libraries/eclexia-compression",
+    "libraries/eclexia-serialisation",
+    "libraries/eclexia-validation",
+    "libraries/eclexia-cli",
+    "libraries/eclexia-process",
+    "libraries/eclexia-signal",
+    "libraries/eclexia-env",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Jonathan D.A. Jewell"]
-license = "AGPL-3.0-or-later"
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+license = "PMPL-1.0-or-later"
 repository = "https://gitlab.com/eclexia-lang/eclexia"
 homepage = "https://eclexia.org"
-rust-version = "1.75"
+rust-version = "1.85"
 
 [workspace.dependencies]
 # Lexer
@@ -65,6 +107,22 @@ tokio = { version = "1.37", features = ["full"] }
 smol_str = "0.2"
 la-arena = "0.3"
 rustc-hash = "1.1"
+
+# Incremental compilation
+salsa = "0.26"
+notify = { version = "6", features = ["macos_fsevent"] }
+parking_lot = "0.12"
+tracing = "0.1"
+
+# Parallel compilation
+rayon = "1.10"
+
+# WASM backend
+wasm-encoder = "0.225"
+
+# Testing
+quickcheck = "1.0"
+proptest = "1.4"
 
 [profile.release]
 lto = true

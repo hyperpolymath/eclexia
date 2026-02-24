@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Eclexia Language Server Protocol implementation.
@@ -6,15 +6,15 @@
 //! This crate provides LSP server functionality for Eclexia, enabling IDE
 //! integration with features like:
 //!
-//! - Syntax error reporting
-//! - Type error diagnostics
-//! - Code completion (TODO)
-//! - Go-to-definition (TODO)
-//! - Find references (TODO)
-//! - Document symbols (TODO)
-//! - Hover information (TODO)
-//! - Rename refactoring (TODO)
-//! - Code formatting (TODO)
+//! - Syntax error reporting (parser + type checker + linter diagnostics)
+//! - Code completion (keywords + symbols with prefix filtering)
+//! - Go-to-definition (symbol table lookup)
+//! - Find references (cross-reference tracking)
+//! - Document symbols (full outline with all item kinds)
+//! - Hover information (symbol kind, name, doc comments)
+//! - Rename refactoring (definition + all references)
+//! - Signature help (function parameters with types)
+//! - Code formatting (via eclexia-fmt)
 
 pub mod server;
 pub mod symbols;

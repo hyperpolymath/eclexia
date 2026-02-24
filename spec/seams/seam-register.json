@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "repository": "eclexia",
+  "seams": [
+    {
+      "id": "compiler-runtime",
+      "name": "Compiler ↔ Runtime Interface",
+      "description": "Ensures the CLI/compiler passes resource usage, shadow pricing, and carbon metrics only through the explicit runtime crate.",
+      "side_a": ["compiler"],
+      "side_b": ["runtime/eclexia-runtime"],
+      "seam_type": "module",
+      "invariants": [
+        {
+          "id": "explicit-usage-tracking",
+          "description": "`VirtualMachine::get_resources()` tuples must be ingested via `Runtime::ingest_usage` or equivalent.",
+          "verification": "manual",
+          "severity": "warning"
+        },
+        {
+          "id": "shadow-price-coverage",
+          "description": "Shadow price registry and carbon report must stay in sync with the runtime metrics emitted by the compiler.",
+          "verification": {
+            "pattern": {
+              "regex": "ShadowPrice"
+            }
+          },
+          "severity": "error"
+        }
+      ],
+      "introduced_at": "i1",
+      "frozen": false,
+      "ring": 1,
+      "checklist_path": "spec/seams/checklists/compiler-runtime.adoc",
+      "conformance_paths": ["spec/seams/conformance/compiler-runtime-conformance.adoc"],
+      "boundary_path": "compiler",
+      "declared_dependencies": ["runtime/eclexia-runtime"]
+    }
+  ],
+  "cross_repo_seams": [],
+  "metadata": {
+    "updated_at": "2026-02-11T12:19:49Z",
+    "updated_by": "seambot init",
+    "commit_hash": null
+  }
+}

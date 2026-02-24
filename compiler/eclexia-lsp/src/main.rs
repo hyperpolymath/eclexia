@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Eclexia Language Server
@@ -12,7 +12,7 @@ async fn main() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let (service, socket) = LspService::new(|client| eclexia_lsp::server::EclexiaLanguageServer::new(client));
+    let (service, socket) = LspService::new(eclexia_lsp::server::EclexiaLanguageServer::new);
 
     Server::new(stdin, stdout, socket).serve(service).await;
 }

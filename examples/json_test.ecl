@@ -1,55 +1,58 @@
-// SPDX-License-Identifier: MIT
-// Test JSON and File I/O features - for SustainaBot integration!
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// File I/O and string operations — demonstrates builtin capabilities.
 
-def main() -> Unit {
-    println("Eclexia Runtime Expansion Demo")
-    println("================================\n")
+fn main() {
+    println("=== File I/O & String Operations ===");
 
-    // Test 1: JSON parsing
-    println("Test 1: JSON Parsing")
-    let json_str = "{\"energy\": 10.5, \"carbon\": 1.2, \"name\": \"test\"}"
-    let parsed = parse_json(json_str)
-    println("Parsed:", to_string(parsed))
-    println()
+    // Test 1: File I/O
+    println("");
+    println("Test 1: File I/O");
+    let test_file = "/tmp/eclexia_io_test.txt";
+    let content = "Hello from Eclexia!\nLine 2: Economics as Code.";
 
-    // Test 2: JSON serialization
-    println("Test 2: JSON Serialization")
-    let data = [1, 2, 3, 4, 5]
-    let json_out = to_json(data)
-    println("Serialized:", json_out)
-    println()
+    write_file(test_file, content);
+    println("  Wrote to", test_file);
 
-    // Test 3: File I/O
-    println("Test 3: File I/O")
-    let test_file = "/tmp/eclexia_test.txt"
+    let exists = file_exists(test_file);
+    println("  File exists:", exists);
 
-    // Write file
-    write_file(test_file, "Hello from Eclexia!\nJSON support works!")
-    println("Wrote to", test_file)
+    let read_back = read_file(test_file);
+    println("  Read back:", read_back);
 
-    // Check existence
-    let exists = file_exists(test_file)
-    println("File exists:", to_string(exists))
+    // Test 2: String operations
+    println("");
+    println("Test 2: String Operations");
+    let greeting = "Hello, World!";
+    println("  String:", greeting);
+    println("  Length:", len(greeting));
 
-    // Read back
-    let content = read_file(test_file)
-    println("Read back:", content)
-    println()
+    // String concatenation
+    let first = "Eclexia";
+    let second = " is economics-as-code";
+    let combined = first + second;
+    println("  Combined:", combined);
 
-    // Test 4: String operations
-    println("Test 4: String Operations")
-    let text = "  hello world  "
-    let trimmed = str_trim(text)
-    println("Trimmed:", trimmed)
+    // String conversion
+    let num = 42;
+    let num_str = to_string(num);
+    println("  Number as string:", num_str);
 
-    let parts = str_split("one,two,three", ",")
-    println("Split:", to_string(parts))
+    let pi = 3.14159;
+    let pi_str = to_string(pi);
+    println("  Float as string:", pi_str);
 
-    let has_world = str_contains("hello world", "world")
-    println("Contains 'world':", to_string(has_world))
-    println()
+    // Test 3: Boolean logic
+    println("");
+    println("Test 3: Boolean & Comparison");
+    let x = 10;
+    let y = 20;
+    println("  x =", x, ", y =", y);
+    println("  x < y:", x < y);
+    println("  x == y:", x == y);
+    println("  x + y =", x + y);
+    println("  max(x, y) =", max(x, y));
+    println("  min(x, y) =", min(x, y));
 
-    println("✅ All runtime features working!")
-    println("\nThis demonstrates Eclexia's expanded runtime,")
-    println("ready for SustainaBot Phase 2 integration!")
+    println("");
+    println("All I/O and string operations working!")
 }

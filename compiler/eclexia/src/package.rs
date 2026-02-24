@@ -1,12 +1,12 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Package management for Eclexia projects.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 
 /// Package manifest (package.toml).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,23 +71,12 @@ pub enum OutputType {
 }
 
 /// Resource limits.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ResourceLimits {
     pub energy: Option<String>,
     pub time: Option<String>,
     pub memory: Option<String>,
     pub carbon: Option<String>,
-}
-
-impl Default for ResourceLimits {
-    fn default() -> Self {
-        Self {
-            energy: None,
-            time: None,
-            memory: None,
-            carbon: None,
-        }
-    }
 }
 
 /// Feature flags.
@@ -114,16 +103,11 @@ pub fn load_manifest(path: &Path) -> Result<PackageManifest, String> {
     let contents = fs::read_to_string(&manifest_path)
         .map_err(|e| format!("Failed to read package.toml: {}", e))?;
 
-    toml::from_str(&contents)
-        .map_err(|e| format!("Failed to parse package.toml: {}", e))
+    toml::from_str(&contents).map_err(|e| format!("Failed to parse package.toml: {}", e))
 }
 
 /// Create a new package manifest.
-pub fn create_manifest(
-    name: String,
-    authors: Vec<String>,
-    output: OutputType,
-) -> PackageManifest {
+pub fn create_manifest(name: String, authors: Vec<String>, output: OutputType) -> PackageManifest {
     PackageManifest {
         package: PackageMetadata {
             name,
@@ -131,7 +115,7 @@ pub fn create_manifest(
             authors,
             edition: "2025".to_string(),
             description: None,
-            license: Some("AGPL-3.0-or-later".to_string()),
+            license: Some("PMPL-1.0-or-later".to_string()),
             repository: None,
         },
         dependencies: HashMap::new(),
@@ -155,17 +139,11 @@ pub fn save_manifest(path: &Path, manifest: &PackageManifest) -> Result<(), Stri
     let contents = toml::to_string_pretty(manifest)
         .map_err(|e| format!("Failed to serialize package.toml: {}", e))?;
 
-    fs::write(&manifest_path, contents)
-        .map_err(|e| format!("Failed to write package.toml: {}", e))
+    fs::write(&manifest_path, contents).map_err(|e| format!("Failed to write package.toml: {}", e))
 }
 
 /// Add a dependency to the manifest.
-pub fn add_dependency(
-    manifest: &mut PackageManifest,
-    name: String,
-    version: String,
-    dev: bool,
-) {
+pub fn add_dependency(manifest: &mut PackageManifest, name: String, version: String, dev: bool) {
     if dev {
         manifest.dev_dependencies.insert(name, version);
     } else {
@@ -186,6 +164,13 @@ pub fn remove_dependency(manifest: &mut PackageManifest, name: &str, dev: bool) 
 mod tests {
     use super::*;
 
+    fn expect_ok<T, E: std::fmt::Debug>(res: Result<T, E>) -> T {
+        match res {
+            Ok(val) => val,
+            Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+        }
+    }
+
     #[test]
     fn test_parse_manifest() {
         let toml = r#"
@@ -203,7 +188,7 @@ output = "bin"
 entry = "src/main.ecl"
 "#;
 
-        let manifest: PackageManifest = toml::from_str(toml).unwrap();
+        let manifest: PackageManifest = expect_ok(toml::from_str(toml));
         assert_eq!(manifest.package.name, "test-package");
         assert_eq!(manifest.package.version, "0.1.0");
         assert_eq!(manifest.dependencies.get("core"), Some(&"0.1".to_string()));

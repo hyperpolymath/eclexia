@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Runtime environment for variable bindings.
@@ -66,7 +66,10 @@ impl Environment {
             let inner = self.inner.borrow();
             if inner.bindings.contains_key(name) {
                 drop(inner);
-                self.inner.borrow_mut().bindings.insert(SmolStr::new(name), value);
+                self.inner
+                    .borrow_mut()
+                    .bindings
+                    .insert(SmolStr::new(name), value);
                 return true;
             }
         }

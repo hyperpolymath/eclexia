@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Eclexia compiler and toolchain CLI.
@@ -6,16 +6,29 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-mod commands;
-mod repl;
-mod test_runner;
 mod bench_runner;
+#[allow(dead_code)]
+mod cache;
+mod commands;
+mod interop;
+#[allow(dead_code)]
+mod lockfile;
+#[allow(dead_code)]
 mod package;
+mod package_manager;
+mod registry;
+mod repl;
+#[allow(dead_code)]
 mod resolver;
+mod test_runner;
 
 #[derive(Parser)]
 #[command(name = "eclexia")]
-#[command(author, version, about = "Eclexia: Economics-as-Code programming language")]
+#[command(
+    author,
+    version,
+    about = "Eclexia: Economics-as-Code programming language"
+)]
 #[command(propagate_version = true)]
 struct Cli {
     #[command(subcommand)]
@@ -34,9 +47,17 @@ enum Commands {
         #[arg(short, long)]
         output: Option<PathBuf>,
 
-        /// Target platform (native, wasm)
+        /// Target platform (native, wasm, cranelift, llvm)
         #[arg(short, long, default_value = "native")]
         target: String,
+
+        /// Run resource analysis and compile-time verification on MIR
+        #[arg(long)]
+        analyze: bool,
+
+        /// Watch for file changes and rebuild automatically
+        #[arg(long)]
+        watch: bool,
     },
 
     /// Build and run an Eclexia program
@@ -82,6 +103,17 @@ enum Commands {
         name: Option<String>,
     },
 
+    /// Create a new Eclexia project from a template
+    New {
+        /// Project name
+        #[arg(value_name = "NAME")]
+        name: String,
+
+        /// Project template
+        #[arg(short, long, default_value = "bin")]
+        template: String,
+    },
+
     /// Run tests
     Test {
         /// Test filter pattern
@@ -94,6 +126,149 @@ enum Commands {
         /// Benchmark filter pattern
         #[arg(value_name = "FILTER")]
         filter: Option<String>,
+
+        /// Enable RAPL energy measurement and carbon estimation
+        #[arg(long = "energy")]
+        energy: bool,
+    },
+
+    /// Profile an Eclexia program and emit timing/resource reports
+    Profile {
+        /// Input source (.ecl) or bytecode (.eclb) file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+
+        /// Output file for report (default: stdout)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Report format: json | flamegraph
+        #[arg(short, long, default_value = "json")]
+        format: String,
+
+        /// Include shadow prices in profile output
+        #[arg(long)]
+        observe_shadow: bool,
+
+        /// Include carbon report in profile output
+        #[arg(long)]
+        carbon_report: bool,
+    },
+
+    /// Run coverage analysis (cargo-tarpaulin wrapper)
+    Coverage {
+        /// Optional output path for coverage report
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Coverage output format: text | Json | Html | Xml | Lcov
+        #[arg(short, long, default_value = "text")]
+        format: String,
+    },
+
+    /// Run fuzzing target (cargo-fuzz wrapper)
+    Fuzz {
+        /// Fuzz target name
+        #[arg(value_name = "TARGET", default_value = "fuzz_main")]
+        target: String,
+
+        /// Number of fuzz iterations/runs
+        #[arg(long)]
+        runs: Option<u64>,
+    },
+
+    /// Apply migration files from a directory
+    Migrate {
+        /// Migration directory (contains *.sql files)
+        #[arg(value_name = "DIR", default_value = "migrations")]
+        dir: PathBuf,
+
+        /// Dry run without marking migrations as applied
+        #[arg(long)]
+        dry_run: bool,
+
+        /// List migration status without applying
+        #[arg(long)]
+        list: bool,
+    },
+
+    /// Scaffold a project from templates (enhanced `new`)
+    Scaffold {
+        /// Project name
+        #[arg(value_name = "NAME")]
+        name: Option<String>,
+
+        /// Template name
+        #[arg(short, long, default_value = "bin")]
+        template: String,
+
+        /// List available templates
+        #[arg(long)]
+        list_templates: bool,
+    },
+
+    /// Lint Eclexia source code
+    Lint {
+        /// Input file(s)
+        #[arg(value_name = "FILE")]
+        input: Vec<PathBuf>,
+    },
+
+    /// Debug Eclexia bytecode
+    Debug {
+        /// Input file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+    },
+
+    /// Generate documentation
+    Doc {
+        /// Input file(s)
+        #[arg(value_name = "FILE")]
+        input: Vec<PathBuf>,
+
+        /// Output directory
+        #[arg(short, long, default_value = "docs")]
+        output: PathBuf,
+
+        /// Output format
+        #[arg(short, long, default_value = "html")]
+        format: String,
+    },
+
+    /// Install dependencies from package.toml
+    Install,
+
+    /// Watch for file changes and rebuild incrementally
+    Watch {
+        /// Input file or directory to watch
+        #[arg(value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Debounce delay in milliseconds
+        #[arg(long, default_value = "100")]
+        debounce: u64,
+    },
+
+    /// Serve runtime health endpoints for Kubernetes
+    Health {
+        /// Bind address for the health server
+        #[arg(short, long, default_value = "127.0.0.1:8080")]
+        bind: String,
+    },
+
+    /// Disassemble Eclexia source to bytecode listing
+    Disasm {
+        /// Input source file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+    },
+
+    /// Validate interop bridge configurations
+    Interop {
+        /// Subcommand (check, list)
+        #[arg(value_name = "COMMAND", default_value = "check")]
+        command: String,
     },
 }
 
@@ -101,10 +276,24 @@ fn main() -> miette::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Build { input, output, target } => {
-            commands::build(&input, output.as_deref(), &target)?;
+        Commands::Build {
+            input,
+            output,
+            target,
+            analyze,
+            watch,
+        } => {
+            if watch {
+                commands::build_watch(&input, output.as_deref(), &target, analyze)?;
+            } else {
+                commands::build(&input, output.as_deref(), &target, analyze)?;
+            }
         }
-        Commands::Run { input, observe_shadow, carbon_report } => {
+        Commands::Run {
+            input,
+            observe_shadow,
+            carbon_report,
+        } => {
             commands::run(&input, observe_shadow, carbon_report)?;
         }
         Commands::Check { input } => {
@@ -119,11 +308,73 @@ fn main() -> miette::Result<()> {
         Commands::Init { name } => {
             commands::init(name.as_deref())?;
         }
+        Commands::New { name, template } => {
+            commands::new_project(&name, &template)?;
+        }
         Commands::Test { filter } => {
             commands::test(filter.as_deref())?;
         }
-        Commands::Bench { filter } => {
-            commands::bench(filter.as_deref())?;
+        Commands::Bench { filter, energy } => {
+            commands::bench(filter.as_deref(), energy)?;
+        }
+        Commands::Profile {
+            input,
+            output,
+            format,
+            observe_shadow,
+            carbon_report,
+        } => {
+            commands::profile(
+                &input,
+                output.as_deref(),
+                &format,
+                observe_shadow,
+                carbon_report,
+            )?;
+        }
+        Commands::Coverage { output, format } => {
+            commands::coverage(output.as_deref(), &format)?;
+        }
+        Commands::Fuzz { target, runs } => {
+            commands::fuzz(&target, runs)?;
+        }
+        Commands::Migrate { dir, dry_run, list } => {
+            commands::migrate(&dir, dry_run, list)?;
+        }
+        Commands::Scaffold {
+            name,
+            template,
+            list_templates,
+        } => {
+            commands::scaffold(name.as_deref(), &template, list_templates)?;
+        }
+        Commands::Lint { input } => {
+            commands::lint(&input)?;
+        }
+        Commands::Debug { input } => {
+            commands::debug(&input)?;
+        }
+        Commands::Doc {
+            input,
+            output,
+            format,
+        } => {
+            commands::doc(&input, &output, &format)?;
+        }
+        Commands::Install => {
+            commands::install()?;
+        }
+        Commands::Watch { path, debounce } => {
+            commands::watch(&path, debounce)?;
+        }
+        Commands::Health { bind } => {
+            commands::serve_health(&bind)?;
+        }
+        Commands::Disasm { input } => {
+            commands::disasm(&input)?;
+        }
+        Commands::Interop { command } => {
+            commands::interop_check(&command)?;
         }
     }
 

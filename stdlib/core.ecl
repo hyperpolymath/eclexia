@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Core standard library module.
@@ -19,7 +19,7 @@ type Result<T, E> {
 
 /// Panic with a message and halt execution.
 fn panic(message: String) -> ! {
-    // TODO: Implement proper panic handling
+    // NOTE: Placeholder panic handling until runtime hooks are wired.
     // For now, this will be a compiler intrinsic
     @builtin("panic")
 }
