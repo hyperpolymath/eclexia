@@ -57,6 +57,17 @@
     (branching "main for stable")
     (ci "GitHub Actions with hypatia-scan"))
 
+  (maintenance-axes
+    (axis-1
+      (name "maintenance-priority")
+      (order "corrective > adaptive > perfective"))
+    (axis-2
+      (name "audit-priority")
+      (order "systems > compliance > effects"))
+    (axis-3
+      (name "scope-priority")
+      (order "must > intend > like")))
+
   (design-rationale
     (resource-aware-computation
       "Programs should be aware of their resource consumption"

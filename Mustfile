@@ -40,6 +40,10 @@ checks:
   - name: machine-readable-docs-present
     run: "bash -euo pipefail -c 'test -f .machine_readable/STATE.scm && test -f .machine_readable/META.scm && test -f .machine_readable/ECOSYSTEM.scm'"
 
+  - name: maintenance-axes-policy-present
+    run: >
+      bash -euo pipefail -c 'rg -q "corrective > adaptive > perfective" .machine_readable/META.scm && rg -q "systems > compliance > effects" .machine_readable/META.scm && rg -q "must > intend > like" .machine_readable/META.scm'
+
   - name: human-readable-docs-present
     run: "bash -euo pipefail -c 'test -f README.adoc && test -f QUICK_STATUS.md && test -f SPECIFICATION.md && test -f docs/README.md && test -f docs/wiki/Home.md'"
 
