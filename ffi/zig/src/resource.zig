@@ -93,11 +93,57 @@ pub const FuseConfig = extern struct {
     dimension: u32,        // which resource dimension
 };
 
+/// SLA constraint for boundary checks
+pub const SlaConstraint = extern struct {
+    max_value: f64,
+    percentile: f64,
+    dimension: u32,
+    _padding: u32 = 0,
+};
+
+/// ABI surface metadata for capability negotiation.
+pub const AbiInfo = extern struct {
+    struct_size: u32 = @sizeOf(AbiInfo),
+    abi_major: u16 = ABI_VERSION_MAJOR,
+    abi_minor: u16 = ABI_VERSION_MINOR,
+    abi_patch: u16 = ABI_VERSION_PATCH,
+    reserved0: u16 = 0,
+    features: u64 = ABI_FEATURES,
+    max_dimensions: u32 = NUM_DIMENSIONS,
+    reserved1: u32 = 0,
+};
+
+/// Forward-compatible tracker creation options.
+pub const TrackerCreateOptions = extern struct {
+    struct_size: u32 = @sizeOf(TrackerCreateOptions),
+    flags: u32 = 0,
+    initial_shadow_price: f64 = 0.0,
+    reserved0: u64 = 0,
+};
+
 // ============================================================================
 // Global State (lock-free)
 // ============================================================================
 
 const NUM_DIMENSIONS = 5;
+const ABI_VERSION_MAJOR: u16 = 1;
+const ABI_VERSION_MINOR: u16 = 1;
+const ABI_VERSION_PATCH: u16 = 0;
+
+const ABI_FEATURE_BATCH: u64 = 1 << 0;
+const ABI_FEATURE_LOCK_FREE: u64 = 1 << 1;
+const ABI_FEATURE_BIDIRECTIONAL: u64 = 1 << 2;
+const ABI_FEATURE_EXTENDED_TRACKER: u64 = 1 << 3;
+const ABI_FEATURE_ABI_INTROSPECTION: u64 = 1 << 4;
+const ABI_FEATURES: u64 = ABI_FEATURE_BATCH |
+    ABI_FEATURE_LOCK_FREE |
+    ABI_FEATURE_BIDIRECTIONAL |
+    ABI_FEATURE_EXTENDED_TRACKER |
+    ABI_FEATURE_ABI_INTROSPECTION;
+
+fn isValidDimension(dimension: u32) bool {
+    return dimension > 0 and dimension <= NUM_DIMENSIONS;
+}
 
 /// Shadow prices — lock-free atomic doubles (read-heavy workload)
 /// Uses u64 atomic with bit-cast for f64 (std.atomic doesn't support f64 directly)
@@ -236,23 +282,23 @@ export fn ecl_resource_consume(dimension: u32, amount: f64) u32 {
 
 /// Select optimal strategy given resource context
 /// Uses SIMD to compute weighted cost across all dimensions simultaneously
-export fn ecl_adaptive_select(ctx_ptr: u64) u32 {
-    const ctx: *const SelectionContext = @ptrFromInt(ctx_ptr);
+export fn ecl_adaptive_select(ctx: ?*const SelectionContext) u32 {
+    const context = ctx orelse return @intFromEnum(Result.null_pointer);
 
     // SIMD: load all 4 resource remainings as a vector
     const remaining = @Vector(4, f64){
-        ctx.energy_remaining,
-        ctx.time_remaining,
-        ctx.memory_remaining,
-        ctx.carbon_remaining,
+        context.energy_remaining,
+        context.time_remaining,
+        context.memory_remaining,
+        context.carbon_remaining,
     };
 
     // SIMD: load all 4 shadow prices as a vector
     const prices = @Vector(4, f64){
-        ctx.shadow_energy,
-        ctx.shadow_time,
-        ctx.shadow_memory,
-        ctx.shadow_carbon,
+        context.shadow_energy,
+        context.shadow_time,
+        context.shadow_memory,
+        context.shadow_carbon,
     };
 
     // Weighted scarcity score = sum(price / remaining) for each dimension
@@ -281,14 +327,14 @@ const Strategy = enum(u32) {
 /// Compute Pareto frontier from array of multi-objective points
 /// SIMD-accelerated dominance checking
 export fn ecl_pareto_compute(
-    points_ptr: u64,
+    points_ptr: ?[*]const f64,
     num_points: u32,
     num_objectives: u32,
 ) u32 {
+    const points = points_ptr orelse return 0;
     if (num_points == 0 or num_objectives == 0) return 0;
     if (num_objectives > 8) return 0; // max 8 objectives for SIMD
 
-    const points: [*]f64 = @ptrFromInt(points_ptr);
     var frontier_count: u32 = 0;
     const stride = num_objectives;
 
@@ -328,36 +374,42 @@ export fn ecl_pareto_compute(
 }
 
 /// Check SLA constraint
-export fn ecl_sla_check(sla_ptr: u64, budget_ptr: u64) u32 {
-    const sla: *const extern struct { max_value: f64, percentile: f64, dimension: u32, _pad: u32 } = @ptrFromInt(sla_ptr);
-    const budget: *const Budget = @ptrFromInt(budget_ptr);
+export fn ecl_sla_check(sla: ?*const SlaConstraint, budget: ?*const Budget) u32 {
+    const constraint = sla orelse return @intFromEnum(Result.null_pointer);
+    const b = budget orelse return @intFromEnum(Result.null_pointer);
 
-    if (budget.remaining < sla.max_value) {
+    if (b.remaining < constraint.max_value) {
         return @intFromEnum(Result.sla_violated);
     }
     return @intFromEnum(Result.ok);
 }
 
 /// Check fuse state (lock-free read)
-export fn ecl_fuse_check(fuse_ptr: u64) u32 {
-    _ = fuse_ptr;
-    // Read from global fuse states for now
+export fn ecl_fuse_check(fuse: ?*const FuseConfig) u32 {
+    const cfg = fuse orelse return @intFromEnum(Result.null_pointer);
+    if (!isValidDimension(cfg.dimension)) return @intFromEnum(Result.invalid_param);
+
+    const idx = cfg.dimension - 1;
+    const remaining: f64 = @bitCast(budgets[idx].load(.acquire));
+    const total: f64 = @bitCast(budget_totals[idx].load(.acquire));
+    if (total > 0.0 and remaining / total <= cfg.trip_threshold) {
+        return @intFromEnum(Result.fuse_open);
+    }
     return @intFromEnum(Result.ok);
 }
 
 /// Propagate budget through a call chain (zero-copy)
 /// parent_budget -> child gets `fraction` of remaining
-export fn ecl_budget_propagate(parent_ptr: u64, child_ptr: u64, fraction: f64) u32 {
+export fn ecl_budget_propagate(parent: ?*const Budget, child: ?*Budget, fraction: f64) u32 {
     if (fraction <= 0.0 or fraction > 1.0) return @intFromEnum(Result.invalid_param);
+    const parent_budget = parent orelse return @intFromEnum(Result.null_pointer);
+    const child_budget = child orelse return @intFromEnum(Result.null_pointer);
 
-    const parent: *const Budget = @ptrFromInt(parent_ptr);
-    const child: *Budget = @ptrFromInt(child_ptr);
-
-    const allocated = parent.remaining * fraction;
-    child.total = allocated;
-    child.consumed = 0.0;
-    child.remaining = allocated;
-    child.dimension = parent.dimension;
+    const allocated = parent_budget.remaining * fraction;
+    child_budget.total = allocated;
+    child_budget.consumed = 0.0;
+    child_budget.remaining = allocated;
+    child_budget.dimension = parent_budget.dimension;
 
     return @intFromEnum(Result.ok);
 }
@@ -366,11 +418,16 @@ export fn ecl_budget_propagate(parent_ptr: u64, child_ptr: u64, fraction: f64) u
 // INBOUND: Native -> Eclexia (external code calls into runtime)
 // ============================================================================
 
-/// Create a new resource tracker for a dimension
-/// Returns a handle (pointer to Budget struct)
-export fn ecl_tracker_create(dimension: u32, total_budget: f64) u64 {
-    if (dimension == 0 or dimension > NUM_DIMENSIONS) return 0;
-    if (total_budget <= 0.0) return 0;
+/// Return ABI version/capability metadata for compatibility negotiation.
+export fn ecl_abi_get_info(out_info: ?*AbiInfo) u32 {
+    const info = out_info orelse return @intFromEnum(Result.null_pointer);
+    info.* = .{};
+    return @intFromEnum(Result.ok);
+}
+
+fn trackerCreateInternal(dimension: u32, total_budget: f64, initial_shadow_price: ?f64) u64 {
+    if (!isValidDimension(dimension)) return 0;
+    if (!std.math.isFinite(total_budget) or total_budget <= 0.0) return 0;
 
     const allocator = std.heap.c_allocator;
     const budget = allocator.create(Budget) catch return 0;
@@ -382,13 +439,61 @@ export fn ecl_tracker_create(dimension: u32, total_budget: f64) u64 {
         .dimension = dimension,
     };
 
-    // Also set global budget
+    // Also set global budget and optional initial shadow price.
     const idx = dimension - 1;
     budget_totals[idx].store(@bitCast(total_budget), .release);
     budgets[idx].store(@bitCast(total_budget), .release);
     budget_consumed[idx].store(@bitCast(@as(f64, 0.0)), .release);
 
+    const shadow_seed = initial_shadow_price orelse 0.0;
+    if (shadow_seed >= 0.0 and std.math.isFinite(shadow_seed)) {
+        shadow_prices[idx].store(@bitCast(shadow_seed), .release);
+    } else {
+        shadow_prices[idx].store(@bitCast(@as(f64, 0.0)), .release);
+    }
+
     return @intFromPtr(budget);
+}
+
+/// Create a new resource tracker for a dimension
+/// Returns a handle (pointer to Budget struct)
+export fn ecl_tracker_create(dimension: u32, total_budget: f64) u64 {
+    return trackerCreateInternal(dimension, total_budget, null);
+}
+
+/// Create tracker using forward-compatible option struct.
+export fn ecl_tracker_create_ex(dimension: u32, total_budget: f64, options: ?*const TrackerCreateOptions) u64 {
+    var initial_shadow_price: ?f64 = null;
+    if (options) |opts| {
+        if (opts.struct_size < @sizeOf(TrackerCreateOptions)) return 0;
+        if (opts.initial_shadow_price >= 0.0 and std.math.isFinite(opts.initial_shadow_price)) {
+            initial_shadow_price = opts.initial_shadow_price;
+        }
+    }
+    return trackerCreateInternal(dimension, total_budget, initial_shadow_price);
+}
+
+/// Snapshot tracker/global budget state with optional timestamp.
+export fn ecl_tracker_snapshot(tracker_handle: u64, out_budget: ?*Budget, timestamp_ns_out: ?*u64) u32 {
+    if (tracker_handle == 0) return @intFromEnum(Result.invalid_param);
+    const tracker: *const Budget = @ptrFromInt(tracker_handle);
+    if (!isValidDimension(tracker.dimension)) return @intFromEnum(Result.invalid_param);
+
+    const idx = tracker.dimension - 1;
+    if (out_budget) |dest| {
+        dest.* = .{
+            .total = @bitCast(budget_totals[idx].load(.acquire)),
+            .consumed = @bitCast(budget_consumed[idx].load(.acquire)),
+            .remaining = @bitCast(budgets[idx].load(.acquire)),
+            .dimension = tracker.dimension,
+        };
+    }
+    if (timestamp_ns_out) |ts| {
+        const now = std.time.nanoTimestamp();
+        const clamped: i128 = if (now < 0) 0 else if (now > std.math.maxInt(u64)) std.math.maxInt(u64) else now;
+        ts.* = @intCast(clamped);
+    }
+    return @intFromEnum(Result.ok);
 }
 
 /// Get remaining budget from a tracker
@@ -440,8 +545,8 @@ export fn ecl_inject_measurement(dimension: u32, value: f64, timestamp_ns: u64) 
 // ============================================================================
 
 /// Batch observe all shadow prices at once (single SIMD load)
-export fn ecl_shadow_price_observe_all(out_ptr: u64) u32 {
-    const out: [*]f64 = @ptrFromInt(out_ptr);
+export fn ecl_shadow_price_observe_all(out_prices: ?[*]f64) u32 {
+    const out = out_prices orelse return @intFromEnum(Result.null_pointer);
 
     // Load all shadow prices
     var i: usize = 0;
@@ -470,8 +575,8 @@ export fn ecl_budget_check_all(threshold: f64) u32 {
 }
 
 /// Batch update all fuse states based on current budgets
-export fn ecl_fuse_update_all(config_ptr: u64, num_configs: u32) u32 {
-    const configs: [*]const FuseConfig = @ptrFromInt(config_ptr);
+export fn ecl_fuse_update_all(configs_ptr: ?[*]const FuseConfig, num_configs: u32) u32 {
+    const configs = configs_ptr orelse return 0;
     var tripped: u32 = 0;
 
     var i: u32 = 0;
@@ -563,7 +668,7 @@ test "batch shadow price observation" {
     _ = ecl_shadow_price_update(3, 1.5);
 
     var prices: [NUM_DIMENSIONS]f64 = undefined;
-    _ = ecl_shadow_price_observe_all(@intFromPtr(&prices));
+    _ = ecl_shadow_price_observe_all(&prices);
 
     try std.testing.expectEqual(@as(f64, 2.0), prices[0]);
     try std.testing.expectEqual(@as(f64, 3.0), prices[1]);
@@ -579,8 +684,35 @@ test "budget propagation" {
     };
     var child: Budget = undefined;
 
-    const result = ecl_budget_propagate(@intFromPtr(&parent), @intFromPtr(&child), 0.5);
+    const result = ecl_budget_propagate(&parent, &child, 0.5);
     try std.testing.expectEqual(@intFromEnum(Result.ok), result);
     try std.testing.expectEqual(@as(f64, 40.0), child.total);
     try std.testing.expectEqual(@as(f64, 40.0), child.remaining);
+}
+
+test "abi info exposes extension capabilities" {
+    var info: AbiInfo = undefined;
+    const result = ecl_abi_get_info(&info);
+    try std.testing.expectEqual(@intFromEnum(Result.ok), result);
+    try std.testing.expectEqual(@as(u16, 1), info.abi_major);
+    try std.testing.expect((info.features & ABI_FEATURE_ABI_INTROSPECTION) != 0);
+    try std.testing.expect((info.features & ABI_FEATURE_EXTENDED_TRACKER) != 0);
+}
+
+test "extended tracker create and snapshot" {
+    var options = TrackerCreateOptions{
+        .initial_shadow_price = 2.5,
+    };
+    const handle = ecl_tracker_create_ex(1, 55.0, &options);
+    defer if (handle != 0) std.heap.c_allocator.destroy(@as(*Budget, @ptrFromInt(handle)));
+    try std.testing.expect(handle != 0);
+
+    var snap: Budget = undefined;
+    var ts: u64 = 0;
+    const snapshot_result = ecl_tracker_snapshot(handle, &snap, &ts);
+    try std.testing.expectEqual(@intFromEnum(Result.ok), snapshot_result);
+    try std.testing.expectEqual(@as(f64, 55.0), snap.total);
+    try std.testing.expectEqual(@as(f64, 55.0), snap.remaining);
+    try std.testing.expect(ts > 0);
+    try std.testing.expectEqual(@as(f64, 2.5), ecl_shadow_price_observe(1));
 }

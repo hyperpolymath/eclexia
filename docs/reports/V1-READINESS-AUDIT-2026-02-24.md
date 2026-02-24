@@ -20,6 +20,11 @@ This audit covers repository hygiene, documentation structure, QA/CI validation,
 - Idris ABI critical unsoundness markers removed (`believe_me` eliminated from active ABI files).
 - Panic-scan wrapper improved to use `mktemp` output files and local binary fallback.
 - Crash-noise fix: conformance runners now skip known intentional stack-overflow abort case by default.
+- ABI/FFI RC extension lane added:
+  - `ecl_abi_get_info` capability negotiation
+  - `ecl_tracker_create_ex` forward-compatible tracker options
+  - `ecl_tracker_snapshot` stable state snapshots
+- Cross-repo `proven` reinforcement checks added to docs gate and CI quality workflow.
 
 ## Verification Evidence
 
@@ -56,7 +61,6 @@ Informational stats still reported by scanner:
 
 ## Not Fully Achieved This Cycle
 
-- “Integrate Idris2 across non-eclexia/proven library code” was not executed in this repo scope.
 - Full historical-doc line-by-line consistency pass was not completed for all archived files.
 
 ## Immediate Maintenance Backlog

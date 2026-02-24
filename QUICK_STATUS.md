@@ -54,6 +54,8 @@
 - Debugger: Interactive with breakpoints, step, stack inspection
 - VSCode extension: Syntax highlighting + LSP integration
 - Interop bridge validator: `eclexia interop check` validates 4 language bridges
+- ABI extension lane active: `ecl_abi_get_info`, `ecl_tracker_create_ex`, `ecl_tracker_snapshot` (additive, compatibility-preserving)
+- Cross-repo proven guardrails: docs/CI verify critical `../proven` bindings referenced by examples
 
 ### Testing
 - 507 total tests passing (0 failures)

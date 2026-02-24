@@ -19,3 +19,8 @@ future:
   introspection:
     - "Expose decision latency and policy evaluation metrics."
     - "Add tracing for end-to-end request decisions."
+
+  reinforcement:
+    - "Use Idris2/proven components for critical-path reinforcement, not whole-repo language replacement."
+    - "Keep non-critical implementation in the best-fit language (for example Rust or Ada) when this improves delivery and adoption."
+    - "Expand ABI/FFI through additive, compatibility-preserving extension APIs."
