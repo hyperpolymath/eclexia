@@ -14,6 +14,7 @@ required_human=(
 )
 
 required_machine=(
+  .machine_readable/anchors/ANCHOR.a2ml
   .machine_readable/STATE.scm
   .machine_readable/META.scm
   .machine_readable/ECOSYSTEM.scm

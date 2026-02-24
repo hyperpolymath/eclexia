@@ -41,7 +41,7 @@ test-e2e:
     cargo run --bin eclexia -- run examples/hello.ecl
     cargo run --bin eclexia -- run examples/comprehensive_opportunity.ecl
 
-# Run the smoke test (per ANCHOR success criteria)
+# Run the smoke test (per .machine_readable/anchors/ANCHOR.a2ml success criteria)
 smoke-test:
     cargo test
     cargo run --bin eclexia -- run examples/hello.ecl

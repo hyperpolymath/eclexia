@@ -49,6 +49,7 @@ Both `.md` and `.adoc` versions are available in these folders for compatibility
 
 == Machine Readable
 
+* link:.machine_readable/anchors/ANCHOR.a2ml[ANCHOR.a2ml]
 * link:.machine_readable/STATE.scm[STATE.scm]
 * link:.machine_readable/META.scm[META.scm]
 * link:.machine_readable/ECOSYSTEM.scm[ECOSYSTEM.scm]
