@@ -42,7 +42,7 @@ checks:
 
   - name: maintenance-axes-policy-present
     run: >
-      bash -euo pipefail -c 'rg -q "name \"scope-priority\"" .machine_readable/META.scm && rg -q "order \"must > intend > like\"" .machine_readable/META.scm && rg -q "name \"maintenance-priority\"" .machine_readable/META.scm && rg -q "order \"corrective > adaptive > perfective\"" .machine_readable/META.scm && rg -q "name \"audit-priority\"" .machine_readable/META.scm && rg -q "order \"systems > compliance > effects\"" .machine_readable/META.scm && rg -q "believe_me/assert_total" .machine_readable/META.scm'
+      bash -euo pipefail -c 'rg -q "name \"scope-priority\"" .machine_readable/META.scm && rg -q "order \"must > intend > like\"" .machine_readable/META.scm && rg -q "name \"maintenance-priority\"" .machine_readable/META.scm && rg -q "order \"corrective > adaptive > perfective\"" .machine_readable/META.scm && rg -q "name \"audit-priority\"" .machine_readable/META.scm && rg -q "order \"systems > compliance > effects\"" .machine_readable/META.scm && rg -q "believe_me/assert_total" .machine_readable/META.scm && rg -q "compliance-focus" .machine_readable/META.scm && rg -q "effects-evidence" .machine_readable/META.scm'
 
   - name: human-readable-docs-present
     run: "bash -euo pipefail -c 'test -f README.adoc && test -f QUICK_STATUS.md && test -f SPECIFICATION.md && test -f docs/README.md && test -f docs/wiki/Home.md'"

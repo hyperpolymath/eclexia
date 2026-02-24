@@ -74,7 +74,10 @@
     (axis-3
       (name "audit-priority")
       (order "systems > compliance > effects")
-      (audit-focus "systems-in-place, documentation coverage/honesty, safety/security accounted-for, operational effects reviewed")))
+      (audit-focus "systems-in-place, documentation coverage/honesty, safety/security accounted-for, operational effects reviewed")
+      (compliance-focus "seams/compromises/exception register, bounded exceptions, anti-drift checks")
+      (drift-risk-example "single exception broadening into policy violation (e.g. ReScript->TypeScript spread)")
+      (effects-evidence "benchmark execution/results and maintainer status dialogue/review")))
 
   (design-rationale
     (resource-aware-computation
