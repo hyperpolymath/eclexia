@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>text - Eclexia Documentation</title>
+<style>
+/* SPDX-License-Identifier: PMPL-1.0-or-later */
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #f5f5f5;
+    color: #333;
+}
+
+h1 {
+    color: #2c3e50;
+    border-bottom: 3px solid #3498db;
+    padding-bottom: 10px;
+}
+
+h2 {
+    color: #34495e;
+    border-bottom: 2px solid #95a5a6;
+    padding-bottom: 5px;
+    margin-top: 30px;
+}
+
+h3 {
+    color: #2980b9;
+}
+
+.item {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.signature {
+    background: #f8f8f8;
+    border-left: 4px solid #3498db;
+    padding: 15px;
+    font-family: "Fira Code", "Source Code Pro", monospace;
+    font-size: 14px;
+    overflow-x: auto;
+    border-radius: 3px;
+}
+
+.doc-comment {
+    margin-top: 15px;
+    color: #555;
+}
+
+.doc-comment p {
+    margin: 10px 0;
+}
+
+.doc-comment code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.doc-comment pre {
+    background: #282c34;
+    color: #abb2bf;
+    padding: 15px;
+    border-radius: 5px;
+    overflow-x: auto;
+}
+
+.doc-comment pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+}
+
+ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+ul li {
+    padding: 5px 0;
+}
+
+a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+</style>
+</head>
+<body>
+<h1>Module: text</h1>
+<h2>Table of Contents</h2>
+<ul>
+<li><a href="#join">join</a> - Function</li>
+<li><a href="#starts_with">starts_with</a> - Function</li>
+<li><a href="#ends_with">ends_with</a> - Function</li>
+</ul>
+<div class="item" id="join">
+<h3>join</h3>
+<pre class="signature">fn join(parts: Idx::<Type>(20), delim: Idx::<Type>(21)) -> Idx::<Type>(22)</pre>
+<div class="doc-comment">
+<p>Join an array of strings with a delimiter.</p>
+<p></p>
+<p># Example</p>
+<pre><code>
+let s = join(["a", "b", "c"], ", ");  // "a, b, c"
+</pre>
+</div>
+</div>
+<div class="item" id="starts_with">
+<h3>starts_with</h3>
+<pre class="signature">fn starts_with(s: Idx::<Type>(23), prefix: Idx::<Type>(24)) -> Idx::<Type>(25)</pre>
+<div class="doc-comment">
+<p>Check if a string starts with a prefix.</p>
+<p></p>
+<p># Example</p>
+<pre><code>
+let starts = starts_with("hello world", "hello");  // true
+</pre>
+</div>
+</div>
+<div class="item" id="ends_with">
+<h3>ends_with</h3>
+<pre class="signature">fn ends_with(s: Idx::<Type>(26), suffix: Idx::<Type>(27)) -> Idx::<Type>(28)</pre>
+<div class="doc-comment">
+<p>Check if a string ends with a suffix.</p>
+<p></p>
+<p># Example</p>
+<pre><code>
+let ends = ends_with("hello world", "world");  // true
+</pre>
+</div>
+</div>
+</body>
+</html>

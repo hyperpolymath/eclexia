@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>time - Eclexia Documentation</title>
+<style>
+/* SPDX-License-Identifier: PMPL-1.0-or-later */
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #f5f5f5;
+    color: #333;
+}
+
+h1 {
+    color: #2c3e50;
+    border-bottom: 3px solid #3498db;
+    padding-bottom: 10px;
+}
+
+h2 {
+    color: #34495e;
+    border-bottom: 2px solid #95a5a6;
+    padding-bottom: 5px;
+    margin-top: 30px;
+}
+
+h3 {
+    color: #2980b9;
+}
+
+.item {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.signature {
+    background: #f8f8f8;
+    border-left: 4px solid #3498db;
+    padding: 15px;
+    font-family: "Fira Code", "Source Code Pro", monospace;
+    font-size: 14px;
+    overflow-x: auto;
+    border-radius: 3px;
+}
+
+.doc-comment {
+    margin-top: 15px;
+    color: #555;
+}
+
+.doc-comment p {
+    margin: 10px 0;
+}
+
+.doc-comment code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.doc-comment pre {
+    background: #282c34;
+    color: #abb2bf;
+    padding: 15px;
+    border-radius: 5px;
+    overflow-x: auto;
+}
+
+.doc-comment pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+}
+
+ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+ul li {
+    padding: 5px 0;
+}
+
+a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+</style>
+</head>
+<body>
+<h1>Module: time</h1>
+<h2>Table of Contents</h2>
+<ul>
+<li><a href="#from_millis">from_millis</a> - Function</li>
+<li><a href="#from_secs">from_secs</a> - Function</li>
+<li><a href="#as_millis">as_millis</a> - Function</li>
+<li><a href="#as_secs">as_secs</a> - Function</li>
+<li><a href="#sleep">sleep</a> - Function</li>
+<li><a href="#now">now</a> - Function</li>
+<li><a href="#duration_since">duration_since</a> - Function</li>
+<li><a href="#elapsed">elapsed</a> - Function</li>
+<li><a href="#datetime_now">datetime_now</a> - Function</li>
+<li><a href="#dt_hour">dt_hour</a> - Function</li>
+<li><a href="#dt_day_of_week">dt_day_of_week</a> - Function</li>
+<li><a href="#dt_to_iso8601">dt_to_iso8601</a> - Function</li>
+<li><a href="#dt_from_iso8601">dt_from_iso8601</a> - Function</li>
+</ul>
+<div class="item" id="from_millis">
+<h3>from_millis</h3>
+<pre class="signature">fn from_millis(millis: Idx::<Type>(10)) -> Idx::<Type>(11)</pre>
+<div class="doc-comment">
+<p>Create a duration from milliseconds.</p>
+</div>
+</div>
+<div class="item" id="from_secs">
+<h3>from_secs</h3>
+<pre class="signature">fn from_secs(secs: Idx::<Type>(12)) -> Idx::<Type>(13)</pre>
+<div class="doc-comment">
+<p>Create a duration from seconds.</p>
+</div>
+</div>
+<div class="item" id="as_millis">
+<h3>as_millis</h3>
+<pre class="signature">fn as_millis(d: Idx::<Type>(14)) -> Idx::<Type>(15)</pre>
+<div class="doc-comment">
+<p>Get duration in milliseconds.</p>
+</div>
+</div>
+<div class="item" id="as_secs">
+<h3>as_secs</h3>
+<pre class="signature">fn as_secs(d: Idx::<Type>(16)) -> Idx::<Type>(17)</pre>
+<div class="doc-comment">
+<p>Get duration in seconds.</p>
+</div>
+</div>
+<div class="item" id="sleep">
+<h3>sleep</h3>
+<pre class="signature">fn sleep(d: Idx::<Type>(18)) -> Idx::<Type>(19)</pre>
+<div class="doc-comment">
+<p>Sleep for a duration.</p>
+</div>
+</div>
+<div class="item" id="now">
+<h3>now</h3>
+<pre class="signature">fn now() -> Idx::<Type>(20)</pre>
+<div class="doc-comment">
+<p>Get the current instant.</p>
+</div>
+</div>
+<div class="item" id="duration_since">
+<h3>duration_since</h3>
+<pre class="signature">fn duration_since(now: Idx::<Type>(21), earlier: Idx::<Type>(22)) -> Idx::<Type>(23)</pre>
+<div class="doc-comment">
+<p>Calculate duration between two instants.</p>
+</div>
+</div>
+<div class="item" id="elapsed">
+<h3>elapsed</h3>
+<pre class="signature">fn elapsed(start: Idx::<Type>(24)) -> Idx::<Type>(25)</pre>
+<div class="doc-comment">
+<p>Get elapsed time since an instant.</p>
+</div>
+</div>
+<div class="item" id="datetime_now">
+<h3>datetime_now</h3>
+<pre class="signature">fn datetime_now() -> Idx::<Type>(26)</pre>
+<div class="doc-comment">
+<p>Get the current datetime.</p>
+</div>
+</div>
+<div class="item" id="dt_hour">
+<h3>dt_hour</h3>
+<pre class="signature">fn dt_hour(dt: Idx::<Type>(27)) -> Idx::<Type>(28)</pre>
+<div class="doc-comment">
+<p>Get hour from datetime (0-23).</p>
+</div>
+</div>
+<div class="item" id="dt_day_of_week">
+<h3>dt_day_of_week</h3>
+<pre class="signature">fn dt_day_of_week(dt: Idx::<Type>(29)) -> Idx::<Type>(30)</pre>
+<div class="doc-comment">
+<p>Get day of week from datetime (0=Sunday, 6=Saturday).</p>
+</div>
+</div>
+<div class="item" id="dt_to_iso8601">
+<h3>dt_to_iso8601</h3>
+<pre class="signature">fn dt_to_iso8601(dt: Idx::<Type>(31)) -> Idx::<Type>(32)</pre>
+<div class="doc-comment">
+<p>Convert datetime to ISO 8601 string.</p>
+</div>
+</div>
+<div class="item" id="dt_from_iso8601">
+<h3>dt_from_iso8601</h3>
+<pre class="signature">fn dt_from_iso8601(iso_string: Idx::<Type>(33)) -> Idx::<Type>(34)</pre>
+<div class="doc-comment">
+<p>Parse ISO 8601 string to datetime.</p>
+</div>
+</div>
+</body>
+</html>

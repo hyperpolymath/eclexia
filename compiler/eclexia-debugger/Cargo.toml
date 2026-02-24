@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+
+[package]
+name = "eclexia-debugger"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+eclexia-ast = { path = "../eclexia-ast" }
+eclexia-codegen = { path = "../eclexia-codegen" }
+eclexia-runtime = { path = "../../runtime/eclexia-runtime" }
+smol_str = { workspace = true }
+
+[dev-dependencies]
+
+[features]
+default = []

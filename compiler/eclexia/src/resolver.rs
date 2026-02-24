@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Dependency resolution for Eclexia packages.
@@ -9,8 +9,8 @@
 //! - Detects version conflicts
 //! - Resolves dependencies to concrete versions
 
-use std::collections::{HashMap, HashSet, VecDeque};
 use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 /// A semantic version (major.minor.patch).
@@ -24,7 +24,11 @@ pub struct Version {
 impl Version {
     /// Create a new version.
     pub fn new(major: u32, minor: u32, patch: u32) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 
     /// Parse a version string (e.g., "1.2.3").
@@ -237,10 +241,7 @@ impl Resolver {
             dependencies,
         };
 
-        self.registry
-            .entry(name)
-            .or_insert_with(Vec::new)
-            .push(node);
+        self.registry.entry(name).or_default().push(node);
     }
 
     /// Resolve dependencies for a package.
@@ -337,13 +338,64 @@ impl Default for Resolver {
     }
 }
 
+/// Resolve dependencies from a name→version requirement map.
+///
+/// Parses and validates all version requirement strings, then resolves
+/// them using the [`Resolver`] when registry data is available.
+/// Without pre-registered packages (no registry query yet), extracts
+/// the best concrete version from the requirement itself.
+pub fn resolve_dependencies(
+    dependencies: &HashMap<String, String>,
+) -> Result<Vec<(String, String)>, String> {
+    let mut resolved = Vec::new();
+
+    for (name, version_str) in dependencies {
+        // Parse and validate the version requirement
+        let req = VersionReq::parse(version_str)
+            .map_err(|e| format!("Invalid version requirement for '{}': {}", name, e))?;
+
+        // Extract a concrete version from the requirement.
+        // With a registry, we'd query for the best matching version;
+        // without one, we use the base version from the requirement.
+        let concrete_version = match &req {
+            VersionReq::Exact(v) | VersionReq::Caret(v) | VersionReq::GreaterEq(v) => v.to_string(),
+            VersionReq::Less(v) => {
+                // Best we can do without a registry: report the upper bound
+                format!("<{}", v)
+            }
+            VersionReq::Any => "*".to_string(),
+        };
+
+        resolved.push((name.clone(), concrete_version));
+    }
+
+    // Sort by name for deterministic output
+    resolved.sort_by(|a, b| a.0.cmp(&b.0));
+
+    Ok(resolved)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn expect_ok<T, E: std::fmt::Debug>(res: Result<T, E>) -> T {
+        match res {
+            Ok(val) => val,
+            Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+        }
+    }
+
+    fn expect_err<T, E: std::fmt::Debug>(res: Result<T, E>) -> E {
+        match res {
+            Ok(_) => panic!("Expected Err, got Ok"),
+            Err(err) => err,
+        }
+    }
+
     #[test]
     fn test_version_parse() {
-        let v = Version::parse("1.2.3").unwrap();
+        let v = expect_ok(Version::parse("1.2.3"));
         assert_eq!(v.major, 1);
         assert_eq!(v.minor, 2);
         assert_eq!(v.patch, 3);
@@ -362,14 +414,14 @@ mod tests {
 
     #[test]
     fn test_version_req_exact() {
-        let req = VersionReq::parse("1.2.3").unwrap();
+        let req = expect_ok(VersionReq::parse("1.2.3"));
         assert!(req.matches(&Version::new(1, 2, 3)));
         assert!(!req.matches(&Version::new(1, 2, 4)));
     }
 
     #[test]
     fn test_version_req_caret() {
-        let req = VersionReq::parse("^1.2.3").unwrap();
+        let req = expect_ok(VersionReq::parse("^1.2.3"));
         assert!(req.matches(&Version::new(1, 2, 3)));
         assert!(req.matches(&Version::new(1, 3, 0)));
         assert!(!req.matches(&Version::new(2, 0, 0)));
@@ -386,17 +438,17 @@ mod tests {
             Version::new(1, 0, 0),
             vec![Dependency {
                 name: "foo".to_string(),
-                version_req: VersionReq::parse("^1.0.0").unwrap(),
+                version_req: expect_ok(VersionReq::parse("^1.0.0")),
             }],
         );
 
         // Resolve
         let deps = vec![Dependency {
             name: "bar".to_string(),
-            version_req: VersionReq::parse("^1.0.0").unwrap(),
+            version_req: expect_ok(VersionReq::parse("^1.0.0")),
         }];
 
-        let resolved = resolver.resolve(&deps).unwrap();
+        let resolved = expect_ok(resolver.resolve(&deps));
         assert_eq!(resolved.len(), 2);
         assert!(resolved.iter().any(|p| p.name == "foo"));
         assert!(resolved.iter().any(|p| p.name == "bar"));
@@ -414,12 +466,36 @@ mod tests {
         // Resolve with caret requirement
         let deps = vec![Dependency {
             name: "foo".to_string(),
-            version_req: VersionReq::parse("^1.0.0").unwrap(),
+            version_req: expect_ok(VersionReq::parse("^1.0.0")),
         }];
 
-        let resolved = resolver.resolve(&deps).unwrap();
+        let resolved = expect_ok(resolver.resolve(&deps));
         assert_eq!(resolved.len(), 1);
         assert_eq!(resolved[0].version, Version::new(1, 1, 0)); // Highest 1.x version
+    }
+
+    #[test]
+    fn test_resolve_dependencies_validates() {
+        let mut deps = HashMap::new();
+        deps.insert("foo".to_string(), "^1.2.3".to_string());
+        deps.insert("bar".to_string(), "2.0.0".to_string());
+
+        let resolved = expect_ok(resolve_dependencies(&deps));
+        assert_eq!(resolved.len(), 2);
+        // Sorted by name
+        assert_eq!(resolved[0].0, "bar");
+        assert_eq!(resolved[0].1, "2.0.0");
+        assert_eq!(resolved[1].0, "foo");
+        assert_eq!(resolved[1].1, "1.2.3");
+    }
+
+    #[test]
+    fn test_resolve_dependencies_rejects_invalid() {
+        let mut deps = HashMap::new();
+        deps.insert("bad".to_string(), "not-a-version".to_string());
+
+        let err = expect_err(resolve_dependencies(&deps));
+        assert!(err.contains("Invalid version requirement"));
     }
 
     #[test]
@@ -432,7 +508,7 @@ mod tests {
             Version::new(1, 0, 0),
             vec![Dependency {
                 name: "bar".to_string(),
-                version_req: VersionReq::parse("^1.0.0").unwrap(),
+                version_req: expect_ok(VersionReq::parse("^1.0.0")),
             }],
         );
         resolver.register_package(
@@ -440,16 +516,19 @@ mod tests {
             Version::new(1, 0, 0),
             vec![Dependency {
                 name: "foo".to_string(),
-                version_req: VersionReq::parse("^1.0.0").unwrap(),
+                version_req: expect_ok(VersionReq::parse("^1.0.0")),
             }],
         );
 
         let deps = vec![Dependency {
             name: "foo".to_string(),
-            version_req: VersionReq::parse("^1.0.0").unwrap(),
+            version_req: expect_ok(VersionReq::parse("^1.0.0")),
         }];
 
         let result = resolver.resolve(&deps);
-        assert!(matches!(result, Err(ResolutionError::CircularDependency(_))));
+        assert!(matches!(
+            result,
+            Err(ResolutionError::CircularDependency(_))
+        ));
     }
 }

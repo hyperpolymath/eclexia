@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Type checking errors.
@@ -44,10 +44,7 @@ pub enum TypeError {
     },
 
     #[error("occurs check failed: infinite type")]
-    OccursCheck {
-        span: Span,
-        hint: Option<String>,
-    },
+    OccursCheck { span: Span, hint: Option<String> },
 
     #[error("infinite type: type variable {var:?} occurs in {ty}")]
     InfiniteType {
@@ -67,11 +64,7 @@ pub enum TypeError {
 
 impl TypeError {
     /// Create an undefined variable error with suggestions.
-    pub fn undefined_with_suggestions(
-        span: Span,
-        name: String,
-        available_names: &[&str],
-    ) -> Self {
+    pub fn undefined_with_suggestions(span: Span, name: String, available_names: &[&str]) -> Self {
         let hint = find_closest_match(&name, available_names)
             .map(|suggestion| format!("did you mean '{}'?", suggestion));
 

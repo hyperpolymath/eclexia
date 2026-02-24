@@ -13,7 +13,7 @@ version = "0.1.0"
 authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
 edition = "2025"
 description = "A sample Eclexia package"
-license = "AGPL-3.0-or-later"
+license = "PMPL-1.0-or-later"
 repository = "https://github.com/hyperpolymath/my-package"
 
 [dependencies]

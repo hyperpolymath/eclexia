@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Mirror of repository invariant checks for machine-readable contractiles consumers
+
+version: 1
+
+checks:
+  - name: root-mustfile-present
+    run: "test -f Mustfile"
+
+  - name: trustfile-present
+    run: "test -f .machine_readable/contractiles/trust/Trustfile.a2ml"
+
+  - name: intentfile-present
+    run: "test -f .machine_readable/contractiles/lust/Intentfile"
+
+  - name: hypatia-workflow-present
+    run: "test -f .github/workflows/hypatia-scan.yml"
+
+  - name: gitbot-fleet-hook-present
+    run: "bash -euo pipefail -c 'rg -q gitbot-fleet .github/workflows/hypatia-scan.yml'"
+
+  - name: ffi-pure-zig
+    run: >
+      bash -euo pipefail -c 'if find ffi -type f ! -name "*.zig" | grep -q .; then exit 1; fi'
+
+  - name: abi-pure-idris2
+    run: >
+      bash -euo pipefail -c 'if find src/abi -type f ! -name "*.idr" | grep -q .; then exit 1; fi'

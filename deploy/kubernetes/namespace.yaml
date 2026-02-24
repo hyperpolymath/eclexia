@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: eclexia
+  labels:
+    name: eclexia
+    app.kubernetes.io/name: eclexia
+    app.kubernetes.io/component: namespace

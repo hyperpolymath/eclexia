@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Eclexia ↔ WokeLang interop bridge configuration
+
+[language]
+name = "WokeLang"
+repo = "nextgen-languages/wokelang"
+build_system = "cargo"
+ffi_mechanism = "rust-bindgen"
+
+[existing_ffi]
+# WokeLang already has C FFI exports
+c_api = "src/ffi/c_api.rs"
+zig_bridge = "ffi/zig/"
+
+[eclexia_exports]
+# Eclexia runtime functions to expose to WokeLang
+resource_tracker = true
+shadow_prices = true
+adaptive_engine = true
+carbon_monitor = true
+profiler = true
+scheduler = true
+
+[bridge]
+# Bridge module to create in WokeLang
+target_file = "src/eclexia_bridge.rs"
+# Import Eclexia FFI header
+header = "generated/abi/eclexia_ffi.h"
+
+[use_cases]
+description = """
+Resource budgets for WokeLang worker pools.
+Energy-aware consent tracking.
+Shadow price-based task prioritization.
+Adaptive graceful degradation under resource constraints.
+"""

@@ -1,0 +1,122 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: eclexia
+  namespace: eclexia
+  labels:
+    app.kubernetes.io/name: eclexia
+    app.kubernetes.io/component: runtime
+spec:
+  serviceName: eclexia
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: eclexia
+      app.kubernetes.io/component: runtime
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: eclexia
+        app.kubernetes.io/component: runtime
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+
+      containers:
+      - name: eclexia
+        image: ghcr.io/hyperpolymath/eclexia:latest
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+
+        env:
+        - name: ECLEXIA_CONFIG_DIR
+          value: /etc/eclexia
+        - name: ECLEXIA_DATA_DIR
+          value: /var/lib/eclexia
+        - name: ECLEXIA_STDLIB_PATH
+          value: /usr/local/lib/eclexia/stdlib
+
+        # Carbon API credentials
+        - name: ELECTRICITYMAPS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: eclexia-secrets
+              key: electricitymaps-api-key
+        - name: WATTIME_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: eclexia-secrets
+              key: wattime-api-key
+
+        volumeMounts:
+        - name: config
+          mountPath: /etc/eclexia
+          readOnly: true
+        - name: data
+          mountPath: /var/lib/eclexia
+        - name: shadow-prices
+          mountPath: /var/lib/eclexia/shadow-prices
+
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+      volumes:
+      - name: config
+        configMap:
+          name: eclexia-config
+
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app.kubernetes.io/name: eclexia
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 10Gi
+
+  - metadata:
+      name: shadow-prices
+      labels:
+        app.kubernetes.io/name: eclexia
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 5Gi

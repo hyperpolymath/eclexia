@@ -19,6 +19,10 @@ Data structures:
 - **Vec<T>**: Dynamically-sized array
 - **HashMap<K, V>**: Key-value hash table
 - **HashSet<T>**: Set of unique values
+- **SortedMap<K, V>**: Ordered key-value map
+- **Queue<T>**: FIFO queue
+- **PriorityQueue<T>**: Priority-based queue
+- **Set operations**: union, intersection, difference
 
 ### math.ecl
 Mathematical functions:
@@ -30,6 +34,68 @@ Mathematical functions:
 - **Rounding**: floor, ceil, round, trunc
 - **Number theory**: factorial, gcd, lcm
 - **Utilities**: clamp
+
+### io.ecl
+I/O operations:
+- **File I/O**: read_file, write_file, file_exists
+- **JSON**: parse_json, to_json, read_json, write_json
+- **Economics use case**: Reading carbon intensity data, saving optimization results
+
+Example:
+```eclexia
+import io::{read_file, write_json}
+
+fn save_carbon_report(data: Value) {
+    write_json("carbon_report.json", data)
+}
+```
+
+### text.ecl
+Text and string manipulation:
+- **Basic**: trim, split, contains, length
+- **Case conversion**: to_lowercase, to_uppercase
+- **Pattern matching**: replace, starts_with, ends_with
+- **Joining**: join (array of strings)
+
+Example:
+```eclexia
+import text::{split, trim, to_lowercase}
+
+fn parse_csv_line(line: String) -> [String] {
+    let parts = split(line, ",")
+    // Trim and lowercase each part
+    parts
+}
+```
+
+### time.ecl
+Time and duration utilities:
+- **Types**: Duration, Instant, DateTime
+- **Current time**: now, now_ms, unix_timestamp
+- **Timing**: sleep, measure, elapsed
+- **Datetime**: hour, day_of_week, to_iso8601, from_iso8601
+- **Economics use case**: Carbon-aware scheduling based on time of day
+
+Example:
+```eclexia
+import time::{now, elapsed, hour, day_of_week}
+
+fn is_low_carbon_period() -> Bool {
+    let current_hour = hour()
+    let day = day_of_week()
+
+    // Weekends and off-peak hours (22:00-06:00)
+    (day == 0 || day == 6) || (current_hour >= 22 || current_hour < 6)
+}
+
+fn time_operation<T>(f: fn() -> T) -> T {
+    let start = now()
+    let result = f()
+    let duration = elapsed(start)
+    println("Operation took: " + to_string(as_millis(duration)) + "ms")
+    result
+}
+```
 
 ## Usage
 
@@ -76,9 +142,9 @@ The standard library is designed to work with Eclexia's resource-aware type syst
 ## Future Additions
 
 Planned additions to the stdlib:
-- **io**: File I/O, network I/O
-- **time**: Date/time handling
-- **json**: JSON parsing/serialization
+- **network**: HTTP client, TCP/UDP sockets
 - **regex**: Regular expressions
 - **crypto**: Cryptographic primitives
-- **concurrent**: Concurrency primitives
+- **concurrent**: Concurrency primitives (async/await, channels)
+- **testing**: Property-based testing, benchmarking utilities
+- **serialization**: MessagePack, CBOR, Protocol Buffers

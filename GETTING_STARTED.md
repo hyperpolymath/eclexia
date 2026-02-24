@@ -2,6 +2,15 @@
 
 Eclexia is an "Economics-as-Code" programming language that brings resource-aware computing to software development. This guide will help you get up and running quickly.
 
+> **Status (2026-02-11):** Eclexia is under active development (~55% complete).
+> The compiler pipeline (lexer, parser, type checker, HIR/MIR, bytecode VM) works
+> for core language features. The LLVM native backend is now producing LLVM IR
+> (`.ll`) and invoking `llc` to emit an object file (`.o`), while adaptive
+> functions, domain-specific libraries, and the remaining native backends (Cranelift,
+> WASM) are still in progress. The `run` command uses the tree-walking interpreter;
+> `build` with no `--target` flag still emits bytecode (JSON or `.eclb`) for the
+> stack-based VM.
+
 ## Installation
 
 ### Prerequisites
@@ -38,7 +47,7 @@ Edit `src/main.ecl`:
 
 ```eclexia
 // A simple hello world program
-def main() -> Unit {
+fn main() {
     println("Hello, Economics-as-Code!")
 }
 ```
@@ -51,26 +60,36 @@ eclexia run src/main.ecl
 
 ## Core Concepts
 
-### Adaptive Functions
+### Core Language Features
 
-Eclexia's key innovation is **adaptive functions** - functions with multiple implementations that the runtime selects based on resource constraints.
+Eclexia supports functions, pattern matching, closures, generics, structs, enums,
+and a Hindley-Milner type system with dimensional analysis:
 
 ```eclexia
-// Define helper functions
-def efficient_fib(n: Int) -> Int {
+fn efficient_fib(n: Int) -> Int {
     fib_helper(n, 0, 1)
 }
 
-def fib_helper(n: Int, a: Int, b: Int) -> Int {
+fn fib_helper(n: Int, a: Int, b: Int) -> Int {
     if n <= 0 { a } else { fib_helper(n - 1, b, a + b) }
 }
 
-def simple_fib(n: Int) -> Int {
-    if n <= 1 { n } else { simple_fib(n - 1) + simple_fib(n - 2) }
+fn main() -> Int {
+    efficient_fib(10)
 }
+```
 
-// Adaptive function with multiple solutions
-adaptive def fibonacci(n: Int) -> Int
+### Adaptive Functions (Planned)
+
+> **Not yet implemented.** The syntax below shows the design goal for adaptive
+> functions — functions with multiple implementations selected at runtime based
+> on resource constraints and shadow prices. The parser recognises `adaptive`
+> as a keyword but the full adaptive dispatch is not yet wired through the
+> compiler pipeline.
+
+```eclexia
+// Design goal — not yet functional
+adaptive fn fibonacci(n: Int) -> Int
     @requires: energy < 100J
     @optimize: minimize energy
 {
@@ -90,44 +109,25 @@ adaptive def fibonacci(n: Int) -> Int
 }
 ```
 
-The runtime uses **shadow prices** to select the optimal solution based on:
-- Energy consumption (Joules)
-- Latency (milliseconds)
-- Carbon emissions (gCO2e)
+### Dimensional Types (Partial)
 
-### Resource Annotations
-
-Functions can declare resource constraints:
-
-```eclexia
-def process_data() -> Unit
-    @requires: energy < 10J
-    @requires: carbon < 5gCO2e
-{
-    // Implementation
-}
-```
-
-### Dimensional Types
-
-Eclexia supports SI units at the type level:
-
-```eclexia
-let energy: Float<J> = 5.0J        // Joules
-let power: Float<W> = 100.0W       // Watts
-let carbon: Float<gCO2e> = 2.5gCO2e  // Carbon emissions
-```
+The type system tracks physical dimensions (mass, length, time, etc.) and
+prevents unit mismatches at compile time. Dimensional annotations on literals
+(e.g., `5.0J`) are **not yet supported** — dimensions are currently expressed
+via the `Resource` type in the type checker.
 
 ## CLI Commands
 
 | Command | Description |
 |---------|-------------|
-| `eclexia run <file>` | Execute an Eclexia program |
-| `eclexia build <file>` | Compile a program |
+| `eclexia run <file>` | Execute via tree-walking interpreter |
+| `eclexia build <file> -o <out>` | Compile to bytecode (JSON or `.eclb`) |
+| `eclexia build <file> --target llvm` | Emit LLVM IR (`.ll`) and run `llc` to produce a native object (`.o`). Requires LLVM 17+ on the PATH; the CLI reports artifact paths and exits non-zero if `llc` fails. |
 | `eclexia check <file>` | Type-check without running |
 | `eclexia init [name]` | Create a new project |
 | `eclexia fmt <files>` | Format source files |
 | `eclexia repl` | Start interactive REPL |
+| `eclexia run <file.eclb>` | Execute a compiled `.eclb` bytecode file via VM |
 
 ### Run Options
 
@@ -139,44 +139,34 @@ eclexia run src/main.ecl --observe-shadow
 eclexia run src/main.ecl --carbon-report
 ```
 
-## Example: Adaptive Fibonacci
+## Example: Simple Arithmetic
 
-See `examples/fibonacci.ecl` for a complete example:
+See `examples/math_showcase.ecl` for a complete example:
 
 ```bash
-eclexia run examples/fibonacci.ecl
+eclexia run examples/math_showcase.ecl
 ```
 
-Output:
-```
-Eclexia Adaptive Fibonacci Demo
-================================
-  [adaptive] Selected solution 'efficient' for fibonacci
+Or compile to bytecode and run via the VM:
 
-fibonacci(10) = 55
-
-The runtime selected the best solution based on shadow prices:
-  efficient: cost = 5 + 10 + 1 = 16
-  naive:     cost = 50 + 50 + 5 = 105
+```bash
+# Compile a pure-function program to .eclb
+eclexia build examples/minimal.ecl -o /tmp/out.eclb
+# Execute via the stack-based VM
+eclexia run /tmp/out.eclb
 ```
 
-## Project Configuration
+### LLVM Target Workflow
 
-The `eclexia.toml` file configures your project:
+1. Install LLVM 17 (`brew install llvm@17`, `sudo apt install llvm-17`, or `sudo dnf install llvm-17`).
+2. Run `eclexia build examples/hello_world.ecl --target llvm` to emit `examples/hello_world.ll`.
+3. The CLI will automatically run `llc` and write `examples/hello_world.o`; if `llc` is missing or fails, the command exits non-zero but keeps the `.ll` file and prints how to run `llc` manually.
+4. Link the `.o` file with `runtime/eclexia-runtime` (via `clang` or `gcc`) to produce a runnable binary, then execute it directly.
 
-```toml
-[package]
-name = "my-project"
-version = "0.1.0"
-edition = "2025"
-
-[dependencies]
-# Add dependencies here
-
-[resources]
-default-energy-budget = "1000J"
-default-carbon-budget = "100gCO2e"
-```
+> **Note:** The `build` command compiles through the full pipeline (parse →
+> typecheck → HIR → MIR → bytecode). Currently only pure-function programs
+> compile to bytecode — builtins like `println` are not yet linked into the
+> bytecode path.
 
 ## Error Messages
 

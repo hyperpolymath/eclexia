@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Type representations for the Eclexia type system.
@@ -11,30 +11,25 @@ use smol_str::SmolStr;
 
 /// A semantic type in Eclexia's type system.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(
+    any(feature = "serde", feature = "serde-types"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum Ty {
     /// Primitive types
     Primitive(PrimitiveTy),
 
     /// A named type (struct, enum, alias) with optional type arguments
-    Named {
-        name: SmolStr,
-        args: Vec<Ty>,
-    },
+    Named { name: SmolStr, args: Vec<Ty> },
 
     /// Function type
-    Function {
-        params: Vec<Ty>,
-        ret: Box<Ty>,
-    },
+    Function { params: Vec<Ty>, ret: Box<Ty> },
 
     /// Tuple type
     Tuple(Vec<Ty>),
 
     /// Array type
-    Array {
-        elem: Box<Ty>,
-        size: Option<usize>,
-    },
+    Array { elem: Box<Ty>, size: Option<usize> },
 
     /// Resource-annotated type with dimensional information
     Resource {
@@ -46,10 +41,7 @@ pub enum Ty {
     Var(TypeVar),
 
     /// Universal quantification (polymorphic type)
-    ForAll {
-        vars: Vec<SmolStr>,
-        body: Box<Ty>,
-    },
+    ForAll { vars: Vec<SmolStr>, body: Box<Ty> },
 
     /// Error type (for recovery)
     Error,
@@ -64,9 +56,7 @@ impl Ty {
         match self {
             Ty::Var(_) => true,
             Ty::Named { args, .. } => args.iter().any(|t| t.has_vars()),
-            Ty::Function { params, ret } => {
-                params.iter().any(|t| t.has_vars()) || ret.has_vars()
-            }
+            Ty::Function { params, ret } => params.iter().any(|t| t.has_vars()) || ret.has_vars(),
             Ty::Tuple(elems) => elems.iter().any(|t| t.has_vars()),
             Ty::Array { elem, .. } => elem.has_vars(),
             Ty::ForAll { body, .. } => body.has_vars(),
@@ -115,6 +105,10 @@ impl Ty {
 
 /// Primitive types built into the language.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    any(feature = "serde", feature = "serde-types"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum PrimitiveTy {
     /// Signed integer (platform-dependent size)
     Int,
@@ -234,6 +228,10 @@ impl PrimitiveTy {
 
 /// A type variable for type inference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    any(feature = "serde", feature = "serde-types"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct TypeVar(pub u32);
 
 impl TypeVar {
@@ -283,10 +281,15 @@ pub struct ResourceConstraint {
 /// Constraint operator
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConstraintOp {
+    /// Less than (`<`)
     Lt,
+    /// Less than or equal (`<=`)
     Le,
+    /// Greater than (`>`)
     Gt,
+    /// Greater than or equal (`>=`)
     Ge,
+    /// Equal (`==`)
     Eq,
 }
 

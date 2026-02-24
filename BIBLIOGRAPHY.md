@@ -1,6 +1,6 @@
 # Bibliography and Prior Art
 
-<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!-- SPDX-License-Identifier: PMPL-1.0-or-later -->
 <!-- SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell -->
 
 **Version:** 1.0
@@ -1104,6 +1104,6 @@ This document provides comprehensive bibliographic references for Eclexia's theo
 
 **Document Version:** 1.0
 **Last Updated:** December 2025
-**License:** AGPL-3.0-or-later
+**License:** PMPL-1.0-or-later
 
 This bibliography is a living document. Contributions of additional relevant references are welcome via merge request.

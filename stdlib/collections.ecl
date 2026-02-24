@@ -201,11 +201,15 @@ impl<K, V> HashMap<K, V> {
         // Check if key exists
         let i = 0
         while i < bucket.len() {
-            let (k, v) = bucket.get(i).unwrap()
-            if k == key {
-                // Update existing value
-                @builtin("array_set", bucket.data, i, (key, value))
-                return
+            match bucket.get(i) {
+                Some((k, v)) => {
+                    if k == key {
+                        // Update existing value
+                        @builtin("array_set", bucket.data, i, (key, value))
+                        return
+                    }
+                }
+                None => break
             }
             i = i + 1
         }
@@ -223,9 +227,13 @@ impl<K, V> HashMap<K, V> {
 
         let i = 0
         while i < bucket.len() {
-            let (k, v) = bucket.get(i).unwrap()
-            if k == key {
-                return Some(v)
+            match bucket.get(i) {
+                Some((k, v)) => {
+                    if k == key {
+                        return Some(v)
+                    }
+                }
+                None => return None
             }
             i = i + 1
         }
@@ -246,12 +254,16 @@ impl<K, V> HashMap<K, V> {
 
         let i = 0
         while i < bucket.len() {
-            let (k, v) = bucket.get(i).unwrap()
-            if k == key {
-                // Remove by swapping with last element
-                @builtin("array_remove_at", bucket.data, i)
-                self.len = self.len - 1
-                return Some(v)
+            match bucket.get(i) {
+                Some((k, v)) => {
+                    if k == key {
+                        // Remove by swapping with last element
+                        @builtin("array_remove_at", bucket.data, i)
+                        self.len = self.len - 1
+                        return Some(v)
+                    }
+                }
+                None => return None
             }
             i = i + 1
         }

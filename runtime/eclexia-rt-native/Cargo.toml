@@ -1,0 +1,11 @@
+[package]
+name = "eclexia-rt-native"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+license = "PMPL-1.0-or-later"
+description = "Native runtime library for Eclexia LLVM backend"
+repository = "https://github.com/hyperpolymath/eclexia"
+
+[lib]
+crate-type = ["staticlib", "rlib"]

@@ -1,0 +1,87 @@
+{
+  "name": "eclexia",
+  "displayName": "Eclexia",
+  "description": "Language support for Eclexia - Economics-as-Code with shadow pricing",
+  "version": "0.1.0",
+  "publisher": "hyperpolymath",
+  "license": "PMPL-1.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hyperpolymath/eclexia"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "eclexia",
+    "economics",
+    "shadow pricing",
+    "resource-aware",
+    "carbon-aware"
+  ],
+  "activationEvents": [
+    "onLanguage:eclexia"
+  ],
+  "main": "./src/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "eclexia",
+        "aliases": [
+          "Eclexia",
+          "eclexia"
+        ],
+        "extensions": [
+          ".ecl"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icon.png",
+          "dark": "./icon.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "eclexia",
+        "scopeName": "source.eclexia",
+        "path": "./syntaxes/eclexia.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Eclexia",
+      "properties": {
+        "eclexia.lsp.path": {
+          "type": "string",
+          "default": "eclexia",
+          "description": "Path to the eclexia LSP server executable"
+        },
+        "eclexia.lsp.trace": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace communication between VSCode and the language server"
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "scripts": {
+    "package": "vsce package",
+    "publish": "vsce publish"
+  }
+}

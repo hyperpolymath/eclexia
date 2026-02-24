@@ -1,102 +1,114 @@
 # Eclexia - Quick Status Reference
 
-**Last Updated:** 2026-01-31
-**Completion:** 97%
-**Build:** ✅ Passing
-**Tests:** ✅ 9/9 passing
+**Last Updated:** 2026-02-24
+**Completion:** Alpha — Core compiler functional, all SONNET completion tasks complete
+**Build:** Passing (25 crates, zero clippy warnings)
+**Tests:** Local quality gate passing (docs, fmt, lint, unit, conformance, integration, p2p, e2e, benchmarks)
 
 ---
 
-## ✅ What's Complete
+## What Works
 
-### Compiler Pipeline (100%)
-- Lexer with dimensional literals
-- Recursive descent parser
-- Hindley-Milner type checker + dimensional analysis
-- HIR lowering
-- MIR with optimizations (constant propagation, dead code elimination, block inlining)
-- Bytecode generator
-- Virtual machine
+### Compiler Pipeline
+- Lexer with dimensional literals (893 lines, 95+ tokens)
+- Pratt parser with macro definition support (3106+ lines)
+- Hindley-Milner type checker with Robinson unification (2210 lines)
+- HIR lowering with concurrency expressions (Spawn, Channel, Send, Recv, Select, Yield, MacroCall)
+- MIR with optimizations (constant propagation, dead code elimination)
+- Bytecode generator with concurrency builtins
+- Stack-based VM (934 lines) with 18 unit tests
+- Tree-walking interpreter (separate path, 28 builtin tests, concurrency support via tokio)
 
-### Runtime System (100%)
-- Shadow price computation and forecasting
-- Resource tracking (energy, time, memory, carbon)
-- Adaptive decision engine
-- Budget enforcement
+### Runtime System
+- Shadow price registry and forecasting (real defaults: energy=0.000033, time=0.001, carbon=0.00005)
+- Resource tracking: energy, time, memory, carbon
+- Adaptive decision engine with budget enforcement (7 tests)
+- Scheduler: shadow-price-aware task scheduling with defer/reject/run (4 tests)
+- Profiler: wall-clock profiling with energy/carbon estimation + RSS memory tracking (6 tests)
+- Carbon monitor: grid intensity with Green/Yellow/Red signals (7 tests)
+- Shadow price engine: utilization-curve LP duality pricing (8+ tests)
 
-### Standard Library (70%)
-- ✅ Core types: Option, Result
-- ✅ Collections: Vec, HashMap, HashSet
-- ✅ Math: trig, log, rounding, number theory
-- ⏳ I/O operations (TODO)
-- ⏳ Text processing (TODO)
-- ⏳ Concurrency (TODO)
+### Backends (All 3 generate real code)
+- **WASM:** Generates valid .wasm binaries via wasm-encoder; complex types (tuples, arrays, structs) as i32 linear memory pointers; WASI preview1 imports (fd_write, clock_time_get, args); 24 tests
+- **LLVM:** Generates textual .ll IR files; runtime linking via eclexia-rt-native static library (5 C-compatible symbols); 21 tests
+- **Cranelift:** Real JIT for simple integer functions; string data sections; Range/RangeInclusive support; fallback estimation for complex ops; 8 tests
+
+### Standard Library (~85%)
+- Core types: Option, Result
+- Collections: Vec, HashMap, HashSet, SortedMap, Queue, PriorityQueue
+- Math: trig, log, rounding, number theory
+- I/O operations: read_file, write_file, file_exists
+- Text processing: trim, split, contains, uppercase, lowercase
+- Time: Duration, Instant, DateTime, sleep, measure
+- Async: task_spawn, task_await, channel_create, channel_send, channel_recv (wired to VM + interpreter)
 
 ### Developer Tooling
-- ✅ CLI: build, run, check, fmt, repl, init, test, bench
-- ✅ REPL with expression evaluation
-- ✅ Testing framework (#[test] attributes)
-- ✅ Benchmarking framework (#[bench] attributes)
-- ✅ Package manager: manifest parsing + dependency resolution (90%)
-- 🔄 LSP server: diagnostics, symbols, navigation (70%)
+- CLI: build (--analyze, --target wasm/llvm), run, check, fmt, lint, repl, init, test, bench, debug, doc, install, watch, disasm, interop
+- REPL with expression evaluation
+- Testing framework (#[test] attributes)
+- Benchmarking framework (#[bench] attributes)
+- Package manager: manifest parsing + dependency resolution + registry server stub
+- LSP server: diagnostics, symbols, navigation, hover, completion, rename, formatting
+- Formatter: AST pretty printer
+- Linter: 10+ rules
+- Debugger: Interactive with breakpoints, step, stack inspection
+- VSCode extension: Syntax highlighting + LSP integration
+- Interop bridge validator: `eclexia interop check` validates 4 language bridges
+
+### Testing
+- 507 total tests passing (0 failures)
+- 446 library tests passing (across all crates)
+- 32/32 valid conformance tests passing
+- 19/19 invalid conformance tests correctly rejecting (0 skips)
+- 11 property-based tests (1000+ generated cases each)
+- 0 clippy warnings
+
+### Formal Verification (Partial)
+- Coq proofs: Typing.v (0 Admitted), ShadowPrices.v (4 Admitted — deep LP theory)
+- Agda proofs: ResourceTracking.agda
+- 4 remaining Admitted theorems are genuinely hard LP proofs (strong duality, dual variables, complementary slackness)
 
 ---
 
-## 🔄 What's In Progress
+## What Does NOT Work Yet
 
-### LSP Server (70% → 100%) - ~2-4 hours
-**Missing:**
-- Rename refactoring
-- Formatting (needs pretty printer)
-- Signature help
-- Semantic tokens
-- Code actions
-
-**Working:**
-- ✅ Diagnostics (parse + type errors)
-- ✅ Document symbols (outline view)
-- ✅ Hover information
-- ✅ Go-to-definition
-- ✅ Find references
-- ✅ Code completion
-
-### Package Manager (90% → 100%) - ~4-6 hours
-**Missing:**
-- Registry client (HTTP API)
-- Dependency downloading
-- Caching
-- Workspace support
-
-**Working:**
-- ✅ Manifest parsing (package.toml)
-- ✅ Dependency resolution (semver)
-- ✅ Version conflict detection
-- ✅ Circular dependency detection
+- **Native compilation end-to-end:** LLVM backend generates .ll but linking to runtime is manual (static library exists, automatic linking not wired)
+- **WASM GC:** No garbage collection in WASM linear memory; bump allocator defined but not yet wired
+- **Runtime system metrics:** scheduler/profiler/carbon/shadow implemented but not wired to real OS metrics (except RSS memory on Linux)
+- **Macro expansion in HIR:** MacroCall lowered to HIR variant but MIR emits Nop — only interpreter supports macro eval
+- **Measured benchmarks:** None — all performance claims are projections
+- **Package registry deployment:** Server stub exists (filesystem backend, 3 routes), not deployed
+- **Formal proofs:** 4 Admitted in ShadowPrices.v (strong duality, dual variables, slack/zero, positive/binding)
 
 ---
 
-## ⏳ What's Not Started
+## Security Status
 
-- Linter
-- Debugger
-- VS Code extension (~4-6 hours)
-- Package registry backend
-- LLVM/Cranelift backend
-- JIT compilation
+- **panic-attack (2026-02-24):** 6 weak points, 0 critical (Idris `believe_me` removed)
+- **Production unwraps:** 163 static `unwrap/expect` sites remain across parser/vm/registry paths
+- **Clippy warnings:** 0 (all resolved)
+- **Unsafe blocks:** 32 (primarily FFI/runtime-native boundaries)
+- **Known conformance skip:** `stack_overflow_deep_recursion.ecl` skipped by default to avoid intentional `SIGABRT` core dumps in routine QA runs
 
 ---
 
-## 🚀 Quick Commands
+## Quick Commands
 
 ```bash
 # Build everything
-cargo build --release
+cargo build --workspace
 
-# Run all tests
-cargo test
+# Run all library tests
+cargo test --workspace --lib
 
-# Run integration tests
-cargo test -p eclexia-codegen --test pipeline_test
+# Run conformance tests
+cargo test -p eclexia --test conformance_tests
+
+# Full test suite (507 tests)
+cargo test --workspace
+
+# Check for warnings
+cargo clippy --workspace
 
 # Try the REPL
 cargo run -- repl
@@ -104,55 +116,35 @@ cargo run -- repl
 # Run an example
 cargo run -- run examples/fibonacci_adaptive.ecl
 
-# Run tests in a file
-cargo run -- test examples/test_example.ecl
+# Validate interop bridges
+cargo run -- interop check
 
-# Run benchmarks
-cargo run -- bench examples/bench_example.ecl
+# Security scan
+just panic-attack
 ```
 
 ---
 
-## 📁 Key Files
+## Key Files
 
-**Status & Planning:**
-- `STATE.scm` - Machine-readable project state
-- `TOOLCHAIN_STATUS.md` - Component-by-component status
-- `SESSION_HANDOVER_2026-01-31.md` - Detailed session notes
-- `.claude/CLAUDE.md` - AI assistant instructions
-
-**Documentation:**
-- `README.adoc` - Project overview
-- `GETTING_STARTED.md` - Quick start guide
-- `WHITEPAPER.md` - Academic foundation
-- `SPECIFICATION.md` - Language spec
-- `IMPLEMENTATION_ROADMAP.md` - Technical roadmap
-
-**Compiler:**
-- `compiler/eclexia-lexer/` - Tokenization
-- `compiler/eclexia-parser/` - Parsing
-- `compiler/eclexia-typeck/` - Type checking
-- `compiler/eclexia-mir/src/optimize.rs` - Optimizations
-- `compiler/eclexia-codegen/src/vm.rs` - Virtual machine
-
-**Tooling:**
-- `compiler/eclexia/src/main.rs` - CLI entry point
-- `compiler/eclexia/src/resolver.rs` - Dependency resolution
-- `compiler/eclexia-lsp/` - Language server
-
-**Tests:**
-- `compiler/eclexia-codegen/tests/pipeline_test.rs` - Integration tests
-- `examples/*.ecl` - Example programs
+| Area | Files |
+|------|-------|
+| Compiler | compiler/eclexia-{lexer,parser,typeck,hir,mir,codegen}/ |
+| Interpreter | compiler/eclexia-interp/ |
+| Runtime | runtime/eclexia-runtime/ |
+| Native Runtime | runtime/eclexia-rt-native/ (static lib for LLVM linking) |
+| Registry Server | runtime/eclexia-registry-server/ |
+| Backends | compiler/eclexia-{cranelift,llvm,wasm}/ |
+| Tooling | compiler/eclexia-{fmt,lint,debugger,doc,lsp}/ |
+| Tests | tests/conformance/{valid,invalid}/ |
+| Formal | formal/{coq,agda}/ |
+| Stdlib | stdlib/ |
+| Interop | interop/*.toml, compiler/eclexia/src/interop.rs |
 
 ---
 
-## 🎯 Next Session Priorities
-
-1. **LSP rename & format** (2-4h) - Complete LSP to 100%
-2. **Package registry client** (4-6h) - Complete package manager
-3. **VS Code extension** (4-6h) - Developer experience
-
----
-
-**Ready to resume development!**
-All core features working, all tests passing, all builds green.
+**Honest assessment:** Eclexia is a working alpha compiler with a functional pipeline
+from source to bytecode VM, with three real code-generation backends (WASM, LLVM, Cranelift).
+The economics-as-code concepts (shadow prices, adaptive functions, resource tracking) are
+implemented in the runtime with real defaults and tests. All 18 SONNET completion
+tasks are done. Not production-ready. Not feature-complete. Active development.

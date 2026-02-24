@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+= Seam Checklist: Compiler ↔ Runtime
+
+* Confirm `eclexia build --analyze` instantiates `Runtime` in `run_mir_analysis` output paths (component: `compiler/eclexia/src/commands.rs`).
+* Verify `run_bytecode`, `profile`, and `serve_health` all share `Runtime` instances so resource tracking lives within one boundary.
+* Ensure `VirtualMachine::get_resources()` tuples use `Dimension` names that `eclexia_runtime::Runtime::ingest_usage` consumes without translation.
+* Manually inspect `HealthServer::new` for the port-binding handshake to downstream consumers.
+* Document any outstanding gaps (e.g., interpreter carbon report path still pending wiring).

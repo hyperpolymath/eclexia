@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Dimensional analysis for resource types.
@@ -19,7 +19,10 @@
 /// A dimension represented as a vector of SI base unit exponents
 /// plus extensions for economic and environmental units.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    any(feature = "serde", feature = "serde-types"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Dimension {
     /// Mass (kilogram, kg) - exponent
     pub mass: i8,
@@ -78,27 +81,42 @@ impl Dimension {
 
     /// Mass dimension (kg)
     pub const fn mass() -> Self {
-        Self { mass: 1, ..Self::dimensionless() }
+        Self {
+            mass: 1,
+            ..Self::dimensionless()
+        }
     }
 
     /// Length dimension (m)
     pub const fn length() -> Self {
-        Self { length: 1, ..Self::dimensionless() }
+        Self {
+            length: 1,
+            ..Self::dimensionless()
+        }
     }
 
     /// Time dimension (s)
     pub const fn time() -> Self {
-        Self { time: 1, ..Self::dimensionless() }
+        Self {
+            time: 1,
+            ..Self::dimensionless()
+        }
     }
 
     /// Electric current dimension (A)
     pub const fn current() -> Self {
-        Self { current: 1, ..Self::dimensionless() }
+        Self {
+            current: 1,
+            ..Self::dimensionless()
+        }
     }
 
     /// Temperature dimension (K)
     pub const fn temperature() -> Self {
-        Self { temperature: 1, ..Self::dimensionless() }
+        Self {
+            temperature: 1,
+            ..Self::dimensionless()
+        }
     }
 
     // Common derived dimensions
@@ -179,22 +197,34 @@ impl Dimension {
 
     /// Money dimension (currency)
     pub const fn money() -> Self {
-        Self { money: 1, ..Self::dimensionless() }
+        Self {
+            money: 1,
+            ..Self::dimensionless()
+        }
     }
 
     /// Carbon dioxide equivalent dimension (gCO2e)
     pub const fn carbon() -> Self {
-        Self { carbon: 1, ..Self::dimensionless() }
+        Self {
+            carbon: 1,
+            ..Self::dimensionless()
+        }
     }
 
     /// Information dimension (bits)
     pub const fn information() -> Self {
-        Self { information: 1, ..Self::dimensionless() }
+        Self {
+            information: 1,
+            ..Self::dimensionless()
+        }
     }
 
     /// Memory dimension (bytes = 8 bits)
     pub const fn memory() -> Self {
-        Self { information: 1, ..Self::dimensionless() }
+        Self {
+            information: 1,
+            ..Self::dimensionless()
+        }
     }
 
     /// Carbon intensity dimension (gCO2e/kWh = carbon/energy)
@@ -263,8 +293,8 @@ impl Dimension {
         self.pow(-1)
     }
 
-    /// Format the dimension as a string for error messages.
-    pub fn to_string(&self) -> String {
+    /// Format the dimension as a human-readable string for error messages.
+    pub fn format_dimension(&self) -> String {
         if self.is_dimensionless() {
             return "dimensionless".to_string();
         }
@@ -323,7 +353,7 @@ impl std::ops::Div for Dimension {
 
 impl std::fmt::Display for Dimension {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", self.format_dimension())
     }
 }
 
@@ -529,9 +559,9 @@ pub fn parse_unit(suffix: &str) -> Option<&'static Unit> {
         "mW" => Some(&units::MILLIWATT),
         "kW" => Some(&units::KILOWATT),
         // Carbon
-        "gCO2e" => Some(&units::GRAM_CO2E),
-        "kgCO2e" => Some(&units::KILOGRAM_CO2E),
-        "tCO2e" => Some(&units::TONNE_CO2E),
+        "gCO2" | "gCO2e" => Some(&units::GRAM_CO2E),
+        "kgCO2" | "kgCO2e" => Some(&units::KILOGRAM_CO2E),
+        "tCO2" | "tCO2e" => Some(&units::TONNE_CO2E),
         // Memory
         "b" => Some(&units::BIT),
         "B" => Some(&units::BYTE),

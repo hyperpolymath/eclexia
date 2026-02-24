@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>collections - Eclexia Documentation</title>
+<style>
+/* SPDX-License-Identifier: PMPL-1.0-or-later */
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #f5f5f5;
+    color: #333;
+}
+
+h1 {
+    color: #2c3e50;
+    border-bottom: 3px solid #3498db;
+    padding-bottom: 10px;
+}
+
+h2 {
+    color: #34495e;
+    border-bottom: 2px solid #95a5a6;
+    padding-bottom: 5px;
+    margin-top: 30px;
+}
+
+h3 {
+    color: #2980b9;
+}
+
+.item {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.signature {
+    background: #f8f8f8;
+    border-left: 4px solid #3498db;
+    padding: 15px;
+    font-family: "Fira Code", "Source Code Pro", monospace;
+    font-size: 14px;
+    overflow-x: auto;
+    border-radius: 3px;
+}
+
+.doc-comment {
+    margin-top: 15px;
+    color: #555;
+}
+
+.doc-comment p {
+    margin: 10px 0;
+}
+
+.doc-comment code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.doc-comment pre {
+    background: #282c34;
+    color: #abb2bf;
+    padding: 15px;
+    border-radius: 5px;
+    overflow-x: auto;
+}
+
+.doc-comment pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+}
+
+ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+ul li {
+    padding: 5px 0;
+}
+
+a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+</style>
+</head>
+<body>
+<h1>Module: collections</h1>
+<h2>Table of Contents</h2>
+<ul>
+<li><a href="#len">len</a> - Function</li>
+<li><a href="#is_empty">is_empty</a> - Function</li>
+<li><a href="#push">push</a> - Function</li>
+<li><a href="#set">set</a> - Function</li>
+<li><a href="#clear">clear</a> - Function</li>
+<li><a href="#contains">contains</a> - Function</li>
+<li><a href="#reverse">reverse</a> - Function</li>
+<li><a href="#resize">resize</a> - Function</li>
+<li><a href="#insert">insert</a> - Function</li>
+<li><a href="#contains_key">contains_key</a> - Function</li>
+<li><a href="#len">len</a> - Function</li>
+<li><a href="#is_empty">is_empty</a> - Function</li>
+<li><a href="#get_or_insert">get_or_insert</a> - Function</li>
+<li><a href="#insert">insert</a> - Function</li>
+<li><a href="#remove">remove</a> - Function</li>
+<li><a href="#contains">contains</a> - Function</li>
+<li><a href="#len">len</a> - Function</li>
+<li><a href="#is_empty">is_empty</a> - Function</li>
+<li><a href="#insert">insert</a> - Function</li>
+<li><a href="#get">get</a> - Function</li>
+<li><a href="#remove">remove</a> - Function</li>
+<li><a href="#len">len</a> - Function</li>
+<li><a href="#min_entry">min_entry</a> - Function</li>
+<li><a href="#max_entry">max_entry</a> - Function</li>
+<li><a href="#enqueue">enqueue</a> - Function</li>
+<li><a href="#dequeue">dequeue</a> - Function</li>
+<li><a href="#peek">peek</a> - Function</li>
+<li><a href="#len">len</a> - Function</li>
+<li><a href="#is_empty">is_empty</a> - Function</li>
+<li><a href="#push">push</a> - Function</li>
+<li><a href="#pop">pop</a> - Function</li>
+<li><a href="#peek">peek</a> - Function</li>
+<li><a href="#len">len</a> - Function</li>
+</ul>
+<div class="item" id="len">
+<h3>len</h3>
+<pre class="signature">fn len(self) -> Idx::<Type>(3)</pre>
+<div class="doc-comment">
+<p>Returns the number of elements in the vector.</p>
+</div>
+</div>
+<div class="item" id="is_empty">
+<h3>is_empty</h3>
+<pre class="signature">fn is_empty(self) -> Idx::<Type>(4)</pre>
+<div class="doc-comment">
+<p>Returns true if the vector is empty.</p>
+</div>
+</div>
+<div class="item" id="push">
+<h3>push</h3>
+<pre class="signature">fn push(self, value: Idx::<Type>(5))</pre>
+<div class="doc-comment">
+<p>Appends an element to the end of the vector.</p>
+</div>
+</div>
+<div class="item" id="set">
+<h3>set</h3>
+<pre class="signature">fn set(self, index: Idx::<Type>(9), value: Idx::<Type>(10))</pre>
+<div class="doc-comment">
+<p>Sets the element at index. Panics if out of bounds.</p>
+</div>
+</div>
+<div class="item" id="clear">
+<h3>clear</h3>
+<pre class="signature">fn clear(self)</pre>
+<div class="doc-comment">
+<p>Clears the vector, removing all values.</p>
+</div>
+</div>
+<div class="item" id="contains">
+<h3>contains</h3>
+<pre class="signature">fn contains(self, value: Idx::<Type>(13)) -> Idx::<Type>(14)</pre>
+<div class="doc-comment">
+<p>Returns true if the vector contains the given value.</p>
+</div>
+</div>
+<div class="item" id="reverse">
+<h3>reverse</h3>
+<pre class="signature">fn reverse(self)</pre>
+<div class="doc-comment">
+<p>Reverses the vector in place.</p>
+</div>
+</div>
+<div class="item" id="resize">
+<h3>resize</h3>
+<pre class="signature">fn resize(self, new_capacity: Idx::<Type>(15))</pre>
+<div class="doc-comment">
+<p>Resizes the vector to a new capacity.</p>
+</div>
+</div>
+<div class="item" id="insert">
+<h3>insert</h3>
+<pre class="signature">fn insert(self, key: Idx::<Type>(19), value: Idx::<Type>(20))</pre>
+<div class="doc-comment">
+<p>Inserts a key-value pair into the map. Overwrites if key exists.</p>
+</div>
+</div>
+<div class="item" id="contains_key">
+<h3>contains_key</h3>
+<pre class="signature">fn contains_key(self, key: Idx::<Type>(23)) -> Idx::<Type>(24)</pre>
+<div class="doc-comment">
+<p>Returns true if the map contains the given key.</p>
+</div>
+</div>
+<div class="item" id="len">
+<h3>len</h3>
+<pre class="signature">fn len(self) -> Idx::<Type>(27)</pre>
+<div class="doc-comment">
+<p>Returns the number of key-value pairs in the map.</p>
+</div>
+</div>
+<div class="item" id="is_empty">
+<h3>is_empty</h3>
+<pre class="signature">fn is_empty(self) -> Idx::<Type>(28)</pre>
+<div class="doc-comment">
+<p>Returns true if the map is empty.</p>
+</div>
+</div>
+<div class="item" id="get_or_insert">
+<h3>get_or_insert</h3>
+<pre class="signature">fn get_or_insert(self, key: Idx::<Type>(29), default: Idx::<Type>(30)) -> Idx::<Type>(31)</pre>
+<div class="doc-comment">
+<p>Gets the value for key, or inserts and returns default.</p>
+</div>
+</div>
+<div class="item" id="insert">
+<h3>insert</h3>
+<pre class="signature">fn insert(self, value: Idx::<Type>(33)) -> Idx::<Type>(34)</pre>
+<div class="doc-comment">
+<p>Adds a value to the set. Returns true if the value was newly inserted.</p>
+</div>
+</div>
+<div class="item" id="remove">
+<h3>remove</h3>
+<pre class="signature">fn remove(self, value: Idx::<Type>(35)) -> Idx::<Type>(36)</pre>
+<div class="doc-comment">
+<p>Removes a value from the set. Returns true if the value was present.</p>
+</div>
+</div>
+<div class="item" id="contains">
+<h3>contains</h3>
+<pre class="signature">fn contains(self, value: Idx::<Type>(37)) -> Idx::<Type>(38)</pre>
+<div class="doc-comment">
+<p>Returns true if the set contains the value.</p>
+</div>
+</div>
+<div class="item" id="len">
+<h3>len</h3>
+<pre class="signature">fn len(self) -> Idx::<Type>(39)</pre>
+<div class="doc-comment">
+<p>Returns the number of values in the set.</p>
+</div>
+</div>
+<div class="item" id="is_empty">
+<h3>is_empty</h3>
+<pre class="signature">fn is_empty(self) -> Idx::<Type>(40)</pre>
+<div class="doc-comment">
+<p>Returns true if the set is empty.</p>
+</div>
+</div>
+<div class="item" id="insert">
+<h3>insert</h3>
+<pre class="signature">fn insert(self, key: Idx::<Type>(42), value: Idx::<Type>(43))</pre>
+<div class="doc-comment">
+<p>Inserts a key-value pair. Overwrites if key exists.</p>
+</div>
+</div>
+<div class="item" id="get">
+<h3>get</h3>
+<pre class="signature">fn get(self, key: Idx::<Type>(44)) -> Idx::<Type>(45)</pre>
+<div class="doc-comment">
+<p>Gets the value associated with a key, or Unit if not found.</p>
+</div>
+</div>
+<div class="item" id="remove">
+<h3>remove</h3>
+<pre class="signature">fn remove(self, key: Idx::<Type>(46)) -> Idx::<Type>(47)</pre>
+<div class="doc-comment">
+<p>Removes a key-value pair. Returns the removed value, or Unit.</p>
+</div>
+</div>
+<div class="item" id="len">
+<h3>len</h3>
+<pre class="signature">fn len(self) -> Idx::<Type>(48)</pre>
+<div class="doc-comment">
+<p>Returns the number of entries.</p>
+</div>
+</div>
+<div class="item" id="min_entry">
+<h3>min_entry</h3>
+<pre class="signature">fn min_entry(self) -> Idx::<Type>(52)</pre>
+<div class="doc-comment">
+<p>Returns the entry with the smallest key, or Unit.</p>
+</div>
+</div>
+<div class="item" id="max_entry">
+<h3>max_entry</h3>
+<pre class="signature">fn max_entry(self) -> Idx::<Type>(55)</pre>
+<div class="doc-comment">
+<p>Returns the entry with the largest key, or Unit.</p>
+</div>
+</div>
+<div class="item" id="enqueue">
+<h3>enqueue</h3>
+<pre class="signature">fn enqueue(self, value: Idx::<Type>(60))</pre>
+<div class="doc-comment">
+<p>Adds an element to the back of the queue.</p>
+</div>
+</div>
+<div class="item" id="dequeue">
+<h3>dequeue</h3>
+<pre class="signature">fn dequeue(self) -> Idx::<Type>(61)</pre>
+<div class="doc-comment">
+<p>Removes and returns the front element. Panics if empty.</p>
+</div>
+</div>
+<div class="item" id="peek">
+<h3>peek</h3>
+<pre class="signature">fn peek(self) -> Idx::<Type>(62)</pre>
+<div class="doc-comment">
+<p>Returns the front element without removing it, or Unit if empty.</p>
+</div>
+</div>
+<div class="item" id="len">
+<h3>len</h3>
+<pre class="signature">fn len(self) -> Idx::<Type>(63)</pre>
+<div class="doc-comment">
+<p>Returns the number of elements in the queue.</p>
+</div>
+</div>
+<div class="item" id="is_empty">
+<h3>is_empty</h3>
+<pre class="signature">fn is_empty(self) -> Idx::<Type>(64)</pre>
+<div class="doc-comment">
+<p>Returns true if the queue is empty.</p>
+</div>
+</div>
+<div class="item" id="push">
+<h3>push</h3>
+<pre class="signature">fn push(self, priority: Idx::<Type>(66), value: Idx::<Type>(67))</pre>
+<div class="doc-comment">
+<p>Adds an element with the given priority (lower = higher urgency).</p>
+</div>
+</div>
+<div class="item" id="pop">
+<h3>pop</h3>
+<pre class="signature">fn pop(self) -> Idx::<Type>(68)</pre>
+<div class="doc-comment">
+<p>Removes and returns the highest-priority (lowest score) element.</p>
+<p>Panics if empty.</p>
+</div>
+</div>
+<div class="item" id="peek">
+<h3>peek</h3>
+<pre class="signature">fn peek(self) -> Idx::<Type>(69)</pre>
+<div class="doc-comment">
+<p>Returns the highest-priority element without removing it, or Unit.</p>
+</div>
+</div>
+<div class="item" id="len">
+<h3>len</h3>
+<pre class="signature">fn len(self) -> Idx::<Type>(70)</pre>
+<div class="doc-comment">
+<p>Returns the total number of elements.</p>
+</div>
+</div>
+</body>
+</html>

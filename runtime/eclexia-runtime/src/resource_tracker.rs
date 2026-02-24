@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Resource consumption tracking.
@@ -82,9 +82,7 @@ pub struct ResourceTracker {
 impl ResourceTracker {
     /// Create a new tracker
     pub fn new() -> Self {
-        Self {
-            usage: Vec::new(),
-        }
+        Self { usage: Vec::new() }
     }
 
     /// Record resource usage
@@ -182,8 +180,8 @@ impl Default for ResourceTracker {
 /// Get current timestamp
 fn current_timestamp() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => duration.as_millis() as u64,
+        Err(err) => err.duration().as_millis() as u64,
+    }
 }

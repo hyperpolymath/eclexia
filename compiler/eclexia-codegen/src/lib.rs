@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Code generation for Eclexia.
@@ -15,16 +15,16 @@
 //! - Adaptive function dispatch
 //! - Efficient calling conventions
 
-mod bytecode;
-mod cranelift_backend;
+pub mod bytecode;
 mod vm;
 
-pub use bytecode::{BytecodeModule, BytecodeGenerator, Instruction as BytecodeInstruction};
-pub use cranelift_backend::CraneliftBackend;
-pub use vm::{VirtualMachine, Value as VmValue, VmError};
+pub use bytecode::{BytecodeGenerator, BytecodeModule, Instruction as BytecodeInstruction};
+pub use vm::{
+    CallFrame, DebugAction, DebugEvent, ResourceUsage, Value as VmValue, VirtualMachine, VmError,
+};
 
 use eclexia_ast::types::Ty;
-use eclexia_mir::{MirFile, LocalId, BlockId};
+use eclexia_mir::{BlockId, LocalId, MirFile};
 use smol_str::SmolStr;
 use std::collections::HashMap;
 
@@ -97,6 +97,7 @@ pub struct CodegenContext {
 }
 
 impl CodegenContext {
+    /// Create a new empty codegen context.
     pub fn new() -> Self {
         Self {
             function_map: HashMap::new(),
@@ -160,7 +161,7 @@ pub fn size_of_type(ty: &Ty) -> usize {
             PrimitiveTy::I64 | PrimitiveTy::U64 | PrimitiveTy::F64 | PrimitiveTy::Float => 8,
             PrimitiveTy::I128 | PrimitiveTy::U128 => 16,
             PrimitiveTy::Int | PrimitiveTy::UInt => 8, // Platform-dependent, default to 64-bit
-            PrimitiveTy::String => 8, // Pointer
+            PrimitiveTy::String => 8,                  // Pointer
         },
         Ty::Resource { base, .. } => size_of_type(&Ty::Primitive(*base)),
         Ty::Function { .. } => 8, // Function pointer
