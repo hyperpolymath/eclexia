@@ -6,4 +6,5 @@
   (version "1.0")
   (notes
     "Repo-specific bot constraints."
-    "Bots must follow these directives in addition to global policies."))
+    "Bots must follow these directives in addition to global policies."
+    "Maintenance axis policy source: .machine_readable/policies/MAINTENANCE-AXES.a2ml."))

@@ -17,6 +17,7 @@ It treats energy, time, memory, and carbon as first-class constraints so softwar
 * link:docs/README.md[Documentation Index]
 * link:docs/wiki/Home.md[Wiki Home]
 * link:NAVIGATION.adoc[NAVIGATION]
+* link:.machine_readable/policies/MAINTENANCE-AXES.a2ml[Maintenance Axes Policy (A2ML)]
 * link:SPECIFICATION.md[Language Specification]
 * link:docs/whitepapers/academic/WHITEPAPER.adoc[Whitepaper]
 * link:docs/proofs/PROOFS.adoc[Formal Proofs]
