@@ -22,5 +22,5 @@ Release audit: [`../reports/V1-READINESS-AUDIT-2026-02-24.md`](../reports/V1-REA
 
 - Language specification: [`../../SPECIFICATION.md`](../../SPECIFICATION.md)
 - Getting started: [`../../GETTING_STARTED.md`](../../GETTING_STARTED.md)
-- Implementation roadmap: [`../../IMPLEMENTATION_ROADMAP.md`](../../IMPLEMENTATION_ROADMAP.md)
-- Toolchain status: [`../../TOOLCHAIN_STATUS.md`](../../TOOLCHAIN_STATUS.md)
+- Implementation roadmap: [`../roadmap/IMPLEMENTATION_ROADMAP.md`](../roadmap/IMPLEMENTATION_ROADMAP.md)
+- Toolchain status: [`../reports/TOOLCHAIN_STATUS.md`](../reports/TOOLCHAIN_STATUS.md)

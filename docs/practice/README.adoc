@@ -1,0 +1,9 @@
+= Practice Docs
+
+Hands-on implementation and operational references:
+
+* link:IMPLEMENTATION_ROADMAP.adoc[Implementation Roadmap]
+* link:TOOLCHAIN_STATUS.adoc[Toolchain Status]
+* link:TESTING-REPORT.adoc[Testing Report]
+
+Markdown mirrors are available alongside these files.

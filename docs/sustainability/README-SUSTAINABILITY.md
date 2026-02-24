@@ -478,12 +478,12 @@ Once LLVM backend is complete, Eclexia will compile to **every major platform**.
 
 ### Documentation
 
-- **[White Paper](WHITEPAPER.md)** - Comprehensive introduction to Economics-as-Code
+- **[White Paper](../research/WHITEPAPER.md)** - Comprehensive introduction to Economics-as-Code
 - **[Getting Started Guide](GETTING_STARTED.md)** - Tutorial and examples
 - **[Language Specification](docs/language-spec.md)** - Complete syntax and semantics
 - **[Self-Hosting Roadmap](../roadmap/SELF-HOSTING-ROADMAP.md)** - Path to production readiness
 - **[Carbon APIs](docs/CARBON_APIS.md)** - Grid carbon intensity integration
-- **[Formal Proofs](FORMAL_VERIFICATION.md)** - Mathematical foundations
+- **[Formal Proofs](../proofs/FORMAL_VERIFICATION.md)** - Mathematical foundations
 
 ### Examples
 

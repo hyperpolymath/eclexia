@@ -1,0 +1,54 @@
+= Navigation
+:toc: left
+:toclevels: 2
+
+Quick project navigation hub while stateful-artefacts tooling is being finalized.
+
+== Root Essentials
+
+* link:README.adoc[README]
+* link:QUICK_STATUS.md[Quick Status]
+* link:GETTING_STARTED.md[Getting Started]
+* link:SPECIFICATION.md[Specification]
+* link:CONTRIBUTING.adoc[Contributing]
+* link:SECURITY.md[Security]
+* link:Containerfile[Containerfile]
+* `Justfile` (root by convention for `just`)
+* link:licensing/README.adoc[Licensing Folder]
+
+== Documentation
+
+* link:docs/README.md[Documentation Index]
+* link:docs/wiki/Home.md[Wiki Home]
+* link:docs/theory/[Theory]
+* link:docs/practice/[Practice]
+* link:docs/whitepapers/[Whitepapers]
+* link:docs/roadmap/ROADMAP.adoc[Roadmap]
+* link:docs/reports/V1-READINESS-AUDIT-2026-02-24.md[V1 Readiness Audit]
+
+== Research And Proofs
+
+* link:docs/whitepapers/academic/WHITEPAPER.adoc[Whitepaper]
+* link:docs/theory/THEORY.adoc[Theory]
+* link:docs/theory/ALGORITHMS.adoc[Algorithms]
+* link:docs/theory/BIBLIOGRAPHY.adoc[Bibliography]
+* link:docs/proofs/PROOFS.adoc[Proofs]
+* link:docs/proofs/FORMAL_VERIFICATION.adoc[Formal Verification]
+* link:docs/proofs/EXTENDED_PROOFS.adoc[Extended Proofs]
+
+Both `.md` and `.adoc` versions are available in these folders for compatibility.
+
+== Testing
+
+* link:tests/[tests/]
+* link:tests/fixtures/parser/test_parse_debug.ecl[Parser Fixture: test_parse_debug.ecl]
+* link:tests/fixtures/parser/test_paren_simple.ecl[Parser Fixture: test_paren_simple.ecl]
+* link:tests/fixtures/parser/test_paren_semi.ecl[Parser Fixture: test_paren_semi.ecl]
+
+== Machine Readable
+
+* link:.machine_readable/STATE.scm[STATE.scm]
+* link:.machine_readable/META.scm[META.scm]
+* link:.machine_readable/ECOSYSTEM.scm[ECOSYSTEM.scm]
+* link:.machine_readable/contractiles/[contractiles/]
+* link:.machine_readable/ai/[AI guidance folder]

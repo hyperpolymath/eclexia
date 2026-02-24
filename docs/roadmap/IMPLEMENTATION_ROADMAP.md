@@ -1,0 +1,1251 @@
+# Eclexia Implementation Roadmap
+
+SPDX-License-Identifier: PMPL-1.0-or-later
+SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+
+## Overview
+
+This document provides a comprehensive technical roadmap for implementing Eclexia as a complete, production-ready programming language. It details all required technologies, tools, frameworks, libraries, and language-specific components.
+
+---
+
+## Table of Contents
+
+1. [Technology Stack](#1-technology-stack)
+2. [Core Language Infrastructure](#2-core-language-infrastructure)
+3. [Runtime System](#3-runtime-system)
+4. [Standard Library](#4-standard-library)
+5. [Developer Tooling](#5-developer-tooling)
+6. [Build & Package System](#6-build--package-system)
+7. [Testing Infrastructure](#7-testing-infrastructure)
+8. [Language-Specific Components](#8-language-specific-components)
+9. [External Integrations](#9-external-integrations)
+10. [Documentation System](#10-documentation-system)
+11. [Implementation Phases](#11-implementation-phases)
+12. [Dependencies Matrix](#12-dependencies-matrix)
+
+---
+
+## 1. Technology Stack
+
+### 1.1 Primary Languages
+
+| Component | Language | Rationale |
+|-----------|----------|-----------|
+| **Compiler** | Rust | Memory safety, performance, WASM compilation |
+| **Runtime** | Rust | Zero-cost abstractions, predictable performance |
+| **Standard Library** | Rust + Eclexia | Bootstrap in Rust, self-host later |
+| **Tooling (CLI)** | Rust | Cross-platform, single binary distribution |
+| **LSP Server** | Rust | Performance for real-time feedback |
+| **Web Playground** | ReScript + Deno | Type-safe web UI, modern runtime |
+| **Configuration** | Nickel | Programmable configuration language |
+| **Build Scripts** | Bash/POSIX | Automation, CI/CD integration |
+| **Package Registry** | Gleam | BEAM reliability for backend services |
+
+### 1.2 Excluded Technologies (per RSR)
+
+| Excluded | Replacement | Reason |
+|----------|-------------|--------|
+| TypeScript | ReScript | Type safety, functional paradigm |
+| Node.js | Deno | Security, modern runtime |
+| Go | Rust | Memory safety, generics |
+| Python | Rust/ReScript | Performance, type safety |
+| Java/Kotlin | Rust | Memory efficiency |
+
+### 1.3 Development Environment
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Development Stack                        │
+├─────────────────────────────────────────────────────────────┤
+│  Package Manager    │ Guix (primary), Nix (fallback)       │
+│  Build System       │ Cargo (Rust), Deno (JS), Just        │
+│  CI/CD              │ GitHub Actions, GitLab CI            │
+│  Container Runtime  │ Podman (not Docker)                  │
+│  Version Control    │ Git + signed commits                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 2. Core Language Infrastructure
+
+### 2.1 Compiler Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Eclexia Compiler                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────┐   ┌──────────┐   ┌───────────┐   ┌─────────┐ │
+│  │ Lexer   │──▶│  Parser  │──▶│    AST    │──▶│ Type    │ │
+│  │         │   │          │   │           │   │ Checker │ │
+│  └─────────┘   └──────────┘   └───────────┘   └────┬────┘ │
+│                                                     │       │
+│  ┌─────────────────────────────────────────────────▼─────┐ │
+│  │                    HIR (High-Level IR)                │ │
+│  │  - Resource annotations preserved                     │ │
+│  │  - Adaptive blocks as first-class constructs          │ │
+│  │  - Dimensional types checked                          │ │
+│  └───────────────────────────┬───────────────────────────┘ │
+│                              │                              │
+│  ┌───────────────────────────▼───────────────────────────┐ │
+│  │                    MIR (Mid-Level IR)                 │ │
+│  │  - Resource constraints lowered                       │ │
+│  │  - Optimization passes applied                        │ │
+│  │  - Shadow price hooks inserted                        │ │
+│  └───────────────────────────┬───────────────────────────┘ │
+│                              │                              │
+│  ┌───────────────────────────▼───────────────────────────┐ │
+│  │                    LIR (Low-Level IR)                 │ │
+│  │  - Platform-specific lowering                         │ │
+│  │  - Register allocation                                │ │
+│  │  - Machine code generation                            │ │
+│  └───────────────────────────┬───────────────────────────┘ │
+│                              │                              │
+│  ┌──────────────┬────────────┴────────────┬─────────────┐ │
+│  │   Native     │       WASM              │    LLVM     │ │
+│  │  (x86/ARM)   │   (Browser/WASI)        │  (Backend)  │ │
+│  └──────────────┴─────────────────────────┴─────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 Compiler Components
+
+#### 2.2.1 Lexer (`compiler/src/lexer/`)
+
+**Technology**: Rust with `logos` crate
+
+```rust
+// Crate dependencies
+logos = "0.14"          // Fast lexer generator
+unicode-xid = "0.2"     // Unicode identifier support
+```
+
+**Key Features**:
+- UTF-8 source handling
+- Dimensional literal parsing (e.g., `100J`, `5ms`, `10gCO2e`)
+- Resource constraint keyword recognition
+- Accurate span tracking for error messages
+
+#### 2.2.2 Parser (`compiler/src/parser/`)
+
+**Technology**: Rust with `chumsky` or hand-written recursive descent
+
+```rust
+// Option A: Parser combinator
+chumsky = "0.9"         // Zero-copy parser combinators
+
+// Option B: Hand-written (recommended for control)
+// No external dependency, custom implementation
+```
+
+**Key Features**:
+- Error recovery for IDE integration
+- Incremental parsing support
+- Macro expansion at parse time
+- Annotation preservation for documentation
+
+#### 2.2.3 Type System (`compiler/src/typechecker/`)
+
+**Technology**: Custom bidirectional type checker in Rust
+
+```rust
+// Core dependencies
+indexmap = "2.0"        // Deterministic hash maps
+im = "15.0"             // Immutable data structures
+petgraph = "0.6"        // Graph algorithms for constraint solving
+```
+
+**Type System Features**:
+
+| Feature | Implementation | Complexity |
+|---------|----------------|------------|
+| Hindley-Milner inference | Algorithm W with constraints | Medium |
+| Dimensional types | Kind-level encoding | High |
+| Resource types | Graded modal types | High |
+| Effect types | Row polymorphism | Medium |
+| Constraint types | SMT-backed solving | Very High |
+| Adaptive block typing | Dependent intersection types | High |
+
+#### 2.2.4 HIR/MIR/LIR (`compiler/src/ir/`)
+
+**Technology**: Custom IR definitions in Rust
+
+```rust
+// Dependencies
+typed-arena = "2.0"     // Arena allocation for IR nodes
+cranelift-entity = "0.107" // Entity-reference pattern
+```
+
+**IR Transformations**:
+1. HIR → MIR: Resource constraint lowering, adaptive block expansion
+2. MIR → MIR: Optimization passes (inlining, DCE, CSE)
+3. MIR → LIR: Platform-specific lowering
+
+#### 2.2.5 Code Generation (`compiler/src/codegen/`)
+
+**Technology**: LLVM or Cranelift backend
+
+```rust
+// Option A: LLVM (more optimizations, slower compile)
+inkwell = "0.4"         // Safe LLVM bindings
+llvm-sys = "180"        // LLVM C API bindings
+
+// Option B: Cranelift (faster compile, fewer optimizations)
+cranelift-codegen = "0.107"
+cranelift-frontend = "0.107"
+cranelift-module = "0.107"
+
+// WASM target (required for browser)
+wasmtime = "21"         // WASM runtime
+wasm-encoder = "0.212"  // WASM binary encoding
+```
+
+---
+
+## 3. Runtime System
+
+### 3.1 Runtime Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Eclexia Runtime                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │              Adaptive Scheduler                      │   │
+│  │  - Solution selection based on shadow prices        │   │
+│  │  - Runtime constraint evaluation                    │   │
+│  │  - Carbon-aware scheduling                          │   │
+│  └─────────────────────────┬───────────────────────────┘   │
+│                            │                                │
+│  ┌────────────┬────────────┴────────────┬────────────┐     │
+│  │ Resource   │   Shadow Price          │  Carbon    │     │
+│  │ Profiler   │   Computer              │  Monitor   │     │
+│  └─────┬──────┴────────────┬────────────┴─────┬──────┘     │
+│        │                   │                  │             │
+│  ┌─────▼──────────────────▼──────────────────▼─────┐       │
+│  │                Memory Manager                    │       │
+│  │  - Region-based allocation                      │       │
+│  │  - Resource-tracked allocations                 │       │
+│  │  - GC with energy-aware collection              │       │
+│  └─────────────────────────────────────────────────┘       │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                Platform Abstraction                  │   │
+│  │  - OS interfaces (Linux, macOS, Windows, WASI)      │   │
+│  │  - Hardware sensors (RAPL, battery, GPU)            │   │
+│  │  - Carbon API clients                               │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.2 Runtime Components
+
+#### 3.2.1 Adaptive Scheduler (`runtime/src/scheduler/`)
+
+**Technology**: Rust with async runtime
+
+```rust
+// Dependencies
+tokio = { version = "1.37", features = ["full"] }  // Async runtime
+priority-queue = "2.0"                              // Priority scheduling
+dashmap = "5.5"                                     // Concurrent hash map
+```
+
+**Scheduling Algorithm**:
+- Multi-armed bandit for solution selection
+- Thompson sampling for exploration/exploitation
+- Constraint propagation for feasibility checking
+
+#### 3.2.2 Shadow Price Computer (`runtime/src/shadow/`)
+
+**Technology**: Linear programming solver in Rust
+
+```rust
+// Dependencies
+good_lp = "1.8"           // LP modeling in Rust
+minilp = "0.2"            // Pure Rust LP solver (for WASM)
+clarabel = "0.7"          // Conic solver for advanced constraints
+
+// For complex optimizations
+highs = "1.6"             // HiGHS solver bindings (optional)
+```
+
+**Implementation**:
+- Dual simplex for shadow price extraction
+- Warm-starting for incremental updates
+- Approximate LP for real-time constraints
+
+#### 3.2.3 Resource Profiler (`runtime/src/profiler/`)
+
+**Technology**: Platform-specific profiling
+
+```rust
+// Dependencies
+sysinfo = "0.30"          // Cross-platform system info
+raw-cpuid = "11"          // CPU feature detection
+perf-event = "0.4"        // Linux perf events (Linux only)
+```
+
+**Profiling Targets**:
+
+| Resource | Linux | macOS | Windows | WASM |
+|----------|-------|-------|---------|------|
+| CPU Time | ✓ perf | ✓ mach | ✓ QueryPerf | ✓ performance.now |
+| Energy | ✓ RAPL | ✓ powermetrics | ✓ EMI | ✗ estimated |
+| Memory | ✓ /proc | ✓ task_info | ✓ WorkingSet | ✓ memory API |
+| Carbon | ✓ API | ✓ API | ✓ API | ✓ API |
+
+#### 3.2.4 Carbon Monitor (`runtime/src/carbon/`)
+
+**Technology**: HTTP client + caching
+
+```rust
+// Dependencies
+reqwest = "0.12"          // HTTP client
+serde_json = "1.0"        // JSON parsing
+moka = "0.12"             // Concurrent cache
+```
+
+**Carbon Data Sources**:
+- [Electricity Maps API](https://api.electricitymap.org/)
+- [WattTime API](https://api.watttime.org/)
+- [UK Carbon Intensity API](https://carbonintensity.org.uk/)
+- Local estimates based on grid region
+
+#### 3.2.5 Memory Manager (`runtime/src/memory/`)
+
+**Technology**: Custom allocator in Rust
+
+```rust
+// Dependencies
+bumpalo = "3.16"          // Bump allocator
+mimalloc = "0.1"          // Fast allocator
+```
+
+**Memory Model**:
+- Region-based allocation for deterministic cleanup
+- Resource-tagged allocations for tracking
+- Optional GC with energy-aware collection scheduling
+
+---
+
+## 4. Standard Library
+
+### 4.1 Core Modules
+
+```
+stdlib/
+├── core/                   # Core language support
+│   ├── prelude.ecl        # Auto-imported definitions
+│   ├── types.ecl          # Primitive types
+│   ├── resources.ecl      # Resource type definitions
+│   ├── operators.ecl      # Operator overloading
+│   └── intrinsics.rs      # Rust intrinsics (FFI)
+│
+├── collections/            # Data structures
+│   ├── array.ecl          # Fixed-size arrays
+│   ├── vec.ecl            # Dynamic arrays
+│   ├── hashmap.ecl        # Hash maps
+│   ├── btree.ecl          # Balanced trees
+│   └── adaptive/          # Adaptive data structures
+│       ├── map.ecl        # Auto-selecting map
+│       └── set.ecl        # Auto-selecting set
+│
+├── io/                     # Input/Output
+│   ├── console.ecl        # Console I/O
+│   ├── file.ecl           # File system
+│   ├── net.ecl            # Networking
+│   └── async.ecl          # Async primitives
+│
+├── math/                   # Mathematics
+│   ├── num.ecl            # Numeric operations
+│   ├── linear.ecl         # Linear algebra
+│   ├── stats.ecl          # Statistics
+│   └── optimize.ecl       # Optimization algorithms
+│
+├── carbon/                 # Carbon-aware utilities
+│   ├── monitor.ecl        # Carbon monitoring
+│   ├── scheduler.ecl      # Carbon-aware scheduling
+│   └── report.ecl         # Carbon reporting
+│
+├── text/                   # Text processing
+│   ├── string.ecl         # String operations
+│   ├── regex.ecl          # Regular expressions
+│   ├── unicode.ecl        # Unicode support
+│   └── format.ecl         # Formatting
+│
+├── time/                   # Time and dates
+│   ├── instant.ecl        # Monotonic time
+│   ├── datetime.ecl       # Calendar dates
+│   └── duration.ecl       # Time durations
+│
+├── concurrency/            # Concurrent programming
+│   ├── thread.ecl         # OS threads
+│   ├── channel.ecl        # Message passing
+│   ├── mutex.ecl          # Mutual exclusion
+│   └── atomic.ecl         # Atomic operations
+│
+└── ffi/                    # Foreign function interface
+    ├── rust.ecl           # Rust interop
+    ├── c.ecl              # C interop
+    └── wasm.ecl           # WASM imports/exports
+```
+
+### 4.2 Adaptive Data Structures
+
+Eclexia-specific data structures that automatically select implementations:
+
+```eclexia
+// Example: Adaptive Map
+adaptive type Map[K, V]
+    @optimize: minimize memory, minimize latency
+{
+    @impl "hash_map":
+        @when: is_hashable(K) && expected_size > 100
+        @provides: lookup: O(1), memory: O(n)
+    { HashMap[K, V] }
+
+    @impl "btree_map":
+        @when: is_ordered(K)
+        @provides: lookup: O(log n), memory: O(n)
+    { BTreeMap[K, V] }
+
+    @impl "sorted_vec":
+        @when: expected_size < 20
+        @provides: lookup: O(log n), memory: O(n)
+    { SortedVec[K, V] }
+}
+```
+
+---
+
+## 5. Developer Tooling
+
+### 5.1 Language Server Protocol (LSP)
+
+**Technology**: Rust with `tower-lsp`
+
+```rust
+// Dependencies
+tower-lsp = "0.20"        // LSP framework
+lsp-types = "0.95"        // LSP type definitions
+ropey = "1.6"             // Rope data structure for text
+```
+
+**Features**:
+
+| Feature | Priority | Complexity |
+|---------|----------|------------|
+| Syntax highlighting | P0 | Low |
+| Diagnostics | P0 | Medium |
+| Go to definition | P0 | Medium |
+| Hover information | P0 | Low |
+| Completion | P1 | High |
+| Signature help | P1 | Medium |
+| Resource annotations | P1 | High |
+| Code actions | P2 | Medium |
+| Rename | P2 | Medium |
+| Find references | P2 | Medium |
+
+### 5.2 IDE Extensions
+
+#### 5.2.1 VSCode Extension
+
+**Technology**: ReScript for extension, Deno for build
+
+```json
+// package.json (for VSCode extension manifest only)
+{
+  "name": "eclexia-vscode",
+  "displayName": "Eclexia",
+  "engines": { "vscode": "^1.85.0" },
+  "activationEvents": ["onLanguage:eclexia"],
+  "main": "./dist/extension.js"
+}
+```
+
+**Features**:
+- Semantic syntax highlighting
+- Inline resource annotations
+- Carbon footprint indicators
+- Solution selection visualization
+
+#### 5.2.2 Neovim/Vim Support
+
+**Technology**: Lua for Neovim, VimScript for Vim
+
+```lua
+-- nvim-lspconfig configuration
+require('lspconfig').eclexia.setup{}
+```
+
+### 5.3 Command-Line Tools
+
+#### 5.3.1 Compiler CLI (`eclexia`)
+
+```bash
+# Compilation
+eclexia build <file.ecl>           # Build executable
+eclexia build --target wasm        # Build for WASM
+eclexia check <file.ecl>           # Type check only
+
+# Execution
+eclexia run <file.ecl>             # Build and run
+eclexia run --observe shadow       # Show shadow prices
+eclexia run --carbon-report        # Generate carbon report
+
+# Development
+eclexia fmt <file.ecl>             # Format code
+eclexia lint <file.ecl>            # Lint code
+eclexia doc <file.ecl>             # Generate documentation
+eclexia test                       # Run tests
+eclexia bench                      # Run benchmarks
+
+# Package management
+eclexia init                       # Initialize project
+eclexia add <package>              # Add dependency
+eclexia publish                    # Publish package
+```
+
+#### 5.3.2 REPL (`eclexia repl`)
+
+**Technology**: Rust with `rustyline`
+
+```rust
+// Dependencies
+rustyline = "14"          // Line editing
+rustyline-derive = "0.10" // Derive macros
+```
+
+**Features**:
+- Incremental type checking
+- Resource tracking display
+- Shadow price inspection
+- Expression evaluation with timing
+
+#### 5.3.3 Formatter (`eclexia fmt`)
+
+**Technology**: Rust with custom pretty printer
+
+```rust
+// Dependencies
+pretty = "0.12"           // Wadler-style pretty printing
+```
+
+**Formatting Rules**:
+- Resource annotations on separate lines
+- Aligned `@when`, `@provides` clauses
+- Consistent indentation (4 spaces)
+
+#### 5.3.4 Linter (`eclexia lint`)
+
+**Technology**: Rust with custom rule engine
+
+**Lints**:
+- Unused resource constraints
+- Impossible constraint combinations
+- Suboptimal solution orderings
+- Carbon inefficiency warnings
+- Dimensional analysis suggestions
+
+### 5.4 Debugging Tools
+
+#### 5.4.1 Resource Debugger
+
+**Technology**: Rust + TUI
+
+```rust
+// Dependencies
+ratatui = "0.26"          // Terminal UI framework
+crossterm = "0.27"        // Cross-platform terminal
+```
+
+**Features**:
+- Real-time resource consumption
+- Shadow price timeline
+- Solution selection trace
+- Constraint violation highlighting
+
+#### 5.4.2 Profiler
+
+**Technology**: Rust + flamegraph
+
+```rust
+// Dependencies
+inferno = "0.11"          // Flamegraph generation
+tracing = "0.1"           // Instrumentation
+tracing-subscriber = "0.3"
+```
+
+**Profiles**:
+- Time profiling
+- Energy profiling
+- Memory profiling
+- Carbon profiling
+
+---
+
+## 6. Build & Package System
+
+### 6.1 Build System
+
+**Technology**: Just (command runner) + Cargo
+
+```just
+# justfile
+default:
+    @just --list
+
+build:
+    cargo build --release
+
+test:
+    cargo test
+    eclexia test
+
+bench:
+    cargo bench
+    eclexia bench
+
+doc:
+    cargo doc --no-deps
+    eclexia doc stdlib/
+
+clean:
+    cargo clean
+    rm -rf target/
+```
+
+### 6.2 Package Manager
+
+#### 6.2.1 Package Format
+
+```toml
+# eclexia.toml
+[package]
+name = "my-package"
+version = "0.1.0"
+edition = "2025"
+authors = ["Author <email>"]
+license = "MIT OR Apache-2.0"
+description = "A package description"
+repository = "https://gitlab.com/user/package"
+
+[dependencies]
+stdlib = "0.1"
+other-package = { version = "1.0", features = ["async"] }
+
+[dev-dependencies]
+test-framework = "0.2"
+
+[build]
+targets = ["native", "wasm"]
+
+[resources]
+default-energy-budget = "1000J"
+default-carbon-budget = "100gCO2e"
+```
+
+#### 6.2.2 Package Registry
+
+**Technology**: Gleam on BEAM
+
+```gleam
+// registry/src/main.gleam
+import gleam/http/elli
+import gleam/json
+import gleam/pgo  // PostgreSQL
+```
+
+**Registry Features**:
+- Package upload/download
+- Version resolution
+- SHA-256 checksum verification
+- License checking
+- Resource requirement metadata
+
+### 6.3 Reproducible Builds
+
+**Technology**: Guix/Nix
+
+```scheme
+;; guix.scm
+(define-public eclexia
+  (package
+    (name "eclexia")
+    (version "0.1.0")
+    (source (origin
+              (method git-fetch)
+              (uri (git-reference
+                    (url "https://gitlab.com/eclexia-lang/eclexia")
+                    (commit (string-append "v" version))))
+              (sha256 (base32 "..."))))
+    (build-system cargo-build-system)
+    (arguments
+     `(#:cargo-inputs
+       (("rust-tokio" ,rust-tokio)
+        ("rust-logos" ,rust-logos)
+        ...)))
+    (home-page "https://eclexia.org")
+    (synopsis "Economics-as-Code programming language")
+    (description "...")
+    (license (list license:asl2.0 license:agpl3+))))
+```
+
+---
+
+## 7. Testing Infrastructure
+
+### 7.1 Test Framework
+
+**Technology**: Custom framework in Eclexia (bootstrapped from Rust)
+
+```eclexia
+// test_example.ecl
+import testing
+
+@test
+def test_resource_tracking() -> TestResult
+    @requires: energy < 10J
+{
+    let x = compute_something()
+    assert_eq(x, expected_value)
+    assert_resource_used(energy, < 5J)
+}
+
+@property
+def prop_resource_monotonic(n: Int) -> Bool
+    @requires: n > 0
+{
+    let before = current_energy()
+    let _ = fib(n)
+    let after = current_energy()
+    after >= before
+}
+```
+
+### 7.2 Test Types
+
+| Type | Framework | Purpose |
+|------|-----------|---------|
+| Unit tests | Eclexia test | Individual function testing |
+| Integration tests | Eclexia test | Cross-module testing |
+| Property tests | QuickCheck-style | Generative testing |
+| Resource tests | Custom | Resource constraint verification |
+| Benchmark tests | Criterion-style | Performance regression |
+| Fuzzing | cargo-fuzz | Compiler robustness |
+
+### 7.3 CI/CD Pipeline
+
+**Technology**: GitHub Actions / GitLab CI
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - run: cargo test
+
+  test-stdlib:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - run: eclexia test stdlib/
+
+  benchmarks:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - run: eclexia bench --compare main
+
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - run: cargo +nightly fuzz run parser -- -max_total_time=300
+```
+
+---
+
+## 8. Language-Specific Components
+
+These components are **unique to Eclexia** and do not exist in other languages:
+
+### 8.1 Dimensional Type System
+
+**Implementation**: Kind-level type encoding
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Dimensional Type Checker                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Dimension = {Mass, Length, Time, Current, Temperature,    │
+│               Amount, Luminosity, Money, Carbon}            │
+│                                                             │
+│  Type = Quantity<Dimension^power, ...>                     │
+│                                                             │
+│  Energy = Quantity<Mass^1, Length^2, Time^-2>   // kg·m²/s²│
+│  Power  = Quantity<Mass^1, Length^2, Time^-3>   // Watts   │
+│  Carbon = Quantity<Mass^1, Carbon^1>            // gCO2e   │
+│                                                             │
+│  Rules:                                                     │
+│  - Addition: dimensions must match exactly                  │
+│  - Multiplication: dimensions add                           │
+│  - Division: dimensions subtract                            │
+│  - Comparison: dimensions must match                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Rust Implementation**:
+
+```rust
+// compiler/src/typechecker/dimensions.rs
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Dimension {
+    pub mass: i8,
+    pub length: i8,
+    pub time: i8,
+    pub current: i8,
+    pub temperature: i8,
+    pub amount: i8,
+    pub luminosity: i8,
+    pub money: i8,
+    pub carbon: i8,
+}
+
+impl Dimension {
+    pub fn dimensionless() -> Self { /* all zeros */ }
+    pub fn energy() -> Self { Self { mass: 1, length: 2, time: -2, ..Default::default() } }
+    pub fn multiply(&self, other: &Self) -> Self { /* add exponents */ }
+    pub fn divide(&self, other: &Self) -> Self { /* subtract exponents */ }
+}
+```
+
+### 8.2 Adaptive Block Compiler
+
+**Implementation**: Dependent intersection types + runtime dispatch
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Adaptive Block Compilation                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Source:                                                    │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  adaptive def sort(arr)                              │   │
+│  │    @solution "quick": @when p1 { impl1 }            │   │
+│  │    @solution "merge": @when p2 { impl2 }            │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                           │                                 │
+│                           ▼                                 │
+│  Compiled Output:                                           │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  struct SortAdaptive {                               │   │
+│  │    solutions: Vec<(Predicate, FnPtr, Resources)>,   │   │
+│  │  }                                                   │   │
+│  │                                                      │   │
+│  │  fn sort(arr, ctx) {                                │   │
+│  │    let idx = ctx.scheduler.select_solution(         │   │
+│  │      &self.solutions,                               │   │
+│  │      ctx.shadow_prices,                             │   │
+│  │      ctx.constraints,                               │   │
+│  │    );                                                │   │
+│  │    (self.solutions[idx].1)(arr, ctx)                │   │
+│  │  }                                                   │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 8.3 Shadow Price Engine
+
+**Implementation**: Dual LP solver with warm starting
+
+```rust
+// runtime/src/shadow/engine.rs
+pub struct ShadowPriceEngine {
+    solver: DualSimplex,
+    constraints: Vec<Constraint>,
+    objectives: Vec<Objective>,
+    warm_start: Option<Basis>,
+}
+
+impl ShadowPriceEngine {
+    pub fn compute_shadow_prices(&mut self) -> ShadowPrices {
+        // 1. Build LP from current constraints and resource usage
+        let lp = self.build_lp();
+
+        // 2. Solve with warm start for speed
+        let solution = self.solver.solve_warm(lp, &self.warm_start);
+
+        // 3. Extract dual variables (shadow prices)
+        ShadowPrices {
+            energy: solution.dual_for("energy"),
+            time: solution.dual_for("time"),
+            memory: solution.dual_for("memory"),
+            carbon: solution.dual_for("carbon"),
+        }
+    }
+
+    pub fn update_constraint(&mut self, constraint: Constraint) {
+        // Incremental update for real-time responsiveness
+        self.constraints.push(constraint);
+        self.warm_start = None;  // Invalidate warm start
+    }
+}
+```
+
+### 8.4 Carbon-Aware Scheduler
+
+**Implementation**: Prediction + deferral + location-aware
+
+```rust
+// runtime/src/carbon/scheduler.rs
+pub struct CarbonScheduler {
+    api_clients: Vec<Box<dyn CarbonApiClient>>,
+    cache: CarbonCache,
+    prediction_model: CarbonPredictor,
+}
+
+impl CarbonScheduler {
+    pub async fn optimal_execution_time(
+        &self,
+        task: &Task,
+        deadline: Option<Duration>,
+    ) -> ExecutionTime {
+        // 1. Get current carbon intensity
+        let current = self.get_carbon_intensity().await;
+
+        // 2. Predict future intensities
+        let forecast = self.prediction_model.forecast(24.hours());
+
+        // 3. Find optimal window within deadline
+        let window = self.find_optimal_window(
+            current,
+            &forecast,
+            task.estimated_duration,
+            task.carbon_budget,
+            deadline,
+        );
+
+        ExecutionTime::Scheduled(window)
+    }
+}
+```
+
+### 8.5 Resource Constraint Solver
+
+**Implementation**: SMT-backed constraint solving
+
+```rust
+// compiler/src/solver/constraints.rs
+pub struct ConstraintSolver {
+    z3_context: z3::Context,
+    theories: Vec<Theory>,
+}
+
+impl ConstraintSolver {
+    pub fn check_satisfiability(
+        &self,
+        constraints: &[ResourceConstraint],
+    ) -> SatisfiabilityResult {
+        // Build SMT formula
+        let solver = z3::Solver::new(&self.z3_context);
+
+        for c in constraints {
+            solver.assert(&self.encode_constraint(c));
+        }
+
+        match solver.check() {
+            z3::SatResult::Sat => SatisfiabilityResult::Sat(solver.get_model()),
+            z3::SatResult::Unsat => SatisfiabilityResult::Unsat(solver.get_unsat_core()),
+            z3::SatResult::Unknown => SatisfiabilityResult::Unknown,
+        }
+    }
+}
+```
+
+---
+
+## 9. External Integrations
+
+### 9.1 Hardware Interfaces
+
+| Interface | Platform | API/Library |
+|-----------|----------|-------------|
+| CPU Energy (RAPL) | Linux | `msr` kernel module |
+| GPU Energy | Linux/Windows | NVIDIA NVML, AMD ROCm |
+| Battery Status | All | `sysinfo` crate |
+| CPU Frequency | All | `raw-cpuid` crate |
+| Temperature | Linux | `hwmon` interface |
+
+### 9.2 Carbon APIs
+
+| Provider | Coverage | API Type |
+|----------|----------|----------|
+| Electricity Maps | Global | REST API (paid) |
+| WattTime | North America | REST API (free tier) |
+| UK Carbon Intensity | UK only | REST API (free) |
+| Local Estimates | Fallback | Offline model |
+
+### 9.3 Cloud Integrations
+
+| Cloud | Integration | Purpose |
+|-------|-------------|---------|
+| AWS | Lambda, EC2 | Carbon-aware scheduling |
+| GCP | Cloud Functions | Carbon-aware scheduling |
+| Azure | Functions | Carbon-aware scheduling |
+| Cloudflare | Workers | WASM execution at edge |
+
+---
+
+## 10. Documentation System
+
+### 10.1 Documentation Generator
+
+**Technology**: Custom generator in Rust
+
+```rust
+// Dependencies
+pulldown-cmark = "0.10"   // Markdown parsing
+syntect = "5"             // Syntax highlighting
+tera = "1"                // Template engine
+```
+
+**Features**:
+- Eclexia syntax highlighting
+- Resource annotation rendering
+- Cross-references between modules
+- Search indexing
+
+### 10.2 Documentation Types
+
+| Type | Format | Purpose |
+|------|--------|---------|
+| API Reference | Generated HTML | Library documentation |
+| Tutorials | Markdown | Learning guides |
+| Language Reference | Markdown | Specification |
+| Internal Docs | Rustdoc | Compiler internals |
+
+---
+
+## 11. Implementation Phases
+
+### Phase 1: Minimal Viable Compiler (3-6 months) - COMPLETE ✅
+
+**Goal**: Compile basic Eclexia to native code
+
+**Deliverables**:
+- [x] Lexer with dimensional literals
+- [x] Parser for core syntax
+- [x] Type checker (Hindley-Milner with dimensional analysis)
+- [x] Code generation (HIR → MIR → Bytecode → VM execution)
+- [x] REPL for experimentation
+- [x] Testing framework (#[test] attributes)
+- [x] Benchmarking framework (#[bench] attributes)
+
+**Dependencies**:
+- Rust 1.75+
+- Logos for lexing
+- Hand-written recursive descent parser
+- Bytecode VM (no LLVM/Cranelift yet)
+
+### Phase 2: Type System Complete (3-6 months) - COMPLETE ✅
+
+**Goal**: Full type system with dimensions and resources
+
+**Deliverables**:
+- [x] Dimensional type checking
+- [x] Resource type tracking
+- [x] Hindley-Milner type inference with let-polymorphism
+- [x] Constraint type checking (@requires, @provides)
+- [x] Adaptive block type checking
+- [x] Comprehensive error messages
+- [x] Unification with occurs check
+
+**Dependencies**:
+- Custom unification algorithm (implemented)
+- No Z3 dependency (constraint checking via type system)
+
+### Phase 3: Runtime System (3-6 months) - COMPLETE ✅
+
+**Goal**: Full adaptive runtime with shadow prices
+
+**Deliverables**:
+- [x] Adaptive decision engine (selection algorithms)
+- [x] Shadow price computation (tracking + forecasting)
+- [x] Resource profiler (energy, time, memory, carbon)
+- [x] Bytecode virtual machine
+- [x] Runtime resource budgets
+- [x] Resource tracking infrastructure
+
+**Dependencies**:
+- Shadow price algorithm (implemented without LP solver)
+- Resource tracking (implemented)
+- Carbon API research (documented in CARBON_APIS.md)
+
+### Phase 4: Standard Library (3-6 months) - COMPLETE ✅
+
+**Goal**: Comprehensive standard library
+
+**Deliverables**:
+- [x] Core types (Option, Result)
+- [x] Collections (Vec, HashMap, HashSet)
+- [x] Mathematics (trig, log, rounding, number theory)
+- [x] Core functions (panic, assert, print)
+- [ ] I/O (async) - TODO
+- [ ] Text processing - TODO
+- [ ] Concurrency primitives - TODO
+
+**Dependencies**:
+- Runtime system complete ✅
+- Standard library modules in stdlib/ ✅
+
+### Phase 5: Tooling (3-6 months) - 85% COMPLETE
+
+**Goal**: Developer-ready tooling
+
+**Deliverables**:
+- [x] LSP server (70% - diagnostics, symbols, navigation)
+- [x] CLI (build, run, check, fmt, repl, init, test, bench)
+- [x] Testing framework
+- [x] Benchmarking framework
+- [x] Package manager (90% - manifest + dependency resolution)
+- [ ] Formatter (pretty printer) - TODO
+- [ ] Linter - TODO
+- [ ] Debugger - TODO
+- [ ] VSCode extension - TODO (LSP server ready)
+
+**Dependencies**:
+- tower-lsp ✅
+- Package registry (deferred to Phase 6)
+
+### Phase 6: Optimization & Polish (6+ months)
+
+**Goal**: Production-ready performance
+
+**Deliverables**:
+- [ ] Advanced optimizations
+- [ ] WASM backend
+- [ ] Self-hosting (compiler in Eclexia)
+- [ ] Comprehensive documentation
+- [ ] Performance benchmarks
+- [ ] Community infrastructure
+
+---
+
+## 12. Dependencies Matrix
+
+### 12.1 Core Dependencies
+
+| Crate | Version | Purpose | License |
+|-------|---------|---------|---------|
+| `logos` | 0.14 | Lexer generator | MIT/Apache-2.0 |
+| `chumsky` | 0.9 | Parser combinators | MIT |
+| `inkwell` | 0.4 | LLVM bindings | Apache-2.0 |
+| `cranelift-*` | 0.107 | Alternative backend | Apache-2.0 |
+| `tokio` | 1.37 | Async runtime | MIT |
+| `good_lp` | 1.8 | LP modeling | MIT |
+| `minilp` | 0.2 | Pure Rust LP solver | MIT |
+| `z3` | 0.12 | SMT solver (optional) | MIT |
+| `sysinfo` | 0.30 | System info | MIT |
+| `tower-lsp` | 0.20 | LSP framework | MIT/Apache-2.0 |
+| `rustyline` | 14 | REPL line editing | MIT |
+| `ratatui` | 0.26 | TUI framework | MIT |
+
+### 12.2 Development Dependencies
+
+| Tool | Purpose |
+|------|---------|
+| `cargo` | Rust build system |
+| `rustfmt` | Rust formatting |
+| `clippy` | Rust linting |
+| `miri` | Undefined behavior detection |
+| `cargo-fuzz` | Fuzzing |
+| `criterion` | Benchmarking |
+| `just` | Command runner |
+
+### 12.3 External Services
+
+| Service | Purpose | Required? |
+|---------|---------|-----------|
+| Electricity Maps API | Carbon intensity | Optional |
+| WattTime API | Carbon intensity | Optional |
+| Package registry | Package distribution | For publishing |
+
+---
+
+## Appendix A: Technology Decisions
+
+### A.1 Why Rust for Compiler?
+
+1. **Memory safety** without garbage collection
+2. **Performance** competitive with C/C++
+3. **WASM compilation** for browser playground
+4. **Ecosystem** (Cargo, crates.io)
+5. **Algebraic data types** for AST representation
+6. **Pattern matching** for compiler passes
+
+### A.2 Why Not LLVM Everywhere?
+
+- **Compile time**: LLVM is slow for debug builds
+- **WASM**: Cranelift has better WASM support
+- **Portability**: Pure Rust solutions work everywhere
+- **Strategy**: Use Cranelift for dev, LLVM for release
+
+### A.3 Why Custom LP Solver?
+
+- **WASM compatibility**: minilp is pure Rust
+- **Real-time**: Approximate solutions acceptable
+- **Warm starting**: Critical for responsiveness
+- **Simplicity**: Most problems are small LP
+
+### A.4 Why Gleam for Registry?
+
+- **BEAM reliability**: Proven for web services
+- **Concurrency**: Millions of connections
+- **Fault tolerance**: Let-it-crash philosophy
+- **Type safety**: Gleam's type system
+
+---
+
+## Appendix B: Risk Assessment
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| Type system too complex | Medium | High | Start simple, iterate |
+| Runtime overhead too high | Medium | High | Profile early, optimize hot paths |
+| Carbon API unreliable | Low | Medium | Multiple providers, fallback |
+| LP solver too slow | Low | Medium | Approximate solutions, caching |
+| WASM limitations | Low | Low | Feature detection, fallbacks |
+| Community adoption | Medium | Medium | Good docs, examples, tutorials |
+
+---
+
+## Appendix C: Success Metrics
+
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| Compile time | < 1s for small files | CI benchmarks |
+| Runtime overhead | < 5% vs hand-optimized | Benchmarks |
+| Shadow price latency | < 1ms | Profiling |
+| Type error quality | > 80% helpful | User surveys |
+| Documentation coverage | 100% public API | Coverage tools |
+| Test coverage | > 80% | Coverage tools |
+
+---
+
+*Document Version: 1.0*
+*Last Updated: 2025-12-31*
+*Author: Claude (for Eclexia Project)*

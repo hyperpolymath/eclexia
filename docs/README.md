@@ -5,6 +5,7 @@ This directory is the canonical home for long-form documentation, status snapsho
 ## Start Here
 
 - [`../README.adoc`](../README.adoc): Repository landing page
+- [`../NAVIGATION.adoc`](../NAVIGATION.adoc): Root navigation map
 - [`../GETTING_STARTED.md`](../GETTING_STARTED.md): Fast start for first-time users
 - [`../QUICK_STATUS.md`](../QUICK_STATUS.md): Current implementation snapshot
 - [`wiki/Home.md`](wiki/Home.md): Wiki entry point
@@ -12,17 +13,20 @@ This directory is the canonical home for long-form documentation, status snapsho
 ## Core References
 
 - [`../SPECIFICATION.md`](../SPECIFICATION.md)
-- [`../WHITEPAPER.md`](../WHITEPAPER.md)
-- [`../PROOFS.md`](../PROOFS.md)
-- [`../FORMAL_VERIFICATION.md`](../FORMAL_VERIFICATION.md)
-- [`../ALGORITHMS.md`](../ALGORITHMS.md)
-- [`../BIBLIOGRAPHY.md`](../BIBLIOGRAPHY.md)
+- [`research/WHITEPAPER.adoc`](research/WHITEPAPER.adoc)
+- [`proofs/PROOFS.adoc`](proofs/PROOFS.adoc)
+- [`proofs/FORMAL_VERIFICATION.adoc`](proofs/FORMAL_VERIFICATION.adoc)
+- [`research/ALGORITHMS.adoc`](research/ALGORITHMS.adoc)
+- [`research/BIBLIOGRAPHY.adoc`](research/BIBLIOGRAPHY.adoc)
 
 ## Architecture and Roadmaps
 
 - [`architecture/`](architecture/)
 - [`roadmap/`](roadmap/)
 - [`analysis/`](analysis/)
+- [`practice/`](practice/)
+- [`theory/`](theory/)
+- [`whitepapers/`](whitepapers/)
 
 ## Reports and Status
 
@@ -46,3 +50,4 @@ This directory is the canonical home for long-form documentation, status snapsho
 
 - Archive folders preserve historical planning and session artifacts that are no longer primary entry points.
 - New long-form documents should default to `docs/` instead of repository root unless they are canonical top-level policies.
+- Whitepapers are grouped into `whitepapers/academic/` and `whitepapers/industry/`.

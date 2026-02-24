@@ -1,0 +1,9 @@
+= Theory Docs
+
+Canonical theory-oriented materials:
+
+* link:THEORY.adoc[Theory]
+* link:ALGORITHMS.adoc[Algorithms]
+* link:BIBLIOGRAPHY.adoc[Bibliography]
+
+Markdown mirrors are available alongside these files.

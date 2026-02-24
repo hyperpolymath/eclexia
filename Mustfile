@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: PMPL-1.0-or-later
 # Mustfile - eclexia invariants and quality gates
+# Canonical machine-readable mirror: .machine_readable/contractiles/must/Mustfile
 
 version: 1
 
@@ -47,6 +48,10 @@ checks:
 
   - name: gitbot-fleet-integration-present
     run: "bash -euo pipefail -c 'rg -q gitbot-fleet .github/workflows/hypatia-scan.yml'"
+
+  - name: bot-directives-mirrored
+    run: >
+      bash -euo pipefail -c 'test -f .machine_readable/bot_directives/rhodibot.scm && test -f .machine_readable/bot_directives/glambot.scm && test -f .machine_readable/bot_directives/finishbot.scm'
 
   - name: trustfile-present
     run: "test -f .machine_readable/contractiles/trust/Trustfile.a2ml"

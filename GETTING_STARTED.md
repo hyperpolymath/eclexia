@@ -180,8 +180,8 @@ Type errors:
 ## Next Steps
 
 - Read the [Specification](SPECIFICATION.md) for language details
-- Explore the [Theory](THEORY.md) for the economics foundation
-- Check the [Implementation Roadmap](IMPLEMENTATION_ROADMAP.md) for upcoming features
+- Explore the [Theory](docs/research/THEORY.md) for the economics foundation
+- Check the [Implementation Roadmap](docs/roadmap/IMPLEMENTATION_ROADMAP.md) for upcoming features
 - Browse `examples/` for more code samples
 
 ## Getting Help

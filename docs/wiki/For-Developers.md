@@ -28,10 +28,10 @@ cargo fmt --all
 ## Key Technical References
 
 - [`../../SPECIFICATION.md`](../../SPECIFICATION.md)
-- [`../../TOOLCHAIN_STATUS.md`](../../TOOLCHAIN_STATUS.md)
-- [`../../IMPLEMENTATION_ROADMAP.md`](../../IMPLEMENTATION_ROADMAP.md)
-- [`../../PROOFS.md`](../../PROOFS.md)
-- [`../../FORMAL_VERIFICATION.md`](../../FORMAL_VERIFICATION.md)
+- [`../reports/TOOLCHAIN_STATUS.md`](../reports/TOOLCHAIN_STATUS.md)
+- [`../roadmap/IMPLEMENTATION_ROADMAP.md`](../roadmap/IMPLEMENTATION_ROADMAP.md)
+- [`../proofs/PROOFS.md`](../proofs/PROOFS.md)
+- [`../proofs/FORMAL_VERIFICATION.md`](../proofs/FORMAL_VERIFICATION.md)
 
 ## Contribution Entry Points
 

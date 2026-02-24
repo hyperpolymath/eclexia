@@ -4,7 +4,8 @@
 :sectanchors:
 :sectnums:
 
-image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+image:https://img.shields.io/badge/License-PMPL_1.0--or--later-blue.svg[PMPL-1.0-or-later,link="https://github.com/hyperpolymath/eclexia/blob/main/LICENSE"]
+image:https://img.shields.io/badge/Idris-Inside-5E5086?style=flat&logo=idris&logoColor=white[Idris Inside,link="https://github.com/hyperpolymath/proven"]
 
 Eclexia is an Economics-as-Code programming language.
 It treats energy, time, memory, and carbon as first-class constraints so software can optimize for performance and sustainability together.
@@ -15,10 +16,11 @@ It treats energy, time, memory, and carbon as first-class constraints so softwar
 * link:QUICK_STATUS.md[Current Implementation Status]
 * link:docs/README.md[Documentation Index]
 * link:docs/wiki/Home.md[Wiki Home]
+* link:NAVIGATION.adoc[NAVIGATION]
 * link:SPECIFICATION.md[Language Specification]
-* link:WHITEPAPER.md[Whitepaper]
-* link:PROOFS.md[Formal Proofs]
-* link:IMPLEMENTATION_ROADMAP.md[Implementation Roadmap]
+* link:docs/whitepapers/academic/WHITEPAPER.adoc[Whitepaper]
+* link:docs/proofs/PROOFS.adoc[Formal Proofs]
+* link:docs/roadmap/IMPLEMENTATION_ROADMAP.adoc[Implementation Roadmap]
 * link:CONTRIBUTING.md[Contributing]
 * link:SECURITY.md[Security Policy]
 
@@ -97,31 +99,31 @@ For a fuller walkthrough, use link:GETTING_STARTED.md[GETTING_STARTED.md].
 | Language syntax and semantics
 | Language implementers
 
-| link:WHITEPAPER.md[Whitepaper]
+| link:docs/whitepapers/academic/WHITEPAPER.adoc[Whitepaper]
 | High-level design and motivation
 | General and research audience
 
-| link:PROOFS.md[Proofs]
+| link:docs/proofs/PROOFS.adoc[Proofs]
 | Formal statements and theorem development
 | Researchers
 
-| link:FORMAL_VERIFICATION.md[Formal Verification]
+| link:docs/proofs/FORMAL_VERIFICATION.adoc[Formal Verification]
 | Coq/Agda proof status and verification notes
 | Researchers and maintainers
 
-| link:IMPLEMENTATION_ROADMAP.md[Implementation Roadmap]
+| link:docs/roadmap/IMPLEMENTATION_ROADMAP.adoc[Implementation Roadmap]
 | Medium/long-term engineering roadmap
 | Contributors and maintainers
 
-| link:TOOLCHAIN_STATUS.md[Toolchain Status]
+| link:docs/reports/TOOLCHAIN_STATUS.adoc[Toolchain Status]
 | Status of compiler/runtime/tooling components
 | Contributors
 
-| link:ALGORITHMS.md[Algorithms]
+| link:docs/theory/ALGORITHMS.adoc[Algorithms]
 | Algorithmic details and implementation notes
 | Contributors and researchers
 
-| link:BIBLIOGRAPHY.md[Bibliography]
+| link:docs/theory/BIBLIOGRAPHY.adoc[Bibliography]
 | Research references used by the project
 | Researchers
 |===
@@ -178,7 +180,7 @@ link:docs/wiki/README.md[docs/wiki/README.md]
 == License
 
 Eclexia is licensed under PMPL-1.0-or-later.
-See link:LICENSE[LICENSE] and link:LICENSE.txt[LICENSE.txt].
+See link:LICENSE[LICENSE] and link:licensing/LICENSE.txt[licensing/LICENSE.txt].
 
 == Contact
 

@@ -41,5 +41,5 @@ Move to wiki:
 | `../QUICK_STATUS.md` | [Home](Home.md), [FAQ](FAQ.md) |
 | `../GETTING_STARTED.md` | [For Users](For-Users.md) |
 | `../SPECIFICATION.md` | [For Developers](For-Developers.md), [Architecture](Architecture.md) |
-| `../PROOFS.md` + `../FORMAL_VERIFICATION.md` | [For Developers](For-Developers.md), [Glossary](Glossary.md) |
-| `../IMPLEMENTATION_ROADMAP.md` + `../TOOLCHAIN_STATUS.md` | [Architecture](Architecture.md), [Testing and Benchmarking](Testing-and-Benchmarking.md) |
+| `../proofs/PROOFS.md` + `../proofs/FORMAL_VERIFICATION.md` | [For Developers](For-Developers.md), [Glossary](Glossary.md) |
+| `../roadmap/IMPLEMENTATION_ROADMAP.md` + `../reports/TOOLCHAIN_STATUS.md` | [Architecture](Architecture.md), [Testing and Benchmarking](Testing-and-Benchmarking.md) |

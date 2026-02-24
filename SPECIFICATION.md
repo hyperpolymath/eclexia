@@ -609,7 +609,7 @@ Eclexia has structural subtyping for resources:
 
 ### 9.4 Typing Rules
 
-See PROOFS.md §2 for complete typing rules.
+See docs/proofs/PROOFS.md §2 for complete typing rules.
 
 ### 9.5 Kind System
 
@@ -942,7 +942,7 @@ A conforming Eclexia implementation MUST:
 
 1. Accept all syntactically valid programs as defined in §3
 2. Reject all ill-typed programs as defined in §9
-3. Implement all typing rules from PROOFS.md
+3. Implement all typing rules from docs/proofs/PROOFS.md
 4. Implement all reduction rules from §10
 5. Provide the core standard library from §12.1
 6. Support resource types and dimensional analysis

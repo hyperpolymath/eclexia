@@ -1,0 +1,85 @@
+= Eclexia Pitch Deck (Draft)
+
+== Slide 1: Title
+- Eclexia
+- Economics-as-Code for resource-aware software
+- Date: February 11, 2026
+
+== Slide 2: The Core Problem
+- Software teams optimize latency and throughput but ignore full resource economics.
+- Cloud spend and carbon costs are rising faster than governance maturity.
+- Existing tools observe after the fact; they do not enforce constraints in code.
+
+== Slide 3: Why Existing Approaches Fail
+- Monitoring dashboards are reactive, not preventative.
+- Sustainability metrics are detached from engineering decisions.
+- Cost controls are policy docs, not executable guarantees.
+
+== Slide 4: The Eclexia Approach
+- Language-native resource constraints.
+- Adaptive functions with explicit trade-offs.
+- Runtime that tracks and reports resource dimensions.
+- Shadow prices to drive economically rational execution.
+
+== Slide 5: Product Demonstration Narrative
+- Define a function with energy/carbon budget.
+- Provide multiple implementations with different trade-offs.
+- Runtime selects viable/optimal path under current shadow prices.
+- Output includes budget adherence and carbon-aware behavior.
+
+== Slide 6: Technology Architecture
+- Compiler pipeline (parse/type-check/HIR/MIR/backends).
+- Runtime crates: core runtime, async, carbon, shadow.
+- Planned web playground for zero-install onboarding.
+
+== Slide 7: Market Opportunity
+- FinOps + GreenOps + platform engineering convergence.
+- Climate disclosure and sustainability commitments increase demand.
+- Resource governance for AI and high-throughput systems is under-served.
+
+== Slide 8: Initial Beachheads
+- Public sector and research institutions.
+- Industrial and IoT platforms with energy/carbon constraints.
+- Enterprise platform teams with strict SLO and cost targets.
+
+== Slide 9: Business Model
+- Open-source core with commercial services.
+- Enterprise support contracts.
+- Hosted analytics/control plane.
+- Training and certification programs.
+
+== Slide 10: Go-to-Market
+- Developer-first open ecosystem.
+- Pilot programs with measurable baseline/after metrics.
+- Partnerships with universities and sustainability-focused engineering orgs.
+
+== Slide 11: Traction and Progress
+- Compiler/runtime test coverage and conformance harness in place.
+- Carbon/shadow runtime modules implemented and verified.
+- Documentation corpus and tutorial set active.
+- Immediate roadmap: playground + ecosystem tooling.
+
+== Slide 12: Roadmap (12 Months)
+- Q1-Q2: Playground and onboarding, core toolchain hardening.
+- Q2-Q3: Section 21 ecosystem acceleration (tools/frameworks/libraries).
+- Q3-Q4: Pilot deployments, hosted metrics and policy workflows.
+
+== Slide 13: Team and Execution
+- Technical leadership in PL/runtime and systems architecture.
+- Contributor model for ecosystem expansion.
+- Research-to-product strategy with measurable milestones.
+
+== Slide 14: Funding Ask
+- Funding for 12-month execution runway.
+- Target use of funds:
+  - Product engineering
+  - Developer relations + docs
+  - Pilot integration support
+- Desired outcomes:
+  - Production pilots
+  - Measurable cost/carbon reduction case studies
+
+== Slide 15: Closing
+- Eclexia makes resource economics executable.
+- We are building the language and runtime layer for accountable software.
+- Contact: info@eclexia.org

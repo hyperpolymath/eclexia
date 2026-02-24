@@ -1,0 +1,16 @@
+= AI Guidance Files
+
+This directory centralizes AI-agent guidance files for the repository.
+
+Contents:
+
+* `CLAUDE.md`
+* `COPILOT.md`
+* `GEMINI.md`
+* `AI.a2ml`
+* `AI.djot`
+
+Source of truth:
+
+* Keep agent-facing policy and coding standards here.
+* Prefer linking from docs rather than duplicating these files elsewhere.

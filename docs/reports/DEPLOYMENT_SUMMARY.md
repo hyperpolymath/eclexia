@@ -21,7 +21,7 @@ This enables Eclexia to be deployed in cloud environments, containerized applica
 
 ### 1. Docker Containerization
 
-**Location:** `Dockerfile`, `.dockerignore`
+**Location:** `Containerfile`, `.dockerignore`
 
 **Multi-Stage Build:**
 - **Stage 1 (Builder):** Rust 1.75-alpine with build dependencies
@@ -537,7 +537,7 @@ kubectl delete pod eclexia-test -n eclexia
 ## Documentation
 
 **Created Files:**
-- `Dockerfile` - Multi-stage Docker build
+- `Containerfile` - Multi-stage container build
 - `.dockerignore` - Build optimization
 - `deploy/kubernetes/namespace.yaml` - Namespace definition
 - `deploy/kubernetes/configmap.yaml` - Configuration

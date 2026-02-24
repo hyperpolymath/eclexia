@@ -29,7 +29,7 @@ The runtime centers on:
 
 ## Deep-Dive References
 
-- [`../../TOOLCHAIN_STATUS.md`](../../TOOLCHAIN_STATUS.md)
-- [`../../ALGORITHMS.md`](../../ALGORITHMS.md)
+- [`../reports/TOOLCHAIN_STATUS.md`](../reports/TOOLCHAIN_STATUS.md)
+- [`../research/ALGORITHMS.md`](../research/ALGORITHMS.md)
 - [`../architecture/MULTICOMPILER-ARCHITECTURE.md`](../architecture/MULTICOMPILER-ARCHITECTURE.md)
 - [`../architecture/DESIGN-DECISIONS.adoc`](../architecture/DESIGN-DECISIONS.adoc)
