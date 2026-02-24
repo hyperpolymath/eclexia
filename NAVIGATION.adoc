@@ -24,6 +24,8 @@ Quick project navigation hub while stateful-artefacts tooling is being finalized
 * link:docs/wiki/Home.md[Wiki Home]
 * link:docs/theory/[Theory]
 * link:docs/practice/[Practice]
+* link:docs/practice/SOFTWARE-DEVELOPMENT-APPROACH.adoc[Software Development Approach]
+* link:docs/maintenance/MAINTENANCE-CHECKLIST.md[Maintenance Checklist]
 * link:docs/whitepapers/[Whitepapers]
 * link:docs/roadmap/ROADMAP.adoc[Roadmap]
 * link:docs/reports/V1-READINESS-AUDIT-2026-02-24.md[V1 Readiness Audit]
@@ -51,6 +53,8 @@ Both `.md` and `.adoc` versions are available in these folders for compatibility
 
 * link:.machine_readable/anchors/ANCHOR.a2ml[ANCHOR.a2ml]
 * link:.machine_readable/policies/MAINTENANCE-AXES.a2ml[MAINTENANCE-AXES.a2ml]
+* link:.machine_readable/policies/MAINTENANCE-CHECKLIST.a2ml[MAINTENANCE-CHECKLIST.a2ml]
+* link:.machine_readable/policies/SOFTWARE-DEVELOPMENT-APPROACH.a2ml[SOFTWARE-DEVELOPMENT-APPROACH.a2ml]
 * link:.machine_readable/STATE.scm[STATE.scm]
 * link:.machine_readable/META.scm[META.scm]
 * link:.machine_readable/ECOSYSTEM.scm[ECOSYSTEM.scm]

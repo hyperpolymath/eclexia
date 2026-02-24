@@ -18,6 +18,10 @@ It treats energy, time, memory, and carbon as first-class constraints so softwar
 * link:docs/wiki/Home.md[Wiki Home]
 * link:NAVIGATION.adoc[NAVIGATION]
 * link:.machine_readable/policies/MAINTENANCE-AXES.a2ml[Maintenance Axes Policy (A2ML)]
+* link:docs/maintenance/MAINTENANCE-CHECKLIST.md[Maintenance Checklist]
+* link:docs/practice/SOFTWARE-DEVELOPMENT-APPROACH.adoc[Software Development Approach]
+* link:.machine_readable/policies/MAINTENANCE-CHECKLIST.a2ml[Maintenance Checklist Policy (A2ML)]
+* link:.machine_readable/policies/SOFTWARE-DEVELOPMENT-APPROACH.a2ml[Software Development Approach Policy (A2ML)]
 * link:SPECIFICATION.md[Language Specification]
 * link:docs/whitepapers/academic/WHITEPAPER.adoc[Whitepaper]
 * link:docs/proofs/PROOFS.adoc[Formal Proofs]
@@ -115,6 +119,14 @@ For a fuller walkthrough, use link:GETTING_STARTED.md[GETTING_STARTED.md].
 | link:docs/roadmap/IMPLEMENTATION_ROADMAP.adoc[Implementation Roadmap]
 | Medium/long-term engineering roadmap
 | Contributors and maintainers
+
+| link:docs/maintenance/MAINTENANCE-CHECKLIST.md[Maintenance Checklist]
+| Cross-repo maintenance baseline and release-prep runbook
+| Maintainers and contributors
+
+| link:docs/practice/SOFTWARE-DEVELOPMENT-APPROACH.adoc[Software Development Approach]
+| Default three-axis development workflow (scope, maintenance, audit)
+| Maintainers and contributors
 
 | link:docs/reports/TOOLCHAIN_STATUS.adoc[Toolchain Status]
 | Status of compiler/runtime/tooling components

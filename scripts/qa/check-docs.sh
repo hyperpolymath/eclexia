@@ -11,11 +11,15 @@ required_human=(
   SPECIFICATION.md
   docs/README.md
   docs/wiki/Home.md
+  docs/maintenance/MAINTENANCE-CHECKLIST.md
+  docs/practice/SOFTWARE-DEVELOPMENT-APPROACH.adoc
 )
 
 required_machine=(
   .machine_readable/anchors/ANCHOR.a2ml
   .machine_readable/policies/MAINTENANCE-AXES.a2ml
+  .machine_readable/policies/MAINTENANCE-CHECKLIST.a2ml
+  .machine_readable/policies/SOFTWARE-DEVELOPMENT-APPROACH.a2ml
   .machine_readable/STATE.scm
   .machine_readable/META.scm
   .machine_readable/ECOSYSTEM.scm

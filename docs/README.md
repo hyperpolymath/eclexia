@@ -25,6 +25,8 @@ This directory is the canonical home for long-form documentation, status snapsho
 - [`roadmap/`](roadmap/)
 - [`analysis/`](analysis/)
 - [`practice/`](practice/)
+- [`practice/SOFTWARE-DEVELOPMENT-APPROACH.adoc`](practice/SOFTWARE-DEVELOPMENT-APPROACH.adoc)
+- [`maintenance/MAINTENANCE-CHECKLIST.md`](maintenance/MAINTENANCE-CHECKLIST.md)
 - [`theory/`](theory/)
 - [`whitepapers/`](whitepapers/)
 
