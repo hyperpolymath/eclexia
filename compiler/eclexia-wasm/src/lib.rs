@@ -2520,7 +2520,7 @@ mod tests {
         // First allocation: aligned to 8 from offset 100 → 104
         let a = alloc.alloc(16);
         assert_eq!(a, 104); // 100 rounded up to 104 (next 8-byte aligned)
-        // Second: 104 + 16 = 120, already aligned
+                            // Second: 104 + 16 = 120, already aligned
         let b = alloc.alloc(8);
         assert_eq!(b, 120);
         // Third: 120 + 8 = 128, already aligned

@@ -866,18 +866,12 @@ fn coerce_condition_to_i1(
 
     let reg = builder.fresh_reg();
     if is_integer_ty(&cond_ty) {
-        builder.emit(&format!(
-            "{} = icmp ne {} {}, 0",
-            reg, cond_ty, cond_val
-        ));
+        builder.emit(&format!("{} = icmp ne {} {}, 0", reg, cond_ty, cond_val));
         return reg;
     }
 
     if cond_ty == "float" || cond_ty == "double" {
-        builder.emit(&format!(
-            "{} = fcmp one {} {}, 0.0",
-            reg, cond_ty, cond_val
-        ));
+        builder.emit(&format!("{} = fcmp one {} {}, 0.0", reg, cond_ty, cond_val));
         return reg;
     }
 
@@ -908,7 +902,10 @@ fn coerce_switch_value(
 
     let reg = builder.fresh_reg();
     if switch_ty == "float" || switch_ty == "double" {
-        builder.emit(&format!("{} = fptosi {} {} to i64", reg, switch_ty, raw_val));
+        builder.emit(&format!(
+            "{} = fptosi {} {} to i64",
+            reg, switch_ty, raw_val
+        ));
         return (reg, "i64".to_string());
     }
 
@@ -2729,7 +2726,10 @@ mod tests {
         };
 
         assert_eq!(infer_value_llvm_type(&first, func, &mir, &mut ctx), "i64");
-        assert_eq!(infer_value_llvm_type(&second, func, &mir, &mut ctx), "double");
+        assert_eq!(
+            infer_value_llvm_type(&second, func, &mir, &mut ctx),
+            "double"
+        );
         assert!(value_is_float(&second, func, &mir));
     }
 
@@ -2764,8 +2764,14 @@ mod tests {
             ptr: Box::new(indexed.clone()),
         };
 
-        assert_eq!(infer_value_llvm_type(&indexed, func, &mir, &mut ctx), "float");
-        assert_eq!(infer_value_llvm_type(&loaded, func, &mir, &mut ctx), "float");
+        assert_eq!(
+            infer_value_llvm_type(&indexed, func, &mir, &mut ctx),
+            "float"
+        );
+        assert_eq!(
+            infer_value_llvm_type(&loaded, func, &mir, &mut ctx),
+            "float"
+        );
         assert!(value_is_float(&loaded, func, &mir));
         assert!(value_is_f32(&loaded, func, &mir));
     }
@@ -2835,7 +2841,10 @@ mod tests {
         };
 
         assert_eq!(infer_value_llvm_type(&arr_len, func, &mir, &mut ctx), "i64");
-        assert_eq!(infer_value_llvm_type(&text_len, func, &mir, &mut ctx), "i64");
+        assert_eq!(
+            infer_value_llvm_type(&text_len, func, &mir, &mut ctx),
+            "i64"
+        );
         assert!(!value_is_float(&arr_len, func, &mir));
         assert!(!value_is_float(&text_len, func, &mir));
     }

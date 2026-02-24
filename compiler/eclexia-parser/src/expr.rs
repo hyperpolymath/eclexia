@@ -288,10 +288,10 @@ impl<'src> Parser<'src> {
                                 }
                             }
                         }
-                        self.expect(TokenKind::RParen)?;
+                        self.expect_token(TokenKind::RParen)?;
                         ExprKind::Tuple(elems)
                     } else {
-                        self.expect(TokenKind::RParen)?;
+                        self.expect_token(TokenKind::RParen)?;
                         // Just return the inner expression
                         return Ok(first);
                     }
@@ -329,7 +329,7 @@ impl<'src> Parser<'src> {
                                 }));
                             }
                         };
-                        self.expect(TokenKind::RBracket)?;
+                        self.expect_token(TokenKind::RBracket)?;
                         ExprKind::ArrayRepeat {
                             value: first,
                             count,
@@ -356,7 +356,7 @@ impl<'src> Parser<'src> {
                                 }
                             }
                         }
-                        self.expect(TokenKind::RBracket)?;
+                        self.expect_token(TokenKind::RBracket)?;
                         ExprKind::Array(elems)
                     }
                 }
@@ -399,7 +399,7 @@ impl<'src> Parser<'src> {
             // Match expression
             TokenKind::Match => {
                 let scrutinee = self.parse_expr_no_struct(file)?;
-                self.expect(TokenKind::LBrace)?;
+                self.expect_token(TokenKind::LBrace)?;
 
                 let mut arms = Vec::new();
                 while !self.check(TokenKind::RBrace) && !self.is_eof() {
@@ -423,16 +423,16 @@ impl<'src> Parser<'src> {
                     self.advance();
                 }
 
-                self.expect(TokenKind::RBrace)?;
+                self.expect_token(TokenKind::RBrace)?;
                 ExprKind::Match { scrutinee, arms }
             }
 
             // Lambda with fn syntax: fn(x, y) -> expr
             TokenKind::Fn => {
-                self.expect(TokenKind::LParen)?;
+                self.expect_token(TokenKind::LParen)?;
                 let params = self.parse_params(file)?;
-                self.expect(TokenKind::RParen)?;
-                self.expect(TokenKind::Arrow)?;
+                self.expect_token(TokenKind::RParen)?;
+                self.expect_token(TokenKind::Arrow)?;
                 let body = self.parse_expr(file)?;
                 ExprKind::Lambda { params, body }
             }
@@ -446,7 +446,7 @@ impl<'src> Parser<'src> {
             // Handle expression: handle expr { effect_name::op(params) => body, ... }
             TokenKind::Handle => {
                 let expr = self.parse_expr_no_struct(file)?;
-                self.expect(TokenKind::LBrace)?;
+                self.expect_token(TokenKind::LBrace)?;
                 let mut handlers = Vec::new();
                 while !self.check(TokenKind::RBrace) && !self.is_eof() {
                     let handler_start = self.peek().span;
@@ -458,9 +458,9 @@ impl<'src> Parser<'src> {
                     } else {
                         effect_name.clone()
                     };
-                    self.expect(TokenKind::LParen)?;
+                    self.expect_token(TokenKind::LParen)?;
                     let params = self.parse_params(file)?;
-                    self.expect(TokenKind::RParen)?;
+                    self.expect_token(TokenKind::RParen)?;
                     // Optional resume parameter: resume k =>
                     let resume_param = if self.check_ident("resume") {
                         self.advance();
@@ -468,7 +468,7 @@ impl<'src> Parser<'src> {
                     } else {
                         None
                     };
-                    self.expect(TokenKind::FatArrow)?;
+                    self.expect_token(TokenKind::FatArrow)?;
                     let handler_body = self.parse_block(file)?;
                     handlers.push(EffectHandler {
                         span: handler_start.merge(handler_body.span),
@@ -483,7 +483,7 @@ impl<'src> Parser<'src> {
                     }
                     self.advance();
                 }
-                self.expect(TokenKind::RBrace)?;
+                self.expect_token(TokenKind::RBrace)?;
                 ExprKind::Handle { expr, handlers }
             }
 
@@ -560,7 +560,7 @@ impl<'src> Parser<'src> {
                     }
                 }
 
-                self.expect(TokenKind::Pipe)?;
+                self.expect_token(TokenKind::Pipe)?;
 
                 // Optional return type: -> Type
                 if self.check(TokenKind::Arrow) {
@@ -622,7 +622,7 @@ impl<'src> Parser<'src> {
             }
         }
 
-        let end = self.expect(TokenKind::RBrace)?;
+        let end = self.expect_token(TokenKind::RBrace)?;
         let span = start.merge(end);
 
         Ok(Block { span, stmts, expr })
@@ -665,7 +665,7 @@ impl<'src> Parser<'src> {
                             self.advance();
                         }
                     }
-                    let end = self.expect(TokenKind::RParen)?;
+                    let end = self.expect_token(TokenKind::RParen)?;
 
                     let span = file.exprs[expr].span.merge(end);
                     let call_expr = Expr {
@@ -702,7 +702,7 @@ impl<'src> Parser<'src> {
                                     self.advance();
                                 }
                             }
-                            let end = self.expect(TokenKind::RParen)?;
+                            let end = self.expect_token(TokenKind::RParen)?;
 
                             let span = file.exprs[expr].span.merge(end);
                             let method_expr = Expr {
@@ -730,7 +730,7 @@ impl<'src> Parser<'src> {
                 TokenKind::LBracket => {
                     self.advance();
                     let index = self.parse_expr(file)?;
-                    let end = self.expect(TokenKind::RBracket)?;
+                    let end = self.expect_token(TokenKind::RBracket)?;
 
                     let span = file.exprs[expr].span.merge(end);
                     let index_expr = Expr {
@@ -757,7 +757,7 @@ impl<'src> Parser<'src> {
                 TokenKind::Bang if matches!(file.exprs[expr].kind, ExprKind::Var(_)) => {
                     if let ExprKind::Var(name) = file.exprs[expr].kind.clone() {
                         self.advance(); // consume !
-                        self.expect(TokenKind::LParen)?;
+                        self.expect_token(TokenKind::LParen)?;
                         let mut args = Vec::new();
                         if !self.check(TokenKind::RParen) {
                             loop {
@@ -769,7 +769,7 @@ impl<'src> Parser<'src> {
                                 self.advance();
                             }
                         }
-                        let end = self.expect(TokenKind::RParen)?;
+                        let end = self.expect_token(TokenKind::RParen)?;
                         let span = file.exprs[expr].span.merge(end);
                         let macro_expr = Expr {
                             span,
@@ -806,7 +806,7 @@ impl<'src> Parser<'src> {
                             self.advance();
                         }
                     }
-                    let end = self.expect(TokenKind::RParen)?;
+                    let end = self.expect_token(TokenKind::RParen)?;
 
                     let span = file.exprs[expr].span.merge(end);
                     let call_expr = Expr {
@@ -855,7 +855,7 @@ impl<'src> Parser<'src> {
                                     self.advance();
                                 }
                             }
-                            let end = self.expect(TokenKind::RParen)?;
+                            let end = self.expect_token(TokenKind::RParen)?;
 
                             let span = file.exprs[expr].span.merge(end);
                             let method_expr = Expr {
@@ -883,7 +883,7 @@ impl<'src> Parser<'src> {
                 TokenKind::LBracket => {
                     self.advance();
                     let index = self.parse_expr(file)?;
-                    let end = self.expect(TokenKind::RBracket)?;
+                    let end = self.expect_token(TokenKind::RBracket)?;
 
                     let span = file.exprs[expr].span.merge(end);
                     let index_expr = Expr {
@@ -923,7 +923,7 @@ impl<'src> Parser<'src> {
                     if !self.check(TokenKind::RBrace) {
                         loop {
                             let field_name = self.expect_ident()?;
-                            self.expect(TokenKind::Colon)?;
+                            self.expect_token(TokenKind::Colon)?;
                             let field_value = self.parse_expr(file)?;
                             fields.push((field_name, field_value));
 
@@ -939,7 +939,7 @@ impl<'src> Parser<'src> {
                         }
                     }
 
-                    let end = self.expect(TokenKind::RBrace)?;
+                    let end = self.expect_token(TokenKind::RBrace)?;
                     let span = file.exprs[expr].span.merge(end);
                     let struct_expr = Expr {
                         span,
@@ -1044,7 +1044,7 @@ impl<'src> Parser<'src> {
             None
         };
 
-        self.expect(TokenKind::FatArrow)?;
+        self.expect_token(TokenKind::FatArrow)?;
         let body = self.parse_expr(file)?;
 
         let span = start.merge(file.exprs[body].span);
@@ -1126,7 +1126,7 @@ impl<'src> Parser<'src> {
                             self.advance();
                         }
                     }
-                    self.expect(TokenKind::RParen)?;
+                    self.expect_token(TokenKind::RParen)?;
                     Pattern::Constructor { name, fields }
                 } else if self.check(TokenKind::LBrace) {
                     // Struct pattern: Name { x, y: pat, .. }
@@ -1159,7 +1159,7 @@ impl<'src> Parser<'src> {
                             self.advance();
                         }
                     }
-                    self.expect(TokenKind::RBrace)?;
+                    self.expect_token(TokenKind::RBrace)?;
                     Pattern::Struct {
                         name,
                         fields: field_pats,
@@ -1212,7 +1212,7 @@ impl<'src> Parser<'src> {
                         self.advance();
                     }
                 }
-                self.expect(TokenKind::RParen)?;
+                self.expect_token(TokenKind::RParen)?;
                 Pattern::Tuple(patterns)
             }
             // Slice pattern: [a, b, ..]
@@ -1227,7 +1227,7 @@ impl<'src> Parser<'src> {
                         self.advance();
                     }
                 }
-                self.expect(TokenKind::RBracket)?;
+                self.expect_token(TokenKind::RBracket)?;
                 Pattern::Slice(patterns)
             }
             // Resource keywords are contextual — valid as variable names in patterns

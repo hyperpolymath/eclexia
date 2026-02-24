@@ -80,8 +80,7 @@ impl BridgeConfig {
         let contents = fs::read_to_string(path)
             .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
 
-        toml::from_str(&contents)
-            .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
+        toml::from_str(&contents).map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
     }
 
     /// Validate this bridge configuration
@@ -134,9 +133,8 @@ impl BridgeConfig {
             || self.eclexia_exports.scheduler;
 
         if !exports_enabled {
-            warnings.push(
-                "No Eclexia exports enabled - bridge will have no functionality".to_string(),
-            );
+            warnings
+                .push("No Eclexia exports enabled - bridge will have no functionality".to_string());
         }
 
         BridgeValidation {
@@ -153,11 +151,14 @@ pub fn load_all_bridges(interop_dir: &Path) -> Result<HashMap<String, BridgeConf
     let mut bridges = HashMap::new();
 
     if !interop_dir.exists() {
-        return Err(format!("Interop directory not found: {}", interop_dir.display()));
+        return Err(format!(
+            "Interop directory not found: {}",
+            interop_dir.display()
+        ));
     }
 
-    for entry in fs::read_dir(interop_dir)
-        .map_err(|e| format!("Failed to read interop directory: {}", e))?
+    for entry in
+        fs::read_dir(interop_dir).map_err(|e| format!("Failed to read interop directory: {}", e))?
     {
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
         let path = entry.path();

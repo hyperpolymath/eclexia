@@ -685,11 +685,7 @@ impl<'a> TypeChecker<'a> {
         self.freshen_ty_with_map(ty, &mut mapping)
     }
 
-    fn freshen_ty_with_map(
-        &mut self,
-        ty: &Ty,
-        mapping: &mut FxHashMap<TypeVar, TypeVar>,
-    ) -> Ty {
+    fn freshen_ty_with_map(&mut self, ty: &Ty, mapping: &mut FxHashMap<TypeVar, TypeVar>) -> Ty {
         match ty {
             Ty::Primitive(p) => Ty::Primitive(*p),
             Ty::Named { name, args } => Ty::Named {

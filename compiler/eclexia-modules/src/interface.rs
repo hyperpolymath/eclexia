@@ -246,17 +246,19 @@ impl ModuleInterface {
                     });
                 }
                 eclexia_ast::Item::TraitDecl(trait_decl) => {
-                    let trait_params: Vec<smol_str::SmolStr> =
-                        trait_decl.type_params.iter().map(|t| t.name.clone()).collect();
+                    let trait_params: Vec<smol_str::SmolStr> = trait_decl
+                        .type_params
+                        .iter()
+                        .map(|t| t.name.clone())
+                        .collect();
                     let methods = trait_decl
                         .items
                         .iter()
                         .filter_map(|item| {
                             if let eclexia_ast::TraitItem::Method { sig, .. } = item {
                                 let mut method_params = trait_params.clone();
-                                method_params.extend(
-                                    sig.type_params.iter().map(|t| t.name.clone()),
-                                );
+                                method_params
+                                    .extend(sig.type_params.iter().map(|t| t.name.clone()));
                                 resolver.set_type_params(&method_params);
                                 let params = sig
                                     .params

@@ -219,12 +219,7 @@ pub fn build_watch(
     use eclexia_tiered::watch::WatchConfig;
     use std::sync::mpsc;
 
-    let watch_config = WatchConfig::new(
-        input
-            .parent()
-            .unwrap_or(Path::new("."))
-            .to_path_buf()
-    );
+    let watch_config = WatchConfig::new(input.parent().unwrap_or(Path::new(".")).to_path_buf());
 
     println!(
         "Watch mode: monitoring {} for changes (debounce: {}ms)",
@@ -931,7 +926,10 @@ fn run_mir_analysis(mir: &eclexia_mir::MirFile, ast: &eclexia_ast::SourceFile, s
         // Report graph statistics
         let total_modules = dep_graph.len();
         println!("    Graph: {} module(s) total", total_modules);
-        println!("    Edges: {} dependency relation(s)", dep_graph.edge_count());
+        println!(
+            "    Edges: {} dependency relation(s)",
+            dep_graph.edge_count()
+        );
 
         // Check for cycles
         if dep_graph.topological_order().is_none() {
@@ -3504,7 +3502,10 @@ pub fn interop_check(command: &str) -> miette::Result<()> {
                 .map_err(|e| miette::miette!("Failed to validate bridges: {}", e))?;
 
             if validations.is_empty() {
-                println!("No bridge configurations found in {}", interop_dir.display());
+                println!(
+                    "No bridge configurations found in {}",
+                    interop_dir.display()
+                );
                 return Ok(());
             }
 
@@ -3512,7 +3513,14 @@ pub fn interop_check(command: &str) -> miette::Result<()> {
 
             for validation in &validations {
                 println!("Bridge: {}", validation.bridge_name);
-                println!("  Status: {}", if validation.valid { "✓ Valid" } else { "✗ Invalid" });
+                println!(
+                    "  Status: {}",
+                    if validation.valid {
+                        "✓ Valid"
+                    } else {
+                        "✗ Invalid"
+                    }
+                );
 
                 if !validation.errors.is_empty() {
                     all_valid = false;
@@ -3545,7 +3553,10 @@ pub fn interop_check(command: &str) -> miette::Result<()> {
                 .map_err(|e| miette::miette!("Failed to load bridges: {}", e))?;
 
             if bridges.is_empty() {
-                println!("No bridge configurations found in {}", interop_dir.display());
+                println!(
+                    "No bridge configurations found in {}",
+                    interop_dir.display()
+                );
                 return Ok(());
             }
 

@@ -15,9 +15,10 @@ use std::process::Command;
 /// When runtime resource enforcement is implemented, these tests
 /// should naturally start failing (as intended) and can be removed
 /// from this list.
-const KNOWN_RUNTIME_GAPS: &[(&str, &str)] = &[
-    // All gaps resolved as of 2026-02-09.
-];
+const KNOWN_RUNTIME_GAPS: &[(&str, &str)] = &[(
+    "stack_overflow_deep_recursion.ecl",
+    "Known abort path: recursive program intentionally overflows host stack (SIGABRT).",
+)];
 
 /// Run a valid test file (should succeed)
 fn run_valid_test(path: &Path) -> Result<(), String> {

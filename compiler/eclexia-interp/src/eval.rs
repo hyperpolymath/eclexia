@@ -70,8 +70,7 @@ impl Interpreter {
     /// Get or create the tokio runtime for async operations
     fn runtime(&mut self) -> &tokio::runtime::Runtime {
         self.runtime.get_or_insert_with(|| {
-            tokio::runtime::Runtime::new()
-                .expect("Failed to create tokio runtime")
+            tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
         })
     }
 
@@ -745,9 +744,7 @@ impl Interpreter {
 
                     // Use the runtime to block on recv
                     let rt = self.runtime();
-                    let result = rt.block_on(async {
-                        rx.recv().await
-                    });
+                    let result = rt.block_on(async { rx.recv().await });
 
                     result.ok_or_else(|| RuntimeError::custom("channel closed"))
                 } else {
@@ -1353,9 +1350,10 @@ impl Interpreter {
                                                 Value::String(resource.clone()),
                                             );
                                             if matches!(op, CompareOp::Lt | CompareOp::Le)
-                                                && resource.as_str() == "energy" {
-                                                    fn_energy_limit = Some(amount.value)
-                                                }
+                                                && resource.as_str() == "energy"
+                                            {
+                                                fn_energy_limit = Some(amount.value)
+                                            }
                                         }
                                     }
 
