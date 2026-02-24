@@ -2768,26 +2768,30 @@ pub fn scaffold(name: Option<&str>, template: &str, list_templates: bool) -> mie
     new_project(name, template)
 }
 
-/// Install dependencies from package.toml.
+/// Install dependencies from the project manifest.
 pub fn install() -> miette::Result<()> {
     use crate::package::PackageManifest;
     use crate::package_manager::PackageManager;
 
-    // Load package.toml
-    let manifest_path = Path::new("package.toml");
+    // Prefer eclexia.toml for new projects; keep package.toml for compatibility.
+    let manifest_path = if Path::new("eclexia.toml").exists() {
+        Path::new("eclexia.toml")
+    } else {
+        Path::new("package.toml")
+    };
     if !manifest_path.exists() {
         return Err(miette::miette!(
-            "No package.toml found in current directory.\nRun 'eclexia init' to create a new project."
+            "No eclexia.toml (or legacy package.toml) found in current directory.\nRun 'eclexia init' to create a new project."
         ));
     }
 
     let manifest_content = std::fs::read_to_string(manifest_path)
         .into_diagnostic()
-        .wrap_err("Failed to read package.toml")?;
+        .wrap_err_with(|| format!("Failed to read {}", manifest_path.display()))?;
 
     let manifest: PackageManifest = toml::from_str(&manifest_content)
         .into_diagnostic()
-        .wrap_err("Failed to parse package.toml")?;
+        .wrap_err_with(|| format!("Failed to parse {}", manifest_path.display()))?;
 
     // Initialize package manager and install
     let mut pm = PackageManager::new().map_err(|e| miette::miette!("{}", e))?;

@@ -236,7 +236,7 @@ enum Commands {
         format: String,
     },
 
-    /// Install dependencies from package.toml
+    /// Install dependencies from eclexia.toml (or legacy package.toml)
     Install,
 
     /// Watch for file changes and rebuild incrementally

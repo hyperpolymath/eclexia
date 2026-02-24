@@ -40,9 +40,20 @@ impl PackageManager {
 
         for (name, version) in &resolved {
             println!("Installing {}@{}...", name, version);
+            let cache_key = format!("{}@{}", name, version);
 
             // Check if already cached
             if self.cache.has(name, version) {
+                // Keep lockfile integrity on warm-cache installs.
+                if let Some(checksum) = self.cache.get_checksum(name, version) {
+                    checksums.insert(cache_key, checksum);
+                } else {
+                    // Backfill checksum for older cache entries that predate checksum tracking.
+                    let metadata = self.registry.fetch_metadata(name, version)?;
+                    self.cache
+                        .set_checksum(name, version, metadata.checksum.clone())?;
+                    checksums.insert(cache_key, metadata.checksum);
+                }
                 println!("  Using cached version");
                 continue;
             }
@@ -67,9 +78,11 @@ impl PackageManager {
 
             // Add to cache
             self.cache.add(name, version, package_dir.clone())?;
+            self.cache
+                .set_checksum(name, version, metadata.checksum.clone())?;
 
             // Store checksum for lock file
-            checksums.insert(format!("{}@{}", name, version), metadata.checksum.clone());
+            checksums.insert(cache_key, metadata.checksum.clone());
 
             println!("  Installed to {}", package_dir.display());
         }

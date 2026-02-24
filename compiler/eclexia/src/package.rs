@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Package manifest (package.toml).
+/// Package manifest (eclexia.toml, with legacy package.toml compatibility).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageManifest {
     pub package: PackageMetadata,
@@ -99,11 +99,20 @@ impl Default for Features {
 
 /// Load a package manifest from a directory.
 pub fn load_manifest(path: &Path) -> Result<PackageManifest, String> {
-    let manifest_path = path.join("package.toml");
-    let contents = fs::read_to_string(&manifest_path)
-        .map_err(|e| format!("Failed to read package.toml: {}", e))?;
+    let primary = path.join("eclexia.toml");
+    let legacy = path.join("package.toml");
+    let manifest_path = if primary.exists() { primary } else { legacy };
 
-    toml::from_str(&contents).map_err(|e| format!("Failed to parse package.toml: {}", e))
+    if !manifest_path.exists() {
+        return Err(
+            "No eclexia.toml (or legacy package.toml) found in project directory".to_string(),
+        );
+    }
+
+    let contents = fs::read_to_string(&manifest_path)
+        .map_err(|e| format!("Failed to read {}: {}", manifest_path.display(), e))?;
+
+    toml::from_str(&contents).map_err(|e| format!("Failed to parse {}: {}", manifest_path.display(), e))
 }
 
 /// Create a new package manifest.
@@ -135,11 +144,12 @@ pub fn create_manifest(name: String, authors: Vec<String>, output: OutputType) -
 
 /// Save a package manifest to a directory.
 pub fn save_manifest(path: &Path, manifest: &PackageManifest) -> Result<(), String> {
-    let manifest_path = path.join("package.toml");
+    let manifest_path = path.join("eclexia.toml");
     let contents = toml::to_string_pretty(manifest)
-        .map_err(|e| format!("Failed to serialize package.toml: {}", e))?;
+        .map_err(|e| format!("Failed to serialize eclexia.toml: {}", e))?;
 
-    fs::write(&manifest_path, contents).map_err(|e| format!("Failed to write package.toml: {}", e))
+    fs::write(&manifest_path, contents)
+        .map_err(|e| format!("Failed to write {}: {}", manifest_path.display(), e))
 }
 
 /// Add a dependency to the manifest.
@@ -163,6 +173,9 @@ pub fn remove_dependency(manifest: &mut PackageManifest, name: &str, dev: bool) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn expect_ok<T, E: std::fmt::Debug>(res: Result<T, E>) -> T {
         match res {
@@ -193,5 +206,70 @@ entry = "src/main.ecl"
         assert_eq!(manifest.package.version, "0.1.0");
         assert_eq!(manifest.dependencies.get("core"), Some(&"0.1".to_string()));
         assert_eq!(manifest.build.output, OutputType::Bin);
+    }
+
+    fn unique_temp_dir(prefix: &str) -> PathBuf {
+        let mut p = std::env::temp_dir();
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        p.push(format!("{}_{}_{}", prefix, std::process::id(), ts));
+        p
+    }
+
+    #[test]
+    fn load_manifest_prefers_eclexia_toml() {
+        let dir = unique_temp_dir("eclexia_manifest_prefer");
+        fs::create_dir_all(&dir).expect("create temp dir");
+
+        fs::write(
+            dir.join("package.toml"),
+            r#"[package]
+name = "legacy"
+version = "0.1.0"
+authors = ["A <a@example.com>"]
+edition = "2025"
+"#,
+        )
+        .expect("write package.toml");
+
+        fs::write(
+            dir.join("eclexia.toml"),
+            r#"[package]
+name = "preferred"
+version = "0.1.0"
+authors = ["A <a@example.com>"]
+edition = "2025"
+"#,
+        )
+        .expect("write eclexia.toml");
+
+        let manifest = load_manifest(&dir).expect("load manifest");
+        assert_eq!(manifest.package.name, "preferred");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_manifest_supports_legacy_package_toml() {
+        let dir = unique_temp_dir("eclexia_manifest_legacy");
+        fs::create_dir_all(&dir).expect("create temp dir");
+
+        fs::write(
+            dir.join("package.toml"),
+            r#"[package]
+name = "legacy-only"
+version = "0.1.0"
+authors = ["A <a@example.com>"]
+edition = "2025"
+"#,
+        )
+        .expect("write package.toml");
+
+        let manifest = load_manifest(&dir).expect("load manifest");
+        assert_eq!(manifest.package.name, "legacy-only");
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

@@ -12,6 +12,8 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct CacheIndex {
     packages: HashMap<String, PathBuf>,
+    #[serde(default)]
+    checksums: HashMap<String, String>,
 }
 
 /// Local package cache.
@@ -59,6 +61,24 @@ impl Cache {
         self.index.packages.get(&key).cloned()
     }
 
+    /// Get the checksum for a cached package.
+    pub fn get_checksum(&self, name: &str, version: &str) -> Option<String> {
+        let key = format!("{}@{}", name, version);
+        self.index.checksums.get(&key).cloned()
+    }
+
+    /// Set or update the checksum for a cached package.
+    pub fn set_checksum(
+        &mut self,
+        name: &str,
+        version: &str,
+        checksum: String,
+    ) -> Result<(), String> {
+        let key = format!("{}@{}", name, version);
+        self.index.checksums.insert(key, checksum);
+        self.save_index()
+    }
+
     /// Add a package to the cache.
     pub fn add(&mut self, name: &str, version: &str, path: PathBuf) -> Result<(), String> {
         let key = format!("{}@{}", name, version);
@@ -102,5 +122,49 @@ impl Default for Cache {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cache;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_dir(prefix: &str) -> PathBuf {
+        let mut p = std::env::temp_dir();
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        p.push(format!("{}_{}_{}", prefix, std::process::id(), ts));
+        p
+    }
+
+    #[test]
+    fn checksum_roundtrip_persists_in_cache_index() {
+        let cache_dir = unique_temp_dir("eclexia_cache_test");
+        let mut cache = Cache::new(cache_dir.clone()).expect("create cache");
+
+        let pkg_path = cache_dir.join("foo-1.0.0");
+        cache
+            .add("foo", "1.0.0", pkg_path)
+            .expect("add cached package");
+        cache
+            .set_checksum("foo", "1.0.0", "abc123".to_string())
+            .expect("set checksum");
+
+        assert_eq!(
+            cache.get_checksum("foo", "1.0.0"),
+            Some("abc123".to_string())
+        );
+
+        let cache_reloaded = Cache::new(cache_dir.clone()).expect("reload cache");
+        assert_eq!(
+            cache_reloaded.get_checksum("foo", "1.0.0"),
+            Some("abc123".to_string())
+        );
+
+        let _ = std::fs::remove_dir_all(cache_dir);
     }
 }
