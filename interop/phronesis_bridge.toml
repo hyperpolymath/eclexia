@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Eclexia ↔ Phronesis interop bridge configuration
+
+[language]
+name = "Phronesis"
+repo = "nextgen-languages/phronesis"
+build_system = "mix"
+ffi_mechanism = "elixir-nif"
+
+[existing_ffi]
+# Phronesis uses OTP/BEAM — NIFs are the FFI path
+supervision_tree = true
+otp_application = true
+
+[eclexia_exports]
+resource_tracker = true
+shadow_prices = true
+adaptive_engine = true
+carbon_monitor = true
+
+[bridge]
+# NIF wrapper module
+target_file = "lib/phronesis/eclexia_nif.ex"
+# Compiled NIF shared object
+nif_so = "priv/eclexia_nif.so"
+# NIF glue code
+nif_c_src = "c_src/eclexia_nif.c"
+
+[use_cases]
+description = """
+Resource-aware network policy execution.
+Energy/carbon budgets for BGP route selection.
+Adaptive policy degradation under resource constraints.
+Shadow price-based routing decisions.
+"""

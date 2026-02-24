@@ -1,79 +1,65 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
-# RSR-compliant .gitignore
+# SPDX-License-Identifier: PMPL-1.0-or-later
 
-# OS & Editor
-.DS_Store
-Thumbs.db
+# Rust/Cargo
+/target/
+**/*.rs.bk
+*.pdb
+*.rlib
+*.rmeta
+
+# Keep lockfile for reproducible CLI/build tooling
+!Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+.direnv/
+.envrc
 *.swp
 *.swo
 *~
-.idea/
-.vscode/
+.DS_Store
 
-# Build
-/target/
-/_build/
-/build/
-/dist/
-/out/
+# Build artifacts
+*.wasm
+*.so
+*.dylib
+*.dll
+*.a
+*.o
+*.ll
+*.eclb
+*.bc
+*.obj
+*.exe
 
-# Dependencies
-/node_modules/
-/vendor/
-/deps/
-/.elixir_ls/
-
-# Rust
-# Cargo.lock  # Keep for binaries
-
-# Elixir
-/cover/
-/doc/
-*.ez
-erl_crash.dump
-
-# Julia
-*.jl.cov
-*.jl.mem
-/Manifest.toml
-
-# ReScript
-/lib/bs/
-/.bsb.lock
-
-# Python (SaltStack only)
-__pycache__/
-*.py[cod]
-.venv/
-
-# Ada/SPARK
-*.ali
-/obj/
-/bin/
-
-# Haskell
-/.stack-work/
-/dist-newstyle/
-
-# Chapel
-*.chpl.tmp.*
-
-# Secrets
-.env
-.env.*
-*.pem
-*.key
-secrets/
-
-# Test/Coverage
-/coverage/
+# Testing
+.coverage/
+*.profraw
+*.profdata
+coverage/
 htmlcov/
+lcov.info
 
-# Logs
-*.log
-/logs/
+# OS
+Thumbs.db
+.Trash-*/
 
-# Temp
-/tmp/
+# AI CLI crash captures
+ai-cli-crash-capture/
+
+# Temporary
 *.tmp
+*.log
 *.bak
+tmp/
+temp/
+
+# Runtime and cloud tooling temp state
+.wrangler/
+.clusterfuzzlite/build/
+.clusterfuzzlite/out/
+
+# Fuzzing runtime outputs
+fuzz/artifacts/
+fuzz/corpus/

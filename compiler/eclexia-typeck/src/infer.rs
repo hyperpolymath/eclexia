@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Type inference implementation.
@@ -7,8 +7,8 @@
 
 use crate::{TypeChecker, TypeEnv};
 use eclexia_ast::types::{Ty, TypeVar};
-use smol_str::SmolStr;
 use rustc_hash::FxHashSet;
+use smol_str::SmolStr;
 
 impl TypeChecker<'_> {
     /// Generalize a type by abstracting free type variables into a ForAll.
@@ -22,7 +22,7 @@ impl TypeChecker<'_> {
         // Variables free in type but not in environment can be generalized
         let generalizable: Vec<SmolStr> = free_in_ty
             .difference(&free_in_env)
-            .map(|v| SmolStr::new(&format!("t{}", v.0)))
+            .map(|v| SmolStr::new(format!("t{}", v.0)))
             .collect();
 
         if generalizable.is_empty() {
@@ -65,9 +65,7 @@ impl TypeChecker<'_> {
                 set.insert(v);
                 set
             }
-            Ty::Named { args, .. } => {
-                args.iter().flat_map(|t| self.free_vars(t)).collect()
-            }
+            Ty::Named { args, .. } => args.iter().flat_map(|t| self.free_vars(t)).collect(),
             Ty::Function { params, ret } => {
                 let mut vars: FxHashSet<TypeVar> =
                     params.iter().flat_map(|p| self.free_vars(p)).collect();
@@ -86,26 +84,23 @@ impl TypeChecker<'_> {
                 }
                 free
             }
-            Ty::Resource { .. } | Ty::Primitive(_) | Ty::Error | Ty::Never => {
-                FxHashSet::default()
-            }
+            Ty::Resource { .. } | Ty::Primitive(_) | Ty::Error | Ty::Never => FxHashSet::default(),
         }
     }
 
     /// Substitute type variables in a type
-    fn substitute_vars(
-        &self,
-        ty: &Ty,
-        subst: &rustc_hash::FxHashMap<SmolStr, Ty>,
-    ) -> Ty {
+    fn substitute_vars(&self, ty: &Ty, subst: &rustc_hash::FxHashMap<SmolStr, Ty>) -> Ty {
         match ty {
             Ty::Var(v) => {
-                let name = SmolStr::new(&format!("t{}", v.0));
+                let name = SmolStr::new(format!("t{}", v.0));
                 subst.get(&name).cloned().unwrap_or_else(|| ty.clone())
             }
             Ty::Named { name, args } => Ty::Named {
                 name: name.clone(),
-                args: args.iter().map(|t| self.substitute_vars(t, subst)).collect(),
+                args: args
+                    .iter()
+                    .map(|t| self.substitute_vars(t, subst))
+                    .collect(),
             },
             Ty::Function { params, ret } => Ty::Function {
                 params: params

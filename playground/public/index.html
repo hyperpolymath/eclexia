@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f5d5f" />
+    <title>Eclexia Playground</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="atmo atmo-a"></div>
+    <div class="atmo atmo-b"></div>
+
+    <header class="hero">
+      <p class="kicker">playground.eclexia.org</p>
+      <h1>Eclexia Playground</h1>
+      <p class="subtitle">Economics-as-Code in your browser: run, compile, and step through programs with resource-aware telemetry.</p>
+    </header>
+
+    <main class="layout">
+      <section class="panel editor-panel">
+        <div class="toolbar">
+          <label>
+            Example
+            <select id="example-select"></select>
+          </label>
+          <label>
+            Mode
+            <select id="mode-select">
+              <option value="interpret">Interpret</option>
+              <option value="compile">Compile + Profile</option>
+              <option value="step">Step-through (Disassembly)</option>
+            </select>
+          </label>
+          <div class="button-row">
+            <button id="run-btn">Run</button>
+            <button id="share-btn" class="secondary">Share URL</button>
+          </div>
+        </div>
+
+        <div class="editor-stack" aria-label="Code editor">
+          <pre id="code-highlight" aria-hidden="true"></pre>
+          <textarea id="code-input" spellcheck="false" aria-label="Eclexia code"></textarea>
+        </div>
+      </section>
+
+      <section class="panel output-panel">
+        <h2>Execution Output</h2>
+        <pre id="output"></pre>
+      </section>
+
+      <section class="panel stats-panel">
+        <h2>Resource Tracking</h2>
+        <div id="resource-chart" class="chart-grid"></div>
+      </section>
+
+      <section class="panel shadow-panel">
+        <h2>Shadow Prices</h2>
+        <div id="shadow-list" class="key-value-list"></div>
+      </section>
+
+      <section class="panel stage-panel">
+        <h2>Pipeline Stages</h2>
+        <div id="stage-list" class="stage-list"></div>
+      </section>
+
+      <section class="panel step-panel">
+        <h2>Step-through</h2>
+        <div class="step-controls">
+          <button id="step-prev" class="secondary">Previous</button>
+          <span id="step-indicator">No step data</span>
+          <button id="step-next" class="secondary">Next</button>
+        </div>
+        <pre id="step-output"></pre>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

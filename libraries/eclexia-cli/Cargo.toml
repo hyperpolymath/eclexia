@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+
+[package]
+name = "eclexia-cli"
+description = "Section 21 additional library: eclexia-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]

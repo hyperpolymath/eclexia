@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
-//! Shadow price computation engine.
+//! Compatibility re-exports for shadow engine APIs.
 
-// TODO: Implement shadow price computation via LP duality
+pub use eclexia_shadow::{ResourceConstraint, ShadowPriceEngine, ShadowPriceResult};

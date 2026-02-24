@@ -1,0 +1,6 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+= Conformance Example: Compiler ↔ Runtime Seam
+
+1. `cargo run -p eclexia -- profile examples/hello_world.ecl --format json --observe-shadow --carbon-report`
+2. Confirm output contains the `Shadow Price` section derived from `runtime::Runtime` and the carbon metrics computed via `PowerMetrics`.
+3. Assert `run_bytecode` ingest path populates `Runtime::ResourceTracker` by invoking `VirtualMachine::get_resources()` when the same example is compiled to `.eclb` and executed via `cargo run -p eclexia -- run examples/hello_world.eclb --observe-shadow`.

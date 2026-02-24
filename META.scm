@@ -1,22 +1,24 @@
-;; SPDX-License-Identifier: PMPL-1.0-or-later
-;; META.scm - Meta-level project information
+;; SPDX-License-Identifier: AGPL-3.0-or-later
+;; SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+;;; META.scm — template-repo
 
-(define meta
-  '((architecture-decisions
-     ((adr-001
-       (status "accepted")
-       (date "2026-02-04")
-       (context "Initial project setup")
-       (decision "Use standard hyperpolymath structure")
-       (consequences "Consistent with other hyperpolymath projects"))))
+(define-module (template-repo meta)
+  #:export (architecture-decisions development-practices design-rationale))
 
-    (development-practices
-     (code-style "Follow language-specific conventions")
-     (security "SPDX headers, OpenSSF Scorecard compliance")
-     (testing "Required for critical functionality")
-     (versioning "Semantic versioning")
-     (documentation "README.adoc, inline comments")
-     (branching "main branch, feature branches, PRs required"))
+(define architecture-decisions
+  '((adr-001
+     (title . "RSR Compliance")
+     (status . "accepted")
+     (date . "2025-12-15")
+     (context . "Project in the hyperpolymath ecosystem")
+     (decision . "Follow Rhodium Standard Repository guidelines")
+     (consequences . ("RSR Gold target" "SHA-pinned actions" "SPDX headers" "Multi-platform CI")))))
 
-    (design-rationale
-     ())))
+(define development-practices
+  '((code-style (languages . ("unknown")) (formatter . "auto-detect") (linter . "auto-detect"))
+    (security (sast . "CodeQL") (credentials . "env vars only"))
+    (testing (coverage-minimum . 70))
+    (versioning (scheme . "SemVer 2.0.0"))))
+
+(define design-rationale
+  '((why-rsr "RSR ensures consistency, security, and maintainability.")))

@@ -1,0 +1,17 @@
+{
+  "name": "Eclexia Playground",
+  "short_name": "Eclexia",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3efe2",
+  "theme_color": "#0f5d5f",
+  "description": "Run, compile, and inspect Eclexia code from a PWA playground.",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

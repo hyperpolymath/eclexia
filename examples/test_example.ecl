@@ -36,3 +36,10 @@ def test_should_fail() -> Bool {
     // This test intentionally fails to demonstrate failure reporting
     add(2, 2) == 5
 }
+
+fn main() {
+    println("=== Test Framework Demo (manual run) ===")
+    println("add(2, 3) =", add(2, 3))
+    println("multiply(3, 4) =", multiply(3, 4))
+    println("Use `eclexia test` to run #[test] functions.")
+}

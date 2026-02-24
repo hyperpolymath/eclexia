@@ -1,17 +1,24 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Integration tests for code generation and VM execution.
 
 use eclexia_ast::span::Span;
-use eclexia_ast::types::{Ty, PrimitiveTy};
+use eclexia_ast::types::{PrimitiveTy, Ty};
 use eclexia_codegen::{Backend, BytecodeGenerator, VirtualMachine, VmValue};
 use eclexia_mir::{
-    MirFile, Function, BasicBlock, Instruction, InstructionKind,
-    Terminator, Value, ConstantKind, Constant, Local, BinaryOp,
+    BasicBlock, BinaryOp, Constant, ConstantKind, Function, Instruction, InstructionKind, Local,
+    MirFile, Terminator, Value,
 };
 use la_arena::Arena;
 use smol_str::SmolStr;
+
+fn expect_ok<T, E: std::fmt::Debug>(res: Result<T, E>) -> T {
+    match res {
+        Ok(val) => val,
+        Err(err) => panic!("Expected Ok, got Err: {:?}", err),
+    }
+}
 
 #[test]
 fn test_simple_arithmetic() {
@@ -33,12 +40,10 @@ fn test_simple_arithmetic() {
     let mut basic_blocks = Arena::new();
     let entry_block = basic_blocks.alloc(BasicBlock {
         label: SmolStr::new("entry"),
-        instructions: vec![
-            Instruction {
-                span: Span::default(),
-                kind: InstructionKind::Nop,
-            },
-        ],
+        instructions: vec![Instruction {
+            span: Span::default(),
+            kind: InstructionKind::Nop,
+        }],
         terminator: Terminator::Return(Some(Value::Binary {
             op: BinaryOp::Add,
             lhs: Box::new(Value::Constant(const_5)),
@@ -62,11 +67,11 @@ fn test_simple_arithmetic() {
 
     // Generate bytecode
     let mut codegen = BytecodeGenerator::new();
-    let bytecode = codegen.generate(&mir).expect("Bytecode generation failed");
+    let bytecode = expect_ok(codegen.generate(&mir));
 
     // Execute on VM
     let mut vm = VirtualMachine::new(bytecode);
-    let result = vm.run().expect("VM execution failed");
+    let result = expect_ok(vm.run());
 
     // Verify result
     match result {
@@ -122,10 +127,10 @@ fn test_local_variables() {
 
     // Generate and execute
     let mut codegen = BytecodeGenerator::new();
-    let bytecode = codegen.generate(&mir).expect("Bytecode generation failed");
+    let bytecode = expect_ok(codegen.generate(&mir));
 
     let mut vm = VirtualMachine::new(bytecode);
-    let result = vm.run().expect("VM execution failed");
+    let result = expect_ok(vm.run());
 
     match result {
         VmValue::Int(n) => assert_eq!(n, 42, "Expected x = 42"),
@@ -175,10 +180,10 @@ fn test_comparison_operations() {
 
     // Generate and execute
     let mut codegen = BytecodeGenerator::new();
-    let bytecode = codegen.generate(&mir).expect("Bytecode generation failed");
+    let bytecode = expect_ok(codegen.generate(&mir));
 
     let mut vm = VirtualMachine::new(bytecode);
-    let result = vm.run().expect("VM execution failed");
+    let result = expect_ok(vm.run());
 
     match result {
         VmValue::Bool(b) => assert!(b, "Expected 10 > 5 = true"),

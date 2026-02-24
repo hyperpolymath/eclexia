@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eclexia-config
+  namespace: eclexia
+  labels:
+    app.kubernetes.io/name: eclexia
+    app.kubernetes.io/component: config
+data:
+  # Resource budget configuration
+  resource-budgets.toml: |
+    # Default resource budgets for Eclexia runtime
+
+    [energy]
+    budget = "10000J"
+    shadow_price_base = 0.01
+    shadow_price_multiplier = 5.0
+
+    [time]
+    budget = "1000ms"
+    shadow_price_base = 0.01
+    shadow_price_multiplier = 5.0
+
+    [memory]
+    budget = "1000MB"
+    shadow_price_base = 0.001
+    shadow_price_multiplier = 3.0
+
+    [compute]
+    budget = "1000CU"  # Compute units
+    shadow_price_base = 0.0001
+    shadow_price_multiplier = 4.0
+
+    [network]
+    budget = "100MB"
+    shadow_price_base = 0.01
+    shadow_price_multiplier = 6.0
+
+  # Carbon intensity API configuration
+  carbon-config.toml: |
+    # Carbon intensity data sources
+
+    [sources]
+    primary = "electricitymaps"
+    fallback = "wattime"
+
+    [electricitymaps]
+    api_url = "https://api.electricitymaps.com/v3/carbon-intensity/latest"
+    refresh_interval = "300s"  # 5 minutes
+
+    [wattime]
+    api_url = "https://api.watttime.org/v2/index"
+    refresh_interval = "300s"
+
+    [carbon_price]
+    base_price = 50.0  # $/ton CO2
+    currency = "USD"
+
+  # Adaptive execution configuration
+  adaptive-config.toml: |
+    # Adaptive block selection parameters
+
+    [selection]
+    algorithm = "branch_and_bound"
+    max_iterations = 1000
+    timeout = "100ms"
+
+    [optimization]
+    objective = "minimize_cost"  # minimize_cost, minimize_time, minimize_energy
+    cost_function = "shadow_price_weighted"
+
+    [constraints]
+    enforce_budget = true
+    allow_graceful_degradation = true

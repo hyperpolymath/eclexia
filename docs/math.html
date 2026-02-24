@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>math - Eclexia Documentation</title>
+<style>
+/* SPDX-License-Identifier: PMPL-1.0-or-later */
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #f5f5f5;
+    color: #333;
+}
+
+h1 {
+    color: #2c3e50;
+    border-bottom: 3px solid #3498db;
+    padding-bottom: 10px;
+}
+
+h2 {
+    color: #34495e;
+    border-bottom: 2px solid #95a5a6;
+    padding-bottom: 5px;
+    margin-top: 30px;
+}
+
+h3 {
+    color: #2980b9;
+}
+
+.item {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.signature {
+    background: #f8f8f8;
+    border-left: 4px solid #3498db;
+    padding: 15px;
+    font-family: "Fira Code", "Source Code Pro", monospace;
+    font-size: 14px;
+    overflow-x: auto;
+    border-radius: 3px;
+}
+
+.doc-comment {
+    margin-top: 15px;
+    color: #555;
+}
+
+.doc-comment p {
+    margin: 10px 0;
+}
+
+.doc-comment code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.doc-comment pre {
+    background: #282c34;
+    color: #abb2bf;
+    padding: 15px;
+    border-radius: 5px;
+    overflow-x: auto;
+}
+
+.doc-comment pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+}
+
+ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+ul li {
+    padding: 5px 0;
+}
+
+a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+</style>
+</head>
+<body>
+<h1>Module: math</h1>
+<h2>Table of Contents</h2>
+<ul>
+<li><a href="#PI">PI</a> - Constant</li>
+<li><a href="#E">E</a> - Constant</li>
+<li><a href="#TAU">TAU</a> - Constant</li>
+<li><a href="#abs_int">abs_int</a> - Function</li>
+<li><a href="#abs_float">abs_float</a> - Function</li>
+<li><a href="#min_int">min_int</a> - Function</li>
+<li><a href="#max_int">max_int</a> - Function</li>
+<li><a href="#min_float">min_float</a> - Function</li>
+<li><a href="#max_float">max_float</a> - Function</li>
+<li><a href="#pow_int">pow_int</a> - Function</li>
+<li><a href="#sqrt">sqrt</a> - Function</li>
+<li><a href="#cbrt">cbrt</a> - Function</li>
+<li><a href="#sin">sin</a> - Function</li>
+<li><a href="#cos">cos</a> - Function</li>
+<li><a href="#tan">tan</a> - Function</li>
+<li><a href="#asin">asin</a> - Function</li>
+<li><a href="#acos">acos</a> - Function</li>
+<li><a href="#atan">atan</a> - Function</li>
+<li><a href="#atan2">atan2</a> - Function</li>
+<li><a href="#sinh">sinh</a> - Function</li>
+<li><a href="#cosh">cosh</a> - Function</li>
+<li><a href="#tanh">tanh</a> - Function</li>
+<li><a href="#exp">exp</a> - Function</li>
+<li><a href="#ln">ln</a> - Function</li>
+<li><a href="#log10">log10</a> - Function</li>
+<li><a href="#log2">log2</a> - Function</li>
+<li><a href="#log">log</a> - Function</li>
+<li><a href="#floor">floor</a> - Function</li>
+<li><a href="#ceil">ceil</a> - Function</li>
+<li><a href="#round">round</a> - Function</li>
+<li><a href="#trunc">trunc</a> - Function</li>
+<li><a href="#factorial">factorial</a> - Function</li>
+<li><a href="#gcd">gcd</a> - Function</li>
+<li><a href="#lcm">lcm</a> - Function</li>
+<li><a href="#clamp_int">clamp_int</a> - Function</li>
+<li><a href="#clamp_float">clamp_float</a> - Function</li>
+</ul>
+<div class="item" id="PI">
+<h3>PI</h3>
+<pre class="signature">const PI: Some(Idx::<Type>(0))</pre>
+</div>
+<div class="item" id="E">
+<h3>E</h3>
+<pre class="signature">const E: Some(Idx::<Type>(1))</pre>
+</div>
+<div class="item" id="TAU">
+<h3>TAU</h3>
+<pre class="signature">const TAU: Some(Idx::<Type>(2))</pre>
+</div>
+<div class="item" id="abs_int">
+<h3>abs_int</h3>
+<pre class="signature">fn abs_int(x: Idx::<Type>(3)) -> Idx::<Type>(4)</pre>
+</div>
+<div class="item" id="abs_float">
+<h3>abs_float</h3>
+<pre class="signature">fn abs_float(x: Idx::<Type>(5)) -> Idx::<Type>(6)</pre>
+</div>
+<div class="item" id="min_int">
+<h3>min_int</h3>
+<pre class="signature">fn min_int(a: Idx::<Type>(7), b: Idx::<Type>(8)) -> Idx::<Type>(9)</pre>
+</div>
+<div class="item" id="max_int">
+<h3>max_int</h3>
+<pre class="signature">fn max_int(a: Idx::<Type>(10), b: Idx::<Type>(11)) -> Idx::<Type>(12)</pre>
+</div>
+<div class="item" id="min_float">
+<h3>min_float</h3>
+<pre class="signature">fn min_float(a: Idx::<Type>(13), b: Idx::<Type>(14)) -> Idx::<Type>(15)</pre>
+</div>
+<div class="item" id="max_float">
+<h3>max_float</h3>
+<pre class="signature">fn max_float(a: Idx::<Type>(16), b: Idx::<Type>(17)) -> Idx::<Type>(18)</pre>
+</div>
+<div class="item" id="pow_int">
+<h3>pow_int</h3>
+<pre class="signature">fn pow_int(base: Idx::<Type>(19), exp: Idx::<Type>(20)) -> Idx::<Type>(21)</pre>
+</div>
+<div class="item" id="sqrt">
+<h3>sqrt</h3>
+<pre class="signature">fn sqrt(x: Idx::<Type>(22)) -> Idx::<Type>(23)</pre>
+</div>
+<div class="item" id="cbrt">
+<h3>cbrt</h3>
+<pre class="signature">fn cbrt(x: Idx::<Type>(24)) -> Idx::<Type>(25)</pre>
+</div>
+<div class="item" id="sin">
+<h3>sin</h3>
+<pre class="signature">fn sin(x: Idx::<Type>(26)) -> Idx::<Type>(27)</pre>
+</div>
+<div class="item" id="cos">
+<h3>cos</h3>
+<pre class="signature">fn cos(x: Idx::<Type>(28)) -> Idx::<Type>(29)</pre>
+</div>
+<div class="item" id="tan">
+<h3>tan</h3>
+<pre class="signature">fn tan(x: Idx::<Type>(30)) -> Idx::<Type>(31)</pre>
+</div>
+<div class="item" id="asin">
+<h3>asin</h3>
+<pre class="signature">fn asin(x: Idx::<Type>(32)) -> Idx::<Type>(33)</pre>
+</div>
+<div class="item" id="acos">
+<h3>acos</h3>
+<pre class="signature">fn acos(x: Idx::<Type>(34)) -> Idx::<Type>(35)</pre>
+</div>
+<div class="item" id="atan">
+<h3>atan</h3>
+<pre class="signature">fn atan(x: Idx::<Type>(36)) -> Idx::<Type>(37)</pre>
+</div>
+<div class="item" id="atan2">
+<h3>atan2</h3>
+<pre class="signature">fn atan2(y: Idx::<Type>(38), x: Idx::<Type>(39)) -> Idx::<Type>(40)</pre>
+</div>
+<div class="item" id="sinh">
+<h3>sinh</h3>
+<pre class="signature">fn sinh(x: Idx::<Type>(41)) -> Idx::<Type>(42)</pre>
+</div>
+<div class="item" id="cosh">
+<h3>cosh</h3>
+<pre class="signature">fn cosh(x: Idx::<Type>(43)) -> Idx::<Type>(44)</pre>
+</div>
+<div class="item" id="tanh">
+<h3>tanh</h3>
+<pre class="signature">fn tanh(x: Idx::<Type>(45)) -> Idx::<Type>(46)</pre>
+</div>
+<div class="item" id="exp">
+<h3>exp</h3>
+<pre class="signature">fn exp(x: Idx::<Type>(47)) -> Idx::<Type>(48)</pre>
+</div>
+<div class="item" id="ln">
+<h3>ln</h3>
+<pre class="signature">fn ln(x: Idx::<Type>(49)) -> Idx::<Type>(50)</pre>
+</div>
+<div class="item" id="log10">
+<h3>log10</h3>
+<pre class="signature">fn log10(x: Idx::<Type>(51)) -> Idx::<Type>(52)</pre>
+</div>
+<div class="item" id="log2">
+<h3>log2</h3>
+<pre class="signature">fn log2(x: Idx::<Type>(53)) -> Idx::<Type>(54)</pre>
+</div>
+<div class="item" id="log">
+<h3>log</h3>
+<pre class="signature">fn log(x: Idx::<Type>(55), base: Idx::<Type>(56)) -> Idx::<Type>(57)</pre>
+</div>
+<div class="item" id="floor">
+<h3>floor</h3>
+<pre class="signature">fn floor(x: Idx::<Type>(58)) -> Idx::<Type>(59)</pre>
+</div>
+<div class="item" id="ceil">
+<h3>ceil</h3>
+<pre class="signature">fn ceil(x: Idx::<Type>(60)) -> Idx::<Type>(61)</pre>
+</div>
+<div class="item" id="round">
+<h3>round</h3>
+<pre class="signature">fn round(x: Idx::<Type>(62)) -> Idx::<Type>(63)</pre>
+</div>
+<div class="item" id="trunc">
+<h3>trunc</h3>
+<pre class="signature">fn trunc(x: Idx::<Type>(64)) -> Idx::<Type>(65)</pre>
+</div>
+<div class="item" id="factorial">
+<h3>factorial</h3>
+<pre class="signature">fn factorial(n: Idx::<Type>(66)) -> Idx::<Type>(67)</pre>
+</div>
+<div class="item" id="gcd">
+<h3>gcd</h3>
+<pre class="signature">fn gcd(a: Idx::<Type>(68), b: Idx::<Type>(69)) -> Idx::<Type>(70)</pre>
+</div>
+<div class="item" id="lcm">
+<h3>lcm</h3>
+<pre class="signature">fn lcm(a: Idx::<Type>(71), b: Idx::<Type>(72)) -> Idx::<Type>(73)</pre>
+</div>
+<div class="item" id="clamp_int">
+<h3>clamp_int</h3>
+<pre class="signature">fn clamp_int(value: Idx::<Type>(74), min: Idx::<Type>(75), max: Idx::<Type>(76)) -> Idx::<Type>(77)</pre>
+</div>
+<div class="item" id="clamp_float">
+<h3>clamp_float</h3>
+<pre class="signature">fn clamp_float(value: Idx::<Type>(78), min: Idx::<Type>(79), max: Idx::<Type>(80)) -> Idx::<Type>(81)</pre>
+</div>
+</body>
+</html>
