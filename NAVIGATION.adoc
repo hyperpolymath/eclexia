@@ -10,9 +10,11 @@ Quick project navigation hub while stateful-artefacts tooling is being finalized
 * link:QUICK_STATUS.md[Quick Status]
 * link:GETTING_STARTED.md[Getting Started]
 * link:SPECIFICATION.md[Specification]
-* link:CONTRIBUTING.adoc[Contributing]
+* link:CONTRIBUTING.md[Contributing]
 * link:SECURITY.md[Security]
+* link:MAINTAINER[Maintainer]
 * link:Containerfile[Containerfile]
+* `CNAME` (hosting custom-domain marker; not a DNS zone file)
 * `Justfile` (root by convention for `just`)
 * link:licensing/README.adoc[Licensing Folder]
 

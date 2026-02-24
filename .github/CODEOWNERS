@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Repository ownership and required review defaults.
+
+# Default owner for all files
+* @hyperpolymath
+
+# Security- and release-sensitive paths
+SECURITY.md @hyperpolymath
+Trustfile.a2ml @hyperpolymath
+Mustfile @hyperpolymath
+Containerfile @hyperpolymath
+.github/workflows/ @hyperpolymath
+.machine_readable/ @hyperpolymath
