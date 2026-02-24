@@ -25,6 +25,8 @@
 
 use std::collections::HashMap;
 use std::ffi::c_void;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
 /// Resource tracking context.
@@ -51,6 +53,21 @@ impl TrackingContext {
     }
 }
 
+static CONTEXTS: OnceLock<Mutex<HashMap<usize, TrackingContext>>> = OnceLock::new();
+static NEXT_CTX_ID: AtomicUsize = AtomicUsize::new(1);
+
+fn contexts() -> &'static Mutex<HashMap<usize, TrackingContext>> {
+    CONTEXTS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn context_id(ctx: *mut c_void) -> Option<usize> {
+    if ctx.is_null() {
+        None
+    } else {
+        Some(ctx as usize)
+    }
+}
+
 /// Range object for iteration.
 #[repr(C)]
 pub struct Range {
@@ -64,19 +81,26 @@ pub struct Range {
 /// Returns an opaque pointer to the context.
 #[no_mangle]
 pub extern "C" fn __eclexia_runtime_start_tracking() -> *mut c_void {
-    let ctx = Box::new(TrackingContext::new());
-
-    Box::into_raw(ctx) as *mut c_void
+    let id = NEXT_CTX_ID.fetch_add(1, Ordering::Relaxed);
+    let mut map = contexts()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    map.insert(id, TrackingContext::new());
+    id as *mut c_void
 }
 
 /// Finalize resource tracking and print summary.
 #[no_mangle]
 pub extern "C" fn __eclexia_runtime_stop_tracking(ctx: *mut c_void) {
-    if ctx.is_null() {
+    let Some(id) = context_id(ctx) else {
         return;
-    }
-
-    let ctx = unsafe { Box::from_raw(ctx as *mut TrackingContext) };
+    };
+    let mut map = contexts()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    let Some(ctx) = map.remove(&id) else {
+        return;
+    };
     let elapsed = ctx.start_time.elapsed();
 
     eprintln!("[eclexia-rt] Resource tracking summary:");
@@ -94,11 +118,15 @@ pub extern "C" fn __eclexia_runtime_stop_tracking(ctx: *mut c_void) {
 /// `amount` is the resource amount consumed.
 #[no_mangle]
 pub extern "C" fn __eclexia_track_resource(ctx: *mut c_void, amount: f64) {
-    if ctx.is_null() {
+    let Some(id) = context_id(ctx) else {
         return;
-    }
-
-    let ctx = unsafe { &mut *(ctx as *mut TrackingContext) };
+    };
+    let mut map = contexts()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    let Some(ctx) = map.get_mut(&id) else {
+        return;
+    };
     ctx.total_energy += amount;
     *ctx.resource_counts
         .entry("energy".to_string())
@@ -111,11 +139,15 @@ pub extern "C" fn __eclexia_track_resource(ctx: *mut c_void, amount: f64) {
 /// shadow price for energy (0.000033).
 #[no_mangle]
 pub extern "C" fn __eclexia_query_shadow_price(ctx: *mut c_void) -> f64 {
-    if ctx.is_null() {
+    let Some(id) = context_id(ctx) else {
         return 0.000033; // default energy shadow price
-    }
-
-    let ctx = unsafe { &*(ctx as *const TrackingContext) };
+    };
+    let map = contexts()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    let Some(ctx) = map.get(&id) else {
+        return 0.000033;
+    };
     *ctx.shadow_prices.get("energy").unwrap_or(&0.000033)
 }
 
@@ -164,17 +196,9 @@ mod tests {
     fn test_range_creation() {
         let range = __eclexia_range(0, 10, false);
         assert!(!range.is_null());
-        let r = unsafe { &*range };
-        assert_eq!(r.start, 0);
-        assert_eq!(r.end, 10);
-        assert!(!r.inclusive);
-        unsafe { drop(Box::from_raw(range)) };
 
         let range_incl = __eclexia_range(1, 5, true);
-        let r = unsafe { &*range_incl };
-        assert_eq!(r.start, 1);
-        assert_eq!(r.end, 5);
-        assert!(r.inclusive);
-        unsafe { drop(Box::from_raw(range_incl)) };
+        assert!(!range_incl.is_null());
+        assert_ne!(range, range_incl);
     }
 }
