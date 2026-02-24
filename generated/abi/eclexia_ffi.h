@@ -25,6 +25,20 @@ extern "C" {
 #endif
 
 /* ========================================================================== */
+/* ABI Version + Capability Flags                                              */
+/* ========================================================================== */
+
+#define ECL_ABI_VERSION_MAJOR 1
+#define ECL_ABI_VERSION_MINOR 1
+#define ECL_ABI_VERSION_PATCH 0
+
+#define ECL_ABI_FEATURE_BATCH             (1ULL << 0)
+#define ECL_ABI_FEATURE_LOCK_FREE         (1ULL << 1)
+#define ECL_ABI_FEATURE_BIDIRECTIONAL     (1ULL << 2)
+#define ECL_ABI_FEATURE_EXTENDED_TRACKER  (1ULL << 3)
+#define ECL_ABI_FEATURE_ABI_INTROSPECTION (1ULL << 4)
+
+/* ========================================================================== */
 /* Result Codes                                                                */
 /* ========================================================================== */
 
@@ -120,6 +134,34 @@ typedef struct {
     uint32_t dimension;
 } ecl_fuse_config_t;
 
+/** SLA constraint used by ecl_sla_check */
+typedef struct {
+    double   max_value;
+    double   percentile;
+    uint32_t dimension;
+    uint32_t _padding;
+} ecl_sla_constraint_t;
+
+/** ABI negotiation metadata */
+typedef struct {
+    uint32_t struct_size;
+    uint16_t abi_major;
+    uint16_t abi_minor;
+    uint16_t abi_patch;
+    uint16_t reserved0;
+    uint64_t features;
+    uint32_t max_dimensions;
+    uint32_t reserved1;
+} ecl_abi_info_t;
+
+/** Forward-compatible tracker creation options */
+typedef struct {
+    uint32_t struct_size;
+    uint32_t flags;
+    double   initial_shadow_price;
+    uint64_t reserved0;
+} ecl_tracker_options_t;
+
 /* ========================================================================== */
 /* OUTBOUND: Eclexia -> Native                                                 */
 /* ========================================================================== */
@@ -141,7 +183,7 @@ uint32_t ecl_pareto_compute(const double *points, uint32_t num_points,
                             uint32_t num_objectives);
 
 /** Check SLA constraint */
-uint32_t ecl_sla_check(const void *sla, const ecl_budget_t *budget);
+uint32_t ecl_sla_check(const ecl_sla_constraint_t *sla, const ecl_budget_t *budget);
 
 /** Check fuse state */
 uint32_t ecl_fuse_check(const ecl_fuse_config_t *fuse);
@@ -154,8 +196,19 @@ uint32_t ecl_budget_propagate(const ecl_budget_t *parent,
 /* INBOUND: Native -> Eclexia                                                  */
 /* ========================================================================== */
 
+/** Get ABI version/capability metadata for compatibility checks */
+uint32_t ecl_abi_get_info(ecl_abi_info_t *out_info);
+
 /** Create resource tracker (returns handle) */
 uint64_t ecl_tracker_create(uint32_t dimension, double total_budget);
+
+/** Create resource tracker with forward-compatible options */
+uint64_t ecl_tracker_create_ex(uint32_t dimension, double total_budget,
+                               const ecl_tracker_options_t *options);
+
+/** Snapshot tracker state into an ABI-stable budget struct */
+uint32_t ecl_tracker_snapshot(uint64_t tracker_handle, ecl_budget_t *out_budget,
+                              uint64_t *timestamp_ns_out);
 
 /** Get remaining budget */
 double ecl_tracker_remaining(uint64_t tracker_handle);

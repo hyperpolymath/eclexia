@@ -266,6 +266,28 @@ record CSelectionContext where
   shadowMemory     : Double  -- offset 48
   shadowCarbon     : Double  -- offset 56
 
+||| C struct: ecl_abi_info_t (ABI/capability negotiation)
+public export
+record CAbiInfo where
+  constructor MkCAbiInfo
+  structSize    : Bits32
+  abiMajor      : Bits16
+  abiMinor      : Bits16
+  abiPatch      : Bits16
+  reserved0     : Bits16
+  features      : Bits64
+  maxDimensions : Bits32
+  reserved1     : Bits32
+
+||| C struct: ecl_tracker_options_t (forward-compatible create options)
+public export
+record CTrackerOptions where
+  constructor MkCTrackerOptions
+  structSize          : Bits32
+  flags               : Bits32
+  initialShadowPrice  : Double
+  reserved0           : Bits64
+
 --------------------------------------------------------------------------------
 -- Bidirectional FFI Declarations
 --------------------------------------------------------------------------------
@@ -286,35 +308,50 @@ namespace Outbound
   ||| Select optimal strategy given resource context (SIMD-accelerated)
   export
   %foreign "C:ecl_adaptive_select, libeclexia_ffi"
-  prim__adaptiveSelect : Bits64 -> PrimIO Bits32
+  prim__adaptiveSelect : AnyPtr -> PrimIO Bits32
 
   ||| Compute Pareto frontier (SIMD-accelerated batch)
   export
   %foreign "C:ecl_pareto_compute, libeclexia_ffi"
-  prim__paretoCompute : Bits64 -> Bits32 -> Bits32 -> PrimIO Bits32
+  prim__paretoCompute : AnyPtr -> Bits32 -> Bits32 -> PrimIO Bits32
 
   ||| Check SLA constraint (vectorised)
   export
   %foreign "C:ecl_sla_check, libeclexia_ffi"
-  prim__slaCheck : Bits64 -> Bits64 -> PrimIO Bits32
+  prim__slaCheck : AnyPtr -> AnyPtr -> PrimIO Bits32
 
   ||| Check fuse state (lock-free)
   export
   %foreign "C:ecl_fuse_check, libeclexia_ffi"
-  prim__fuseCheck : Bits64 -> PrimIO Bits32
+  prim__fuseCheck : AnyPtr -> PrimIO Bits32
 
   ||| Propagate budget through call chain (zero-copy)
   export
   %foreign "C:ecl_budget_propagate, libeclexia_ffi"
-  prim__budgetPropagate : Bits64 -> Bits64 -> Double -> PrimIO Bits32
+  prim__budgetPropagate : AnyPtr -> AnyPtr -> Double -> PrimIO Bits32
 
 namespace Inbound
   ||| === Native -> Eclexia (external code calling into runtime) ===
+
+  ||| Query ABI/capability metadata
+  export
+  %foreign "C:ecl_abi_get_info, libeclexia_ffi"
+  prim__abiGetInfo : AnyPtr -> PrimIO Bits32
 
   ||| Create a new resource tracker
   export
   %foreign "C:ecl_tracker_create, libeclexia_ffi"
   prim__trackerCreate : Bits32 -> Double -> PrimIO Bits64
+
+  ||| Create a resource tracker using forward-compatible options
+  export
+  %foreign "C:ecl_tracker_create_ex, libeclexia_ffi"
+  prim__trackerCreateEx : Bits32 -> Double -> AnyPtr -> PrimIO Bits64
+
+  ||| Snapshot tracker state into C budget struct and optional timestamp
+  export
+  %foreign "C:ecl_tracker_snapshot, libeclexia_ffi"
+  prim__trackerSnapshot : Bits64 -> AnyPtr -> AnyPtr -> PrimIO Bits32
 
   ||| Get remaining budget from tracker
   export

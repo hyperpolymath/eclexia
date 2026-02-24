@@ -69,6 +69,14 @@ gitbot_fleet:
     - type: "post-merge-observe"
       script: "gitbot-fleet monitors inbound findings and remediation loop"
 
+external_trust:
+  - id: "did:web:proven.hyperpolymath.org"
+    repository: "hyperpolymath/proven"
+    trustfile: "proven/Trustfile.a2ml"
+    verification:
+      - "test -f proven/Trustfile.a2ml"
+      - "grep -q 'did:web:proven' proven/Trustfile.a2ml"
+
 ---
 ### [SECURITY_SCHEME]
 controls:

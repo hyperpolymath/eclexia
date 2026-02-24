@@ -1,7 +1,7 @@
 = Eclexia Bidirectional ABI/FFI Layer
 :author: Jonathan D.A. Jewell
 :email: jonathan.jewell@open.ac.uk
-:revdate: 2026-02-09
+:revdate: 2026-02-24
 :toc:
 :spdx: PMPL-1.0-or-later
 
@@ -11,6 +11,28 @@ Eclexia's resource system is exposed through a *bidirectional* ABI/FFI layer:
 
 * **Outbound** -- Eclexia programs call optimised native implementations (SIMD Pareto, lock-free shadow prices)
 * **Inbound** -- External code (C, Rust, Python ctypes, SCADA/DCS systems, embedded devices) calls into the Eclexia resource runtime
+
+The ABI is managed with two lanes:
+
+* **Stable lane** -- existing C ABI symbols remain compatible
+* **Extension lane** -- additive APIs evolve capability without breaking existing callers
+
+== Reinforcement Strategy
+
+`proven` is used as targeted reinforcement for critical paths, not as a full-language migration policy.
+
+* Keep Rust and other practical languages as defaults for most implementation work.
+* Apply Idris2/proven components where failure cost is high (safe crypto, path/url/json/network validation, critical ABI invariants).
+* Avoid mandatory high-assurance substitutions where they would harm delivery speed, operability, or contributor accessibility.
+
+== ABI Extension APIs (RC4)
+
+The following additive APIs are now part of the RC boundary:
+
+* `ecl_abi_get_info` -- version/capability negotiation (`ecl_abi_info_t`)
+* `ecl_tracker_create_ex` -- forward-compatible tracker creation (`ecl_tracker_options_t`)
+* `ecl_tracker_snapshot` -- stable budget snapshots with optional timestamp
+* Typed SLA constraint struct (`ecl_sla_constraint_t`) for `ecl_sla_check`
 
 == Architecture
 

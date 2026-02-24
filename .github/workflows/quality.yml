@@ -18,11 +18,25 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
+      - name: Checkout proven repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: hyperpolymath/proven
+          path: proven
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Documentation consistency checks
         run: ./scripts/qa/check-docs.sh
+
+      - name: Proven cross-repo smoke checks
+        run: |
+          test -f proven/bindings/rescript/src/ProvenSafePath.res
+          test -f proven/bindings/rescript/src/ProvenSafeJson.res
+          test -f proven/bindings/rescript/src/ProvenSafeNetwork.res
+          test -f proven/Trustfile.a2ml
+          grep -q '^env-info:' proven/justfile
 
       - name: Formatting check
         run: cargo fmt --all -- --check

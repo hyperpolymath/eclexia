@@ -20,6 +20,12 @@ future:
   boundary-purity:
     - "Enforce Zig-only FFI sources under ffi/."
     - "Enforce Idris2-only ABI definitions under src/abi/."
+    - "Grow ABI/FFI through additive extension APIs while preserving stable symbol compatibility."
+
+  proven-reinforcement:
+    - "Use proven/Idris2 for critical-path reinforcement, not blanket language migration."
+    - "Prioritize safety-sensitive surfaces first (safe crypto/path/url/json/network and ABI invariants)."
+    - "Retain Rust and other practical languages for non-critical implementation where this improves delivery and operability."
 
   documentation:
     - "Keep machine_read and machine_readable documents synchronized with implementation status."

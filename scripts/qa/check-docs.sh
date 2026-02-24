@@ -31,8 +31,8 @@ for f in "${required_machine[@]}"; do
   [[ -f "$f" ]] || { echo "missing machine-readable doc: $f" >&2; exit 1; }
 done
 
-if rg -n '\{\{PROJECT\}\}|\{\{project\}\}' src/abi >/dev/null; then
-  echo "template placeholders remain in src/abi" >&2
+if rg -n '\{\{PROJECT\}\}|\{\{project\}\}' src/abi docs/interop >/dev/null; then
+  echo "template placeholders remain in ABI/interop docs" >&2
   exit 1
 fi
 
