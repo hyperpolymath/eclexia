@@ -58,15 +58,23 @@
     (ci "GitHub Actions with hypatia-scan"))
 
   (maintenance-axes
+    (execution-order "axis-1 -> axis-2 -> axis-3")
     (axis-1
-      (name "maintenance-priority")
-      (order "corrective > adaptive > perfective"))
-    (axis-2
-      (name "audit-priority")
-      (order "systems > compliance > effects"))
-    (axis-3
       (name "scope-priority")
-      (order "must > intend > like")))
+      (order "must > intend > like")
+      (scoping-required #t)
+      (scope-sources "README, roadmap, status docs, maintenance checklist, CI/security docs")
+      (marker-scan "TODO/FIXME/XXX/HACK/STUB/PARTIAL")
+      (idris-unsound-scan "believe_me/assert_total"))
+    (axis-2
+      (name "maintenance-priority")
+      (order "corrective > adaptive > perfective")
+      (adaptive-focus "scope-change reconciliation, stale-reference removal, obsolete-work culling")
+      (perfective-source "Axis 1 honest state after corrective/adaptive"))
+    (axis-3
+      (name "audit-priority")
+      (order "systems > compliance > effects")
+      (audit-focus "systems-in-place, documentation coverage/honesty, safety/security accounted-for, operational effects reviewed")))
 
   (design-rationale
     (resource-aware-computation
