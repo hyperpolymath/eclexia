@@ -95,10 +95,7 @@ impl RegistryServer {
 
 /// GET /packages/:name/:version - Return package metadata
 fn get_package_metadata(packages_dir: &Path, name: &str, version: &str) -> Response {
-    let metadata_path = packages_dir
-        .join(name)
-        .join(version)
-        .join("metadata.json");
+    let metadata_path = packages_dir.join(name).join(version).join("metadata.json");
 
     match fs::read_to_string(&metadata_path) {
         Ok(contents) => Response::json(&contents),
@@ -123,11 +120,7 @@ fn download_package(packages_dir: &Path, name: &str, version: &str) -> Response 
 }
 
 /// POST /packages - Upload a new package (requires authentication)
-fn upload_package(
-    packages_dir: &Path,
-    auth_token: &Option<String>,
-    req: &Request,
-) -> Response {
+fn upload_package(packages_dir: &Path, auth_token: &Option<String>, req: &Request) -> Response {
     // Check authentication if token is configured
     if let Some(expected_token) = auth_token {
         let provided_token = req
@@ -136,8 +129,7 @@ fn upload_package(
             .unwrap_or("");
 
         if provided_token != expected_token {
-            return Response::new(401, b"Unauthorized")
-                .with_header("content-type", "text/plain");
+            return Response::new(401, b"Unauthorized").with_header("content-type", "text/plain");
         }
     }
 
@@ -162,8 +154,11 @@ fn upload_package(
     let metadata_json = match serde_json::to_string_pretty(&metadata) {
         Ok(json) => json,
         Err(e) => {
-            return Response::new(500, format!("Failed to serialize metadata: {}", e).as_bytes())
-                .with_header("content-type", "text/plain")
+            return Response::new(
+                500,
+                format!("Failed to serialize metadata: {}", e).as_bytes(),
+            )
+            .with_header("content-type", "text/plain")
         }
     };
 
@@ -172,8 +167,7 @@ fn upload_package(
             .with_header("content-type", "text/plain");
     }
 
-    Response::new(201, b"Package uploaded successfully")
-        .with_header("content-type", "text/plain")
+    Response::new(201, b"Package uploaded successfully").with_header("content-type", "text/plain")
 }
 
 #[cfg(test)]
@@ -182,12 +176,17 @@ mod tests {
     use std::io::Write;
 
     fn setup_test_registry() -> (tempfile::TempDir, RegistryServer) {
-        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let temp_dir = match tempfile::tempdir() {
+            Ok(dir) => dir,
+            Err(err) => panic!("Failed to create temp dir: {}", err),
+        };
         let server = RegistryServer::new(temp_dir.path()).with_auth_token("test-token".into());
 
         // Create a test package
         let pkg_dir = temp_dir.path().join("testpkg").join("1.0.0");
-        fs::create_dir_all(&pkg_dir).expect("Failed to create test package dir");
+        if let Err(err) = fs::create_dir_all(&pkg_dir) {
+            panic!("Failed to create test package dir: {}", err);
+        }
 
         let metadata = PackageMetadata {
             name: "testpkg".to_string(),
@@ -200,15 +199,23 @@ mod tests {
             checksum: "abc123".to_string(),
         };
 
-        let metadata_json = serde_json::to_string_pretty(&metadata).expect("Failed to serialize");
-        fs::write(pkg_dir.join("metadata.json"), metadata_json)
-            .expect("Failed to write metadata");
+        let metadata_json = match serde_json::to_string_pretty(&metadata) {
+            Ok(json) => json,
+            Err(err) => panic!("Failed to serialize: {}", err),
+        };
+        if let Err(err) = fs::write(pkg_dir.join("metadata.json"), metadata_json) {
+            panic!("Failed to write metadata: {}", err);
+        }
 
         // Create a test tarball
         let tarball_path = pkg_dir.join("testpkg-1.0.0.tar");
-        let mut file = fs::File::create(&tarball_path).expect("Failed to create tarball");
-        file.write_all(b"test tarball content")
-            .expect("Failed to write tarball");
+        let mut file = match fs::File::create(&tarball_path) {
+            Ok(file) => file,
+            Err(err) => panic!("Failed to create tarball: {}", err),
+        };
+        if let Err(err) = file.write_all(b"test tarball content") {
+            panic!("Failed to write tarball: {}", err);
+        }
 
         (temp_dir, server)
     }
@@ -237,8 +244,10 @@ mod tests {
         let response = router.dispatch(&req);
         assert_eq!(response.status, 200);
 
-        let metadata: PackageMetadata =
-            serde_json::from_slice(&response.body).expect("Failed to parse metadata");
+        let metadata: PackageMetadata = match serde_json::from_slice(&response.body) {
+            Ok(metadata) => metadata,
+            Err(err) => panic!("Failed to parse metadata: {}", err),
+        };
         assert_eq!(metadata.name, "testpkg");
         assert_eq!(metadata.version, "1.0.0");
     }

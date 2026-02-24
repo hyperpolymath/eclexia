@@ -7,7 +7,7 @@
 ---
 
 ## Reality check
-- Bytecode path, parser/typeck/MIR lowering, CLI/REPL, runtime subsystem (scheduler/profiler/carbon/shadow price), and the test suite (271 unit tests + 51 conformance tests) are verified and documented in `QUICK_STATUS.md` and `ECLEXIA-COMPLETE-STATUS-2026-02-09.md`.
+- Bytecode path, parser/typeck/MIR lowering, CLI/REPL, runtime subsystem (scheduler/profiler/carbon/shadow price), and the test suite (271 unit tests + 51 conformance tests) are verified and documented in `QUICK_STATUS.md` and `docs/archive/status/ECLEXIA-COMPLETE-STATUS-2026-02-09.md`.
 - The current `eclexia build --target llvm` branch runs `LlvmBackend::generate` for heuristics and prints numeric estimates; it never writes `.ll` or runs `llc`, so no native artifact exists yet.
 - Runtime instrumentation exists but is not wired to the LLVM emission pipeline (no `start_tracking`/`stop_tracking` hooks around native functions, adaptive dispatch tables are still conceptual, metadata points at runtime constants only in comments).
 - Reactive compiler crates are partially wired into `build --analyze` (comptime/absinterp/specialize/effects boxed, while modules, db, tiered still need integration) and cross-platform packaging/infrastructure (PanLL, gitbot fleet, OPSM trust) remains TODO.
@@ -81,6 +81,6 @@
 ---
 
 ## Notes
-- Reactive crate wiring (modules, db, tiered) and infrastructure enrolment (gitbot fleet, PanLL, OPSM trust) are tracked in `ECLEXIA-COMPLETE-STATUS-2026-02-09.md`; reference that document when choosing follow-up work.
+- Reactive crate wiring (modules, db, tiered) and infrastructure enrolment (gitbot fleet, PanLL, OPSM trust) are tracked in `docs/archive/status/ECLEXIA-COMPLETE-STATUS-2026-02-09.md`; reference that document when choosing follow-up work.
 - Update `QUICK_STATUS.md` after Phase 1 so the status page says "LLVM target emits `.ll` and runs `llc`".
 - This plan is the working record of the native-target effort; annotate it as things move from TODO → DONE so downstream agents can pick up exactly where this session leaves off.

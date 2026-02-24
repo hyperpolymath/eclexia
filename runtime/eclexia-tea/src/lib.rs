@@ -60,7 +60,6 @@ impl<Msg> fmt::Debug for Cmd<Msg> {
     }
 }
 
-
 /// A subscription represents an ongoing event source
 #[derive(Default)]
 pub enum Sub<Msg> {
@@ -103,7 +102,6 @@ impl<Msg> fmt::Debug for Sub<Msg> {
         }
     }
 }
-
 
 /// Virtual DOM node representation
 #[derive(Debug, Clone, Serialize, Deserialize)]

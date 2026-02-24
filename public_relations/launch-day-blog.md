@@ -286,7 +286,7 @@ Each `@solution` compiles to a separate function. At runtime:
 - **Phase 2 (Months 5-7):** Self-hosting bootstrap
 - **Phase 3 (Months 8-9):** Ecosystem (package manager, VSCode extension)
 
-See [SELF-HOSTING-ROADMAP.md](../SELF-HOSTING-ROADMAP.md) for details.
+See [docs/roadmap/SELF-HOSTING-ROADMAP.md](../docs/roadmap/SELF-HOSTING-ROADMAP.md) for details.
 
 ---
 
@@ -382,7 +382,7 @@ Because the planet can't wait for manual optimization.
 **Learn:**
 - 📚 Documentation: [eclexia.org/docs](https://eclexia.org/docs)
 - 📖 White Paper: [Economics-as-Code](../WHITEPAPER.md)
-- 🗺️ Roadmap: [Self-Hosting Plan](../SELF-HOSTING-ROADMAP.md)
+- 🗺️ Roadmap: [Self-Hosting Plan](../docs/roadmap/SELF-HOSTING-ROADMAP.md)
 
 **Contribute:**
 We welcome compiler engineers, sustainability experts, mobile devs, cloud engineers, educators, and technical writers.

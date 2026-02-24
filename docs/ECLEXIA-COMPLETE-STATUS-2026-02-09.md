@@ -300,10 +300,10 @@ These exist with their own tests. Four are now wired into CLI via `build --analy
 | 1.4 | Update STATE.scm with real completion numbers | 30min | DONE 2026-02-09 (state now reports verification & honesty audit phase with honest percentiles) |
 | 1.5 | Update .claude/CLAUDE.md session status | 30min | DONE 2026-02-09 (commit 6c41a4d + 3471d73) |
 | 1.6 | Audit ALL .md files for false claims (WHITEPAPER, THEORY, etc.) | 2h | DONE 2026-02-09 (commit a26acbe — WHITEPAPER.md implementation note added) |
-| 1.7 | Audit ROADMAP.adoc — ensure all claims match reality | 1h | DONE 2026-02-09 (commit a26acbe — 80%→~55%, date updated, license fixed, v0.2.0 checklist) |
+| 1.7 | Audit docs/roadmap/ROADMAP.adoc — ensure all claims match reality | 1h | DONE 2026-02-09 (commit a26acbe — 80%→~55%, date updated, license fixed, v0.2.0 checklist) |
 | 1.8 | Audit IMPLEMENTATION_ROADMAP.md | 1h | DONE 2026-02-09 (commit a26acbe — fixed SPDX typo) |
-| 1.9 | Audit SELF-HOSTING-ROADMAP.md | 30min | DONE 2026-02-09 (commit a26acbe — 100%→~55%, frontend/backend status corrected) |
-| 1.10 | Audit MULTICOMPILER-ARCHITECTURE.md | 30min | DONE 2026-02-09 (commit a26acbe — added VISION DOCUMENT disclaimer) |
+| 1.9 | Audit docs/roadmap/SELF-HOSTING-ROADMAP.md | 30min | DONE 2026-02-09 (commit a26acbe — 100%→~55%, frontend/backend status corrected) |
+| 1.10 | Audit docs/architecture/MULTICOMPILER-ARCHITECTURE.md | 30min | DONE 2026-02-09 (commit a26acbe — added VISION DOCUMENT disclaimer) |
 
 ### PRIORITY 2: CORE TOOLCHAIN COMPLETION
 | # | Task | Effort | Status |
@@ -584,7 +584,7 @@ dependent types. Both can leverage eclexia's resource budget system for query co
 ### PRIORITY 18: VM BACKENDS
 | # | Task | Effort | Status |
 |---|------|--------|--------|
-| 18.1 | LLVM backend (real, 12-week plan exists in IMPLEMENTATION-PLAN.md) | 40h | TODO |
+| 18.1 | LLVM backend (real, 12-week plan exists in docs/roadmap/IMPLEMENTATION-PLAN.md) | 40h | TODO |
 | 18.2 | Cranelift backend (real, fast dev builds) | 20h | IN PROGRESS — skeleton with real JIT for int functions |
 | 18.3 | WASM backend (real, browser/edge) | 15h | IN PROGRESS — generates real .wasm, needs GC/complex types/WASI |
 | 18.4 | BEAM backend (Erlang VM, distributed) | 40h | TODO |
@@ -593,7 +593,7 @@ dependent types. Both can leverage eclexia's resource budget system for query co
 | 18.7 | GPU backend (CUDA/ROCm/Metal/WebGPU) | 40h | TODO |
 | 18.8 | Embedded backend (ARM Cortex-M, RISC-V embedded) | 30h | TODO |
 
-### PRIORITY 19: DOMAIN-SPECIFIC STANDARD LIBRARIES (from MULTICOMPILER-ARCHITECTURE.md)
+### PRIORITY 19: DOMAIN-SPECIFIC STANDARD LIBRARIES (from docs/architecture/MULTICOMPILER-ARCHITECTURE.md)
 | # | Task | Effort | Status |
 |---|------|--------|--------|
 | 19.1 | std::mobile (battery, adaptive networking, UI) | 20h | TODO |
@@ -897,7 +897,7 @@ Various conformance tests in `tests/conformance/invalid/` (19 files)
 
 ## 14. ROADMAP ITEMS FROM PLANNING DOCS
 
-### From IMPLEMENTATION-PLAN.md (LLVM 12-Week Plan)
+### From docs/roadmap/IMPLEMENTATION-PLAN.md (LLVM 12-Week Plan)
 - Weeks 1-2 (Foundation): DONE (4/4 milestones)
 - Weeks 3-4 (Type Lowering): NOT DONE (4 tasks)
 - Weeks 5-6 (Function Codegen): NOT DONE (6 tasks)
@@ -906,19 +906,19 @@ Various conformance tests in `tests/conformance/invalid/` (19 files)
 - Weeks 11-12 (Optimisation): NOT DONE (5 tasks)
 - **Total: ~28 undone LLVM tasks**
 
-### From SELF-HOSTING-ROADMAP.md
+### From docs/roadmap/SELF-HOSTING-ROADMAP.md
 - Phase 1 (Backends): NOT DONE — LLVM, WASM, Cranelift
 - Phase 2 (Bootstrap): NOT DONE — FFI, unsafe, memory layout, port 10 modules (~14,400 LOC)
 - Phase 3 (Dogfooding): NOT DONE — rewrite tools in eclexia
 - **Total: ~50+ undone tasks**
 
-### From MULTICOMPILER-ARCHITECTURE.md
+### From docs/architecture/MULTICOMPILER-ARCHITECTURE.md
 - 5 backend targets: NOT DONE (LLVM, WASM, Cranelift, GPU, Embedded)
 - 6 domain libraries: NOT DONE (mobile, cloud, datascience, HPC, embedded, web)
 - 4 cross-cutting libraries: NOT DONE (carbon, resources, adaptive, units)
 - **Total: ~100+ undone tasks**
 
-### From GITHUB-ISSUES.md
+### From docs/community/GITHUB-ISSUES.md
 - 32 issues tracked, 4 done, 28 remaining
 - **Total: 28 undone issues**
 
@@ -999,10 +999,10 @@ Include date and any notes.
 | 2026-02-09 | 0.1 | Fix conformance test regression (COMPLETE) | **32/32 valid pass**, 19/19 invalid correctly reject, 0 skips. All 271 lib tests pass. |
 | 2026-02-09 | 0.4 | Fix rustls-pemfile (upgrade reqwest 0.11→0.12) | Commit dbbe4f4. Also added macro system (MacroCall AST, expansion, token nesting) |
 | 2026-02-09 | 0.6 | Fix runtime resource enforcement gaps | Commit 8c9f564. Resource<D> dimension comparison check in typeck. KNOWN_RUNTIME_GAPS cleared. |
-| 2026-02-09 | 1.1-1.5 | Documentation honesty pass | Commit 6c41a4d. README.adoc, QUICK_STATUS.md, CLAUDE.md, TOOLCHAIN_STATUS.md, TIER3_COMPLETION_SUMMARY.md |
+| 2026-02-09 | 1.1-1.5 | Documentation honesty pass | Commit 6c41a4d. README.adoc, QUICK_STATUS.md, CLAUDE.md, TOOLCHAIN_STATUS.md, docs/archive/completed-work/TIER3_COMPLETION_SUMMARY.md |
 | 2026-02-09 | 2.4-2.7 | Implement all 4 runtime stubs | Commit a6ce99b. scheduler (4 tests), profiler (6), carbon (7), shadow (8). 271 lib tests. |
 | 2026-02-09 | 2.10 | Implement Serialize for BytecodeModule | Commit 8c9f564. serde derives on AST/Bytecode types, JSON output in commands.rs |
-| 2026-02-09 | 12.1 | Seam analysis: compiler crate boundaries | Commit e5be2cb. 8 issues found (2 critical MIR panics fixed). SEAM_ANALYSIS.md created. |
+| 2026-02-09 | 12.1 | Seam analysis: compiler crate boundaries | Commit e5be2cb. 8 issues found (2 critical MIR panics fixed). docs/analysis/SEAM_ANALYSIS.md created. |
 | 2026-02-09 | 15.x | Nextgen-languages interop bridges | Commit e5be2cb. Bridge configs for WokeLang, Phronesis, betlang, AffineScript. INTEROP_STATUS.md created. |
 | 2026-02-09 | 0.1a | Parser: contextual keywords for energy/latency/memory/carbon | Tokens parsed as identifiers in expression/pattern context |
 | 2026-02-07 | — | 32/32 valid conformance tests | (had regressed to 29/32 — now fully restored) |
@@ -1021,7 +1021,7 @@ Include date and any notes.
 | 2026-02-09 | 3.5-3.6 | Clippy lint pass + zero warnings | Auto-fixed + manual: Dimension::to_string→format_dimension, Visibility derive Default |
 | 2026-02-09 | 3.2 | Panic-attack scan (session 6) | 15 weak pts, 327 unwraps, 28 unsafe, 48 panic sites, 49,882 lines |
 | 2026-02-09 | 2.1-2.2 | .eclb binary bytecode format | Commit 5bb9512. 8-byte header (magic "ECLB" + version) + JSON body. write_eclb/read_eclb/is_eclb_path. |
-| 2026-02-09 | 1.3,1.6-1.10 | Documentation honesty pass (6 docs) | Commit a26acbe. GETTING_STARTED (def→fn, status disclaimer), SELF-HOSTING-ROADMAP (100%→~55%), MULTICOMPILER-ARCHITECTURE (VISION DOCUMENT), ROADMAP.adoc (completion/date/license), IMPLEMENTATION_ROADMAP (SPDX typo), WHITEPAPER (projected vs measured note) |
+| 2026-02-09 | 1.3,1.6-1.10 | Documentation honesty pass (6 docs) | Commit a26acbe. GETTING_STARTED (def→fn, status disclaimer), SELF-HOSTING-ROADMAP (100%→~55%), MULTICOMPILER-ARCHITECTURE (VISION DOCUMENT), docs/roadmap/ROADMAP.adoc (completion/date/license), IMPLEMENTATION_ROADMAP (SPDX typo), WHITEPAPER (projected vs measured note) |
 | 2026-02-09 | 2.9 (partial) | Fix 3 dangerous production unwrap() calls | Commit 6eb2b45. modules (file_name), REPL debugger (flush), LSP symbols (position). 88% remaining are test-only. |
 | 2026-02-09 | 5.5 | Ingest eclexia scan into verisimdb-data | Commit 9ef8bab (verisimdb-data). 15 weak pts, pushed GitHub + GitLab. |
 | 2026-02-09 | 2.8 (partial) | Wire 4/7 reactive crates into CLI | Commits d5241ab + 0441089. absinterp, comptime, specialize, effects via `build --analyze`. |

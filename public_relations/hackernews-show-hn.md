@@ -290,7 +290,7 @@ comes from hardware counters (RAPL/PowerMetrics). Grid intensity from Electricit
 not perfect (especially for cloud), but better than guessing. Open to better approaches!
 
 **Feature requests:** Several people asked about GPU support, embedded targets, and custom resource
-types. All on the roadmap! See https://github.com/hyperpolymath/eclexia/blob/main/SELF-HOSTING-ROADMAP.md
+types. All on the roadmap! See https://github.com/hyperpolymath/eclexia/blob/main/docs/roadmap/SELF-HOSTING-ROADMAP.md
 
 Thanks for the thoughtful discussion, HN. This feedback is incredibly valuable. 🙏
 
