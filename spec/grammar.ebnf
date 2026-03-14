@@ -1,0 +1,403 @@
+(* SPDX-License-Identifier: PMPL-1.0-or-later *)
+(* Eclexia Formal Grammar — EBNF (ISO 14977) *)
+(* Extracted from hand-written Pratt parser: eclexia-parser/src/{lib,expr}.rs *)
+(* and lexer: eclexia-lexer/src/lib.rs *)
+(* Version: 0.1.0 — 2026-03-14 *)
+(* @taxonomy: spec/grammar *)
+
+(* ================================================================ *)
+(* LEXICAL GRAMMAR                                                   *)
+(* ================================================================ *)
+
+(* --- Whitespace and Comments --- *)
+
+whitespace = " " | "\t" | "\n" | "\r" ;
+line_comment = "//" , { ? any character except newline ? } ;
+block_comment = "/*" , { ? any character ? } , "*/" ;
+doc_comment = "///" , { ? any character except newline ? } ;
+block_doc_comment = "/**" , { ? any character ? } , "*/" ;
+
+(* --- Identifiers --- *)
+
+identifier = ( letter | "_" ) , { letter | digit | "_" } ;
+letter = ? Unicode letter (categories L*) ? | "a"-"z" | "A"-"Z" ;
+digit = "0"-"9" ;
+
+(* --- Literals --- *)
+
+integer_literal = decimal_integer | hex_integer | oct_integer | bin_integer ;
+decimal_integer = digit , { digit | "_" } ;
+hex_integer = "0" , ( "x" | "X" ) , hex_digit , { hex_digit | "_" } ;
+oct_integer = "0" , ( "o" | "O" ) , oct_digit , { oct_digit | "_" } ;
+bin_integer = "0" , ( "b" | "B" ) , bin_digit , { bin_digit | "_" } ;
+hex_digit = digit | "a"-"f" | "A"-"F" ;
+oct_digit = "0"-"7" ;
+bin_digit = "0" | "1" ;
+
+float_literal = digit , { digit | "_" } , "." , digit , { digit | "_" }
+              , [ ( "e" | "E" ) , [ "+" | "-" ] , digit , { digit } ] ;
+
+resource_literal = ( float_literal | decimal_integer ) , identifier ;
+(* Examples: 100J, 5ms, 10gCO2e, 2.5kWh *)
+
+string_literal = '"' , { string_char | escape_sequence } , '"' ;
+raw_string = "r" , '"' , { ? any character except '"' ? } , '"' ;
+raw_string_hash = "r#" , '"' , { ? any character except '"#' ? } , '"#' ;
+char_literal = "'" , ( ? any character except '\'' and '\\' ? | escape_sequence ) , "'" ;
+
+string_char = ? any character except '"' and '\\' ? ;
+escape_sequence = "\\" , ( "n" | "r" | "t" | "\\" | '"' | "'" | "0"
+                         | "x" , hex_digit , hex_digit
+                         | "u" , "{" , hex_digit , { hex_digit } , "}" ) ;
+
+boolean_literal = "true" | "false" ;
+unit_literal = "(" , ")" ;
+
+literal = integer_literal | float_literal | resource_literal
+        | string_literal | raw_string | raw_string_hash | char_literal
+        | boolean_literal | unit_literal ;
+
+(* --- Keywords (58) --- *)
+
+keyword = "adaptive" | "and" | "as" | "async" | "await" | "break"
+        | "carbon" | "case" | "chan" | "comptime" | "const" | "continue"
+        | "def" | "do" | "effect" | "else" | "energy" | "enum"
+        | "export" | "extern" | "false" | "fn" | "for" | "handle"
+        | "if" | "impl" | "import" | "in" | "latency" | "let"
+        | "loop" | "macro" | "match" | "memory" | "mod" | "module"
+        | "mut" | "not" | "or" | "pub" | "recv" | "ref" | "return"
+        | "select" | "self" | "Self" | "send" | "spawn" | "static"
+        | "struct" | "super" | "then" | "trait" | "true" | "type"
+        | "unit" | "use" | "where" | "while" | "yield" ;
+
+(* ================================================================ *)
+(* SYNTACTIC GRAMMAR                                                 *)
+(* ================================================================ *)
+
+(* --- Source File --- *)
+
+source_file = { item } ;
+
+item = function
+     | adaptive_function
+     | type_def
+     | import_decl
+     | const_decl
+     | trait_decl
+     | impl_block
+     | module_decl
+     | effect_decl
+     | static_decl
+     | extern_block
+     | macro_def ;
+
+(* --- Visibility --- *)
+
+visibility = "pub" , [ "(" , "crate" , ")" ] ;
+
+(* --- Attributes --- *)
+
+attributes = { attribute } ;
+attribute = "#" , "[" , identifier , [ "(" , attr_args , ")" ] , "]" ;
+attr_args = identifier , { "," , identifier } ;
+
+(* --- Functions --- *)
+
+function = [ visibility ] , attributes , ( "def" | "fn" ) , identifier
+         , [ type_params ] , "(" , [ params ] , ")"
+         , [ "->" , type ] , [ where_clause ] , block ;
+
+adaptive_function = attributes , "adaptive" , ( "def" | "fn" ) , identifier
+                  , [ type_params ] , "(" , [ params ] , ")"
+                  , [ "->" , type ] , [ constraints ]
+                  , [ optimize_directives ] , "{" , { solution } , "}" ;
+
+type_params = "<" , identifier , { "," , identifier } , ">" ;
+
+params = param , { "," , param } ;
+param = identifier , [ ":" , type ] ;
+
+(* --- Adaptive Function Components --- *)
+
+constraints = { "@requires" , ":" , constraint_item , { "," , constraint_item } } ;
+constraint_item = identifier , compare_op , ( resource_literal | integer_literal | float_literal )
+                | expression ;
+
+compare_op = "<" | "<=" | ">" | ">=" | "==" | "!=" ;
+
+optimize_directives = { "@optimize" , ":" , direction , identifier
+                      , { "," , direction , identifier } } ;
+direction = "minimize" | "maximize" ;
+
+solution = "@solution" , string_literal , ":"
+         , [ "@when" , ":" , expression ]
+         , [ provides ] , block ;
+
+provides = "@provides" , "(" , provides_item , { "," , provides_item } , ")" ;
+provides_item = identifier , ":" , ( resource_literal | integer_literal | float_literal ) ;
+
+(* --- Statements --- *)
+
+statement = let_stmt
+          | return_stmt
+          | while_stmt
+          | for_stmt
+          | loop_stmt
+          | break_stmt
+          | continue_stmt
+          | assignment_stmt
+          | expr_stmt ;
+
+let_stmt = "let" , [ "mut" ] , pattern , [ ":" , type ] , "=" , expression ;
+
+return_stmt = "return" , [ expression ] ;
+
+while_stmt = "while" , expression , block ;
+
+for_stmt = "for" , pattern , "in" , expression , block ;
+
+loop_stmt = "loop" , [ label ] , block ;
+
+break_stmt = "break" , [ label ] , [ expression ] ;
+
+continue_stmt = "continue" , [ label ] ;
+
+assignment_stmt = expression , ( "=" | compound_assign_op ) , expression ;
+
+compound_assign_op = "+=" | "-=" | "*=" | "/=" | "%="
+                   | "^=" | "&=" | "|=" | "<<=" | ">>=" | "**=" ;
+
+expr_stmt = expression ;
+
+block = "{" , { statement } , [ expression ] , "}" ;
+
+label = "'" , identifier ;
+
+(* --- Expressions (Pratt precedence, lowest to highest) --- *)
+(*                                                          *)
+(*  Precedence    Operators               Associativity     *)
+(*  ──────────────────────────────────────────────────────── *)
+(*   1 (Or)       ||, or                  Left              *)
+(*   2 (And)      &&, and                 Left              *)
+(*   3 (Eq)       ==, !=                  Left              *)
+(*   4 (Cast)     as                      Left              *)
+(*   5 (Cmp)      <, <=, >, >=, .., ..=   Left              *)
+(*   6 (BitOr)    |                       Left              *)
+(*   7 (BitXor)   ^                       Left              *)
+(*   8 (BitAnd)   &                       Left              *)
+(*   9 (Shift)    <<, >>                  Left              *)
+(*  10 (Term)     +, -                    Left              *)
+(*  11 (Factor)   *, /, %                 Left              *)
+(*  12 (Power)    **                      Right             *)
+(*  13 (Unary)    !, -, ~                 Prefix            *)
+(*  14 (Call)     (), [], ., ?            Postfix           *)
+(*  15 (Primary)  literals, idents, etc.  N/A               *)
+
+expression = or_expr ;
+
+or_expr = and_expr , { ( "||" | "or" ) , and_expr } ;
+and_expr = equality_expr , { ( "&&" | "and" ) , equality_expr } ;
+equality_expr = cast_expr , { ( "==" | "!=" ) , cast_expr } ;
+cast_expr = comparison_expr , { "as" , type } ;
+comparison_expr = bitor_expr , { ( "<" | "<=" | ">" | ">=" | ".." | "..=" ) , bitor_expr } ;
+bitor_expr = bitxor_expr , { "|" , bitxor_expr } ;
+bitxor_expr = bitand_expr , { "^" , bitand_expr } ;
+bitand_expr = shift_expr , { "&" , shift_expr } ;
+shift_expr = term_expr , { ( "<<" | ">>" ) , term_expr } ;
+term_expr = factor_expr , { ( "+" | "-" ) , factor_expr } ;
+factor_expr = power_expr , { ( "*" | "/" | "%" ) , power_expr } ;
+power_expr = unary_expr , [ "**" , power_expr ] ;  (* right-associative *)
+
+unary_expr = ( "!" | "-" | "~" ) , unary_expr
+           | postfix_expr ;
+
+postfix_expr = primary_expr , { postfix_op } ;
+
+postfix_op = "(" , [ arg_list ] , ")"        (* function call *)
+           | "." , identifier , [ "(" , [ arg_list ] , ")" ]  (* field/method *)
+           | "[" , expression , "]"          (* index *)
+           | "?"                             (* try operator *)
+           | "!" , "(" , [ arg_list ] , ")"  (* macro invocation *)
+           | "{" , struct_fields , "}"       (* struct literal, only after ident *) ;
+
+arg_list = expression , { "," , expression } ;
+
+struct_fields = struct_field , { "," , struct_field } , [ "," ] ;
+struct_field = identifier , ":" , expression ;
+
+primary_expr = literal
+             | identifier
+             | "(" , ")"                                  (* unit *)
+             | "(" , expression , { "," , expression } , [ "," ] , ")"  (* tuple *)
+             | "[" , "]"                                  (* empty array *)
+             | "[" , expression , ( ( ";" , expression )
+                                  | { "," , expression } ) , "]"  (* array *)
+             | block                                      (* block expression *)
+             | if_expr
+             | match_expr
+             | lambda_expr
+             | pipe_lambda
+             | async_expr
+             | handle_expr
+             | spawn_expr
+             | select_expr
+             | return_stmt
+             | break_stmt
+             | continue_stmt ;
+
+if_expr = "if" , expression , [ "then" ] , block , [ "else" , block ] ;
+
+match_expr = "match" , expression , "{" , match_arm , { "," , match_arm } , [ "," ] , "}" ;
+
+match_arm = pattern , [ "if" , expression ] , "=>" , expression ;
+
+lambda_expr = "fn" , "(" , [ params ] , ")" , [ "->" , type ] , expression ;
+
+pipe_lambda = "|" , param , { "," , param } , "|" , [ "->" , type ] , expression ;
+
+async_expr = "async" , block ;
+
+handle_expr = "handle" , expression , "{" , effect_handler , { "," , effect_handler } , [ "," ] , "}" ;
+
+effect_handler = identifier , [ "::" , identifier ] , "(" , [ params ] , ")"
+               , [ "resume" , identifier ] , "=>" , block ;
+
+spawn_expr = "spawn" , expression ;
+
+select_expr = "select" , "{" , select_arm , { "," , select_arm } , [ "," ] , "}" ;
+select_arm = pattern , "=>" , expression ;
+
+(* --- Patterns --- *)
+
+pattern = single_pattern , { "|" , single_pattern } ;
+
+single_pattern = "_"                                        (* wildcard *)
+               | ".."                                       (* rest *)
+               | "ref" , [ "mut" ] , identifier             (* reference binding *)
+               | "&" , [ "mut" ] , single_pattern           (* reference pattern *)
+               | identifier , [ ctor_pattern | struct_pattern | "@" , single_pattern ]
+               | literal                                    (* literal *)
+               | "(" , pattern , { "," , pattern } , [ "," ] , ")"  (* tuple *)
+               | "[" , pattern , { "," , pattern } , "]"    (* slice *)
+               | literal , ( ".." | "..=" ) , single_pattern  (* range *) ;
+
+ctor_pattern = "(" , pattern , { "," , pattern } , ")" ;
+
+struct_pattern = "{" , field_pattern , { "," , field_pattern } , [ "," ] , [ ".." ] , "}" ;
+
+field_pattern = identifier , [ ":" , pattern ] ;
+
+(* --- Types --- *)
+
+type = "&" , [ "mut" ] , type                              (* reference *)
+     | "fn" , "(" , [ type_list ] , ")" , "->" , type      (* function *)
+     | "(" , [ type_list ] , ")" , [ "->" , type ]         (* tuple or fn *)
+     | "(" , type , ")"                                    (* grouped *)
+     | named_type , "[" , [ size_expr ] , "]"              (* array *)
+     | named_type                                          (* named *)
+     | type , "?"                                          (* optional *)
+     | "_" ;                                               (* inferred *)
+
+named_type = identifier , [ type_args ] ;
+
+type_args = "[" , type , { "," , type } , "]" ;
+
+type_list = type , { "," , type } ;
+
+size_expr = integer_literal ;
+
+(* --- Type Definitions --- *)
+
+type_def = "type" , identifier , [ type_params ] , "="
+         , ( struct_def | enum_def | type ) ;
+
+struct_def = ( "struct" | "{" ) , "{" , [ fields ] , "}" ;
+
+enum_def = "enum" , "{" , [ variants ] , "}" ;
+
+fields = field , { "," , field } , [ "," ] ;
+field = identifier , ":" , type ;
+
+variants = variant , { "," , variant } , [ "," ] ;
+variant = identifier , [ "(" , type , { "," , type } , ")"
+                       | "{" , fields , "}" ] ;
+
+(* --- Declarations --- *)
+
+import_decl = ( "import" | "use" ) , import_path
+            , [ "as" , identifier ] ;
+
+import_path = identifier , { ( "::" | "." ) , identifier }
+            , [ "::" , ( "*" | "{" , identifier , { "," , identifier } , "}" ) ] ;
+
+const_decl = "const" , identifier , [ ":" , type ] , "=" , expression ;
+
+static_decl = [ visibility ] , "static" , [ "mut" ] , identifier
+            , ":" , type , "=" , expression ;
+
+(* --- Traits --- *)
+
+trait_decl = [ visibility ] , "trait" , identifier , [ type_params ]
+           , [ ":" , trait_bound , { "+" , trait_bound } ]
+           , [ where_clause ] , "{" , { trait_item } , "}" ;
+
+trait_bound = identifier , { "::" , identifier } , [ type_args ] ;
+
+trait_item = "fn" , identifier , "(" , [ params ] , ")" , [ "->" , type ]
+           , ( ";" | block )
+           | "type" , identifier , [ ":" , trait_bound , { "+" , trait_bound } ]
+           , [ "=" , type ] , ";"
+           | "const" , identifier , ":" , type , [ "=" , expression ] , ";" ;
+
+(* --- Implementations --- *)
+
+impl_block = "impl" , [ type_params ] , [ trait_path , "for" ] , type
+           , [ where_clause ] , "{" , { impl_item } , "}" ;
+
+trait_path = identifier , { "::" , identifier } , [ type_args ] ;
+
+impl_item = [ visibility ] , "fn" , identifier , "(" , [ params ] , ")"
+           , [ "->" , type ] , block
+           | "type" , identifier , "=" , type , ";"
+           | "const" , identifier , ":" , type , "=" , expression , ";" ;
+
+where_clause = "where" , where_predicate , { "," , where_predicate } ;
+
+where_predicate = type , ":" , trait_bound , { "+" , trait_bound } ;
+
+(* --- Modules --- *)
+
+module_decl = [ visibility ] , ( "module" | "mod" ) , identifier
+            , [ "{" , { item } , "}" ] ;
+
+(* --- Effects --- *)
+
+effect_decl = [ visibility ] , "effect" , identifier , [ type_params ]
+            , "{" , { effect_op } , "}" ;
+
+effect_op = identifier , "(" , [ params ] , ")" , [ "->" , type ] , ";" ;
+
+(* --- Extern --- *)
+
+extern_block = "extern" , [ string_literal ] , "{" , { extern_item } , "}" ;
+
+extern_item = "fn" , identifier , "(" , [ params ] , ")" , [ "->" , type ] , ";"
+            | "static" , [ "mut" ] , identifier , ":" , type , ";" ;
+
+(* --- Macros --- *)
+
+macro_def = [ visibility ] , "macro" , identifier
+          , "{" , macro_rule , { "," , macro_rule } , "}" ;
+
+macro_rule = macro_pattern , "=>" , macro_template , ";" ;
+
+macro_pattern = { macro_token } ;
+macro_template = { macro_token } ;
+
+macro_token = identifier
+            | "$" , identifier , ":" , macro_var_kind
+            | "$" , "(" , { macro_token } , ")" , repeat_kind , [ separator ] ;
+
+macro_var_kind = "expr" | "stmt" | "ty" | "pat" | "ident" | "block" | "literal" | "tt" ;
+repeat_kind = "*" | "+" | "?" ;
+separator = identifier | "," | ";" ;
