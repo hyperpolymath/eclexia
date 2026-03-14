@@ -1,4 +1,5 @@
 (* SPDX-License-Identifier: PMPL-1.0-or-later *)
+(* Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk> *)
 (* Eclexia Formal Grammar — EBNF (ISO 14977) *)
 (* Extracted from hand-written Pratt parser: eclexia-parser/src/{lib,expr}.rs *)
 (* and lexer: eclexia-lexer/src/lib.rs *)
