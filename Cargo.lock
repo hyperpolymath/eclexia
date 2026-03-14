@@ -687,6 +687,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "eclexia-cst"
+version = "0.1.0"
+dependencies = [
+ "eclexia-ast",
+ "eclexia-lexer",
+ "logos",
+ "smol_str",
+]
+
+[[package]]
 name = "eclexia-datetime"
 version = "0.1.0"
 
@@ -1003,6 +1013,14 @@ dependencies = [
  "rustc-hash 1.1.0",
  "serde",
  "serde_json",
+ "smol_str",
+]
+
+[[package]]
+name = "eclexia-token-stream"
+version = "0.1.0"
+dependencies = [
+ "eclexia-ast",
  "smol_str",
 ]
 

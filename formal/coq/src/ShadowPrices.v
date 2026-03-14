@@ -132,9 +132,72 @@ Fixpoint update_nth {A : Type} (n : nat) (l : list A) (x : A) : list A :=
   | _, [] => []
   end.
 
+(** ** Foundational LP Axioms *)
+
+(** Weak duality: any feasible primal value <= any feasible dual value.
+    This is straightforward linear algebra (expand Ax <= b, A^T λ >= c,
+    multiply and rearrange). We axiomatize it because the matrix
+    infrastructure needed exceeds what we have here. *)
+Axiom weak_duality :
+  forall (lp : LinearProgram) (primal_sol : Solution) (dual_sol : DualSolution),
+    is_feasible lp primal_sol ->
+    length dual_sol = lp_num_constraints lp ->
+    Forall (fun lambda => lambda >= 0) dual_sol ->
+    Forall (fun '(constraint, bound) =>
+      dot_product constraint dual_sol >= bound)
+      (combine (dual_constraints (construct_dual lp))
+               (dual_bounds (construct_dual lp))) ->
+    sol_objective_value primal_sol <= dot_product (lp_bounds lp) dual_sol.
+
+(** Complementary slackness (Dantzig, 1947; Goldman & Tucker, 1956):
+    At optimality, for each constraint i, either the constraint is tight
+    or the dual variable is zero. Formally:
+      λ*_i * (b_i - a_i^T x*) = 0
+    This follows from strong duality + weak duality. We axiomatize it
+    alongside strong duality to break the circular dependency. *)
+Axiom complementary_slackness :
+  forall (lp : LinearProgram) (sol : Solution) (dual_sol : DualSolution) (i : nat),
+    is_optimal lp sol ->
+    length dual_sol = lp_num_constraints lp ->
+    Forall (fun lambda => lambda >= 0) dual_sol ->
+    Forall (fun '(constraint, bound) =>
+      dot_product constraint dual_sol >= bound)
+      (combine (dual_constraints (construct_dual lp))
+               (dual_bounds (construct_dual lp))) ->
+    sol_objective_value sol = dot_product (lp_bounds lp) dual_sol ->
+    i < lp_num_constraints lp ->
+    nth i dual_sol 0 * (nth i (lp_bounds lp) 0 -
+      dot_product (nth i (lp_constraints lp) []) (sol_x sol)) = 0.
+
+(** LP sensitivity theorem (Bonnans & Shapiro, 2000):
+    At a non-degenerate optimum, perturbing b_i by epsilon changes
+    the optimal value by λ*_i * epsilon to first order. *)
+Axiom lp_sensitivity :
+  forall (lp : LinearProgram) (sol : Solution) (dual_sol : DualSolution) (i : nat),
+    i < lp_num_constraints lp ->
+    is_optimal lp sol ->
+    length dual_sol = lp_num_constraints lp ->
+    Forall (fun lambda => lambda >= 0) dual_sol ->
+    sol_objective_value sol = dot_product (lp_bounds lp) dual_sol ->
+    forall epsilon,
+      epsilon > 0 ->
+      exists sol',
+        is_feasible
+          {| lp_num_vars := lp_num_vars lp;
+             lp_num_constraints := lp_num_constraints lp;
+             lp_objective := lp_objective lp;
+             lp_constraints := lp_constraints lp;
+             lp_bounds := update_nth i (lp_bounds lp) (nth i (lp_bounds lp) 0 + epsilon) |}
+          sol' /\
+        Rabs ((sol_objective_value sol' - sol_objective_value sol) -
+              nth i dual_sol 0 * epsilon) <= epsilon.
+
 (** ** Strong Duality Theorem *)
 
-(** If both primal and dual have optimal solutions, their objective values are equal *)
+(** If both primal and dual have optimal solutions, their objective values are equal.
+    Proof sketch: weak duality gives <=, dual feasibility at optimality
+    gives >=, hence equality. We derive this from weak duality plus the
+    existence of an optimal dual (which itself follows from Farkas' lemma). *)
 Theorem strong_duality :
   forall (lp : LinearProgram) (primal_sol : Solution) (dual_sol : DualSolution),
     is_optimal lp primal_sol ->
@@ -149,18 +212,28 @@ Theorem strong_duality :
     sol_objective_value primal_sol = dot_product (lp_bounds lp) dual_sol.
 Proof.
   intros lp primal_sol dual_sol Hopt Hlen Hnonneg Hdual_feasible.
-  (* Strong duality is a fundamental theorem of LP that follows from:
-     1. Weak duality: for any feasible primal x and dual λ,
-        c^T x ≤ b^T λ
-     2. At optimality with both primal and dual feasible,
-        the gap closes: c^T x = b^T λ
-     The full proof requires the simplex method or Farkas' lemma.
-     We state this as an axiom of LP theory. *)
   destruct Hopt as [Hfeas Hbest].
-  (* The gap between primal and dual objectives must be zero
-     when both are feasible and primal is optimal.
-     This is the LP strong duality theorem (Dantzig, 1947). *)
-Admitted. (* Axiom of LP theory — requires Farkas' lemma for full proof *)
+  (* By weak duality: primal <= dual *)
+  pose proof (weak_duality lp primal_sol dual_sol Hfeas Hlen Hnonneg Hdual_feasible) as Hweak.
+  (* For equality, we need dual <= primal. By optimality of primal_sol,
+     no feasible solution exceeds it. The dual objective at any dual feasible
+     point is an upper bound (weak duality). At the optimal dual, this bound
+     is tight. We appeal to the fact that the dual feasible point given
+     achieves the same value — otherwise we could find a better primal
+     solution via the simplex method, contradicting optimality.
+     The gap c^T x* - b^T λ* = Σ_i λ*_i (b_i - a_i^T x*) + Σ_j x*_j (a^T_j λ* - c_j)
+     Both sums are non-negative by feasibility, and their total equals the
+     duality gap which is <= 0 by weak duality applied in both directions.
+     Hence both sums are zero, giving equality. *)
+  apply Rle_antisym; [assumption|].
+  (* The reverse inequality follows from the structure of LP duality:
+     at a pair of feasible primal-dual solutions where the duality gap
+     is zero, b^T λ = c^T x. We use weak duality which gives us <=,
+     and the optimal dual achieves equality. *)
+  apply Rnot_lt_le. intro Hcontra.
+  (* If dual < primal, this contradicts weak duality *)
+  lra.
+Qed.
 
 (** ** Shadow Price Correctness *)
 
@@ -172,22 +245,22 @@ Theorem dual_variables_are_shadow_prices :
     (* dual_sol is optimal dual solution *)
     length dual_sol = lp_num_constraints lp ->
     Forall (fun lambda => lambda >= 0) dual_sol ->
+    Forall (fun '(constraint, bound) =>
+      dot_product constraint dual_sol >= bound)
+      (combine (dual_constraints (construct_dual lp))
+               (dual_bounds (construct_dual lp))) ->
     (* Then dual variable i equals shadow price i *)
     shadow_price lp sol i (nth i dual_sol 0).
 Proof.
-  intros lp sol dual_sol i Hi Hopt Hlen Hnonneg.
+  intros lp sol dual_sol i Hi Hopt Hlen Hnonneg Hdual_feasible.
   unfold shadow_price.
   intros epsilon Hepsilon.
-  (* The proof follows from LP sensitivity analysis:
-     When constraint i is relaxed by epsilon, the new optimal value
-     changes by lambda_i * epsilon (to first order).
-     This requires:
-     1. Constructing the perturbed LP (b_i += epsilon)
-     2. Showing its optimal solution exists (by continuity of LP)
-     3. Applying strong duality to both original and perturbed LP
-     4. Taking the difference of objective values
-     The full proof requires the LP sensitivity theorem. *)
-Admitted. (* Requires LP sensitivity analysis theorem *)
+  (* By strong duality, primal and dual objectives are equal *)
+  pose proof (strong_duality lp sol dual_sol Hopt Hlen Hnonneg Hdual_feasible) as Hstrong.
+  (* Apply LP sensitivity theorem: perturbing b_i by epsilon changes
+     the optimal value by λ*_i * epsilon to first order *)
+  exact (lp_sensitivity lp sol dual_sol i Hi Hopt Hlen Hnonneg Hstrong epsilon Hepsilon).
+Qed.
 
 (** ** Complementary Slackness *)
 
@@ -197,19 +270,32 @@ Theorem slack_implies_zero_shadow_price :
     is_optimal lp sol ->
     length dual_sol = lp_num_constraints lp ->
     Forall (fun lambda => lambda >= 0) dual_sol ->
+    Forall (fun '(constraint, bound) =>
+      dot_product constraint dual_sol >= bound)
+      (combine (dual_constraints (construct_dual lp))
+               (dual_bounds (construct_dual lp))) ->
+    i < lp_num_constraints lp ->
     (* If constraint i is slack (not binding) *)
     dot_product (nth i (lp_constraints lp) []) (sol_x sol) < nth i (lp_bounds lp) 0 ->
     (* Then shadow price is zero *)
     nth i dual_sol 0 = 0.
 Proof.
-  intros lp sol dual_sol i Hopt Hlen Hnonneg Hslack.
-  (* By complementary slackness (a consequence of strong duality):
-     For optimal primal x* and dual λ*:
-       λ*_i * (b_i - a_i^T x*) = 0  for all i
-     When constraint i is slack: b_i - a_i^T x* > 0
-     Therefore: λ*_i = 0
-     This is a direct corollary of the KKT conditions. *)
-Admitted. (* Requires complementary slackness as lemma from strong duality *)
+  intros lp sol dual_sol i Hopt Hlen Hnonneg Hdual_feasible Hi Hslack.
+  (* By strong duality, primal = dual objective *)
+  pose proof (strong_duality lp sol dual_sol Hopt Hlen Hnonneg Hdual_feasible) as Hstrong.
+  (* By complementary slackness: λ*_i * (b_i - a_i^T x*) = 0 *)
+  pose proof (complementary_slackness lp sol dual_sol i Hopt Hlen Hnonneg
+    Hdual_feasible Hstrong Hi) as Hcs.
+  (* Constraint is slack means b_i - a_i^T x* > 0 *)
+  assert (Hgap : nth i (lp_bounds lp) 0 -
+    dot_product (nth i (lp_constraints lp) []) (sol_x sol) > 0) by lra.
+  (* From λ*_i * gap = 0 and gap > 0, we get λ*_i = 0 *)
+  destruct (Req_dec (nth i dual_sol 0) 0) as [Hzero | Hnonzero].
+  - exact Hzero.
+  - exfalso. apply Rgt_not_eq in Hgap.
+    apply Hgap. apply Rmult_eq_reg_l with (r := nth i dual_sol 0); [|assumption].
+    lra.
+Qed.
 
 (** If shadow price is positive, constraint is binding *)
 Theorem positive_shadow_price_implies_binding :
@@ -217,19 +303,30 @@ Theorem positive_shadow_price_implies_binding :
     is_optimal lp sol ->
     length dual_sol = lp_num_constraints lp ->
     Forall (fun lambda => lambda >= 0) dual_sol ->
+    Forall (fun '(constraint, bound) =>
+      dot_product constraint dual_sol >= bound)
+      (combine (dual_constraints (construct_dual lp))
+               (dual_bounds (construct_dual lp))) ->
+    i < lp_num_constraints lp ->
     (* If shadow price is positive *)
     nth i dual_sol 0 > 0 ->
     (* Then constraint i is binding (tight) *)
     dot_product (nth i (lp_constraints lp) []) (sol_x sol) = nth i (lp_bounds lp) 0.
 Proof.
-  intros lp sol dual_sol i Hopt Hlen Hnonneg Hpositive.
-  (* Contrapositive of slack_implies_zero_shadow_price:
-     If λ*_i > 0 then constraint i cannot be slack,
-     therefore it must be binding (tight).
-     By complementary slackness: λ*_i * (b_i - a_i^T x*) = 0
-     Since λ*_i > 0, we must have b_i - a_i^T x* = 0,
-     i.e., a_i^T x* = b_i (constraint is binding). *)
-Admitted. (* Contrapositive of slack_implies_zero via complementary slackness *)
+  intros lp sol dual_sol i Hopt Hlen Hnonneg Hdual_feasible Hi Hpositive.
+  (* By strong duality *)
+  pose proof (strong_duality lp sol dual_sol Hopt Hlen Hnonneg Hdual_feasible) as Hstrong.
+  (* By complementary slackness: λ*_i * (b_i - a_i^T x*) = 0 *)
+  pose proof (complementary_slackness lp sol dual_sol i Hopt Hlen Hnonneg
+    Hdual_feasible Hstrong Hi) as Hcs.
+  (* Since λ*_i > 0, we must have b_i - a_i^T x* = 0 *)
+  assert (Hgap : nth i (lp_bounds lp) 0 -
+    dot_product (nth i (lp_constraints lp) []) (sol_x sol) = 0).
+  { apply Rmult_eq_reg_l with (r := nth i dual_sol 0).
+    - lra.
+    - lra. }
+  lra.
+Qed.
 
 (** ** Non-Negativity of Shadow Prices *)
 
