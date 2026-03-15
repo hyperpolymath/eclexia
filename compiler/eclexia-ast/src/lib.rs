@@ -16,6 +16,7 @@
 pub mod dimension;
 pub mod span;
 pub mod types;
+pub mod visitor;
 
 use la_arena::{Arena, Idx};
 use smol_str::SmolStr;
