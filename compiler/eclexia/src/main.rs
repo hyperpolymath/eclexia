@@ -270,6 +270,17 @@ enum Commands {
         #[arg(value_name = "COMMAND", default_value = "check")]
         command: String,
     },
+
+    /// Parse a file and display the AST
+    Parse {
+        /// Input file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+
+        /// Output format (sexpr, debug, hir, mir)
+        #[arg(short, long, default_value = "sexpr")]
+        format: String,
+    },
 }
 
 fn main() -> miette::Result<()> {
@@ -375,6 +386,9 @@ fn main() -> miette::Result<()> {
         }
         Commands::Interop { command } => {
             commands::interop_check(&command)?;
+        }
+        Commands::Parse { input, format } => {
+            commands::parse_ast(&input, &format)?;
         }
     }
 

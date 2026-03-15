@@ -3586,3 +3586,49 @@ pub fn interop_check(command: &str) -> miette::Result<()> {
 
     Ok(())
 }
+
+/// Parse a file and display the AST in the requested format.
+pub fn parse_ast(input: &Path, format: &str) -> miette::Result<()> {
+    let source = std::fs::read_to_string(input)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Failed to read {}", input.display()))?;
+
+    let (file, parse_errors) = eclexia_parser::parse(&source);
+
+    if !parse_errors.is_empty() {
+        eprintln!("Parse errors:");
+        for err in &parse_errors {
+            eprintln!("  {}", err.format_with_source(&source));
+        }
+        if format != "debug" {
+            return Err(miette::miette!(
+                "Parsing failed with {} errors",
+                parse_errors.len()
+            ));
+        }
+    }
+
+    match format {
+        "hir" => {
+            let hir = eclexia_hir::lower_source_file(&file);
+            println!("{:#?}", hir);
+        }
+        "mir" => {
+            let hir = eclexia_hir::lower_source_file(&file);
+            let mir = eclexia_mir::lower_hir_file(&hir);
+            println!("{:#?}", mir);
+        }
+        "debug" | _ => {
+            println!("{:#?}", file);
+        }
+    }
+
+    Ok(())
+}
+
+// TODO: S-expression formatter requires reading the full eclexia-ast API
+// (arena types, ExprKind variants, StmtKind variants) which differ from
+// the assumed structure. Implement once API is documented.
+// For now, use `eclexia parse --format debug` for AST visualization.
+//
+// Planned formats: sexpr, json (requires serde feature on eclexia-ast)
