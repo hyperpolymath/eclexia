@@ -1,6 +1,9 @@
 -- SPDX-License-Identifier: PMPL-1.0-or-later
 -- SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 -- Resource Tracking Soundness Proofs
+--
+-- This module formalizes the soundness of Eclexia's resource tracking system.
+-- All proofs are complete — no holes, no postulates, no unsafe escape hatches.
 
 module ResourceTracking where
 
@@ -9,8 +12,11 @@ open import Data.Nat.Properties using (≤-refl; ≤-trans; +-comm; +-assoc; +-m
 open import Data.List using (List; []; _∷_; _++_; length; map; foldr; sum)
 open import Data.Bool using (Bool; true; false; _∧_; _∨_; not; if_then_else_)
 open import Data.Product using (_×_; ∃; _,_; proj₁; proj₂)
+open import Data.Maybe using (Maybe; just; nothing)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl; sym; trans; cong; subst)
 open import Relation.Nullary using (¬_; Dec; yes; no)
+open import Data.Empty using (⊥-elim)
+open import Data.Nat.Properties using (_≤?_)
 
 {- * Resource Tracking Soundness
 
@@ -28,6 +34,23 @@ ResourceId = ℕ
 Amount : Set
 Amount = ℕ
 
+-- Top-level natural number equality decision function.
+-- Previously this was duplicated in multiple where blocks, making it
+-- opaque to the type checker and blocking the tracking-soundness proof.
+-- Refactored to top level so all definitions and proofs share the same
+-- definitional equality.
+_==ℕ_ : ℕ → ℕ → Bool
+zero  ==ℕ zero  = true
+zero  ==ℕ suc _ = false
+suc _ ==ℕ zero  = false
+suc m ==ℕ suc n = m ==ℕ n
+
+-- Reflexivity of natural number equality: n ==ℕ n always reduces to true.
+-- This is the key lemma that unblocks the tracking-soundness proof.
+==ℕ-refl : ∀ (n : ℕ) → (n ==ℕ n) ≡ true
+==ℕ-refl zero    = refl
+==ℕ-refl (suc n) = ==ℕ-refl n
+
 -- Resource state
 record ResourceState : Set where
   field
@@ -44,16 +67,11 @@ ResourceTable = List (ResourceId × ResourceState)
 {- ** Operations -}
 
 -- Look up resource in table
+-- Now uses top-level _==ℕ_ instead of a local where-defined copy.
 lookup-resource : ResourceId → ResourceTable → Maybe ResourceState
 lookup-resource id [] = nothing
 lookup-resource id ((id' , state) ∷ table) =
-  if id == id' then just state else lookup-resource id table
-  where
-    _==_ : ℕ → ℕ → Bool
-    zero == zero = true
-    zero == suc _ = false
-    suc _ == zero = false
-    suc m == suc n = m == n
+  if id ==ℕ id' then just state else lookup-resource id table
 
 -- Consume resource (returns updated state or error)
 data ConsumeResult : Set where
@@ -89,48 +107,84 @@ data ConsumesResource : Expr → ResourceId → Amount → Set where
     ConsumesResource (ELet e1 e2) id (a1 + a2)
 
 -- Tracked resource usage (what the runtime tracks)
+-- Now uses top-level _==ℕ_ so the proof of tracking-soundness can
+-- reason about the equality test via ==ℕ-refl.
 tracked-usage : Expr → ResourceId → Amount
 tracked-usage (EInt _) _ = 0
 tracked-usage (EAdd e1 e2) id = tracked-usage e1 id + tracked-usage e2 id
 tracked-usage (ELet e1 e2) id = tracked-usage e1 id + tracked-usage e2 id
-tracked-usage (EAnnotated id' amount e) id with id == id'
-  where
-    _==_ : ℕ → ℕ → Bool
-    zero == zero = true
-    zero == suc _ = false
-    suc _ == zero = false
-    suc m == suc n = m == n
-... | true = amount + tracked-usage e id
+tracked-usage (EAnnotated id' amount e) id with id ==ℕ id'
+... | true  = amount + tracked-usage e id
 ... | false = tracked-usage e id
 
 {- ** Main Soundness Theorem -}
 
--- Helper: natural number equality is reflexive
-n≡n-true : ∀ (n : ℕ) → (n == n) ≡ true
-  where
-    _==_ : ℕ → ℕ → Bool
-    zero == zero = true
-    zero == suc _ = false
-    suc _ == zero = false
-    suc m == suc n = m == n
-n≡n-true zero = refl
-n≡n-true (suc n) = n≡n-true n
+-- Helper: rewriting lemma for tracked-usage on EAnnotated when ids match.
+-- When id ==ℕ id reduces to true, tracked-usage computes amount + recursive.
+tracked-usage-annotated-self : ∀ (id : ResourceId) (amount : Amount) (e : Expr) →
+  tracked-usage (EAnnotated id amount e) id ≡ amount + tracked-usage e id
+tracked-usage-annotated-self id amount e with id ==ℕ id | ==ℕ-refl id
+... | .true | refl = refl
 
--- Tracked usage equals actual consumption
-tracking-soundness : ∀ (e : Expr) (id : ResourceId) (amount : Amount) →
-  ConsumesResource e id amount →
+-- NOTE: The original tracking-soundness theorem for ConsumesResource is
+-- unprovable as stated. The CR-Annotated constructor claims total consumption
+-- is `amount`, but tracked-usage computes `amount + tracked-usage e id`.
+-- These agree only when tracked-usage e id ≡ 0, but CR-Annotated carries
+-- no evidence about the sub-expression. This is a design flaw in the
+-- original data type, not a proof difficulty.
+--
+-- The original incomplete proof (with {!!} hole) is replaced by the
+-- corrected ConsumesResource' below, which threads sub-expression
+-- consumption through all constructors.
+
+{- ** Corrected ConsumesResource with complete soundness proof -}
+
+-- Refined: CR-Annotated now correctly accounts for sub-expression usage.
+-- CR-Annotated-other carries proof that the annotation targets a different
+-- resource id, so the with-clause in tracked-usage can be discharged.
+data ConsumesResource' : Expr → ResourceId → Amount → Set where
+  CR-Annotated' : ∀ {e id amount a_sub} →
+    ConsumesResource' e id a_sub →
+    ConsumesResource' (EAnnotated id amount e) id (amount + a_sub)
+
+  CR-Annotated-other' : ∀ {e id id' amount a_sub} →
+    (id ==ℕ id') ≡ false →  -- Evidence that we are tracking a different resource
+    ConsumesResource' e id a_sub →
+    ConsumesResource' (EAnnotated id' amount e) id a_sub
+
+  CR-Int' : ∀ {n id} →
+    ConsumesResource' (EInt n) id 0
+
+  CR-Add' : ∀ {e1 e2 id a1 a2} →
+    ConsumesResource' e1 id a1 →
+    ConsumesResource' e2 id a2 →
+    ConsumesResource' (EAdd e1 e2) id (a1 + a2)
+
+  CR-Let' : ∀ {e1 e2 id a1 a2} →
+    ConsumesResource' e1 id a1 →
+    ConsumesResource' e2 id a2 →
+    ConsumesResource' (ELet e1 e2) id (a1 + a2)
+
+-- Complete soundness proof for the refined data type
+tracking-soundness' : ∀ (e : Expr) (id : ResourceId) (amount : Amount) →
+  ConsumesResource' e id amount →
   tracked-usage e id ≡ amount
-tracking-soundness .(EAnnotated id amount e) id amount (CR-Annotated {e}) = {!!}
-  -- Requires showing: when id == id evaluates to true in tracked-usage,
-  -- the result is amount + tracked-usage e id.
-  -- Blocked on locally-defined _==_ inside tracked-usage being opaque.
-  -- Would need refactoring tracked-usage to use a top-level eq decision.
-tracking-soundness .(EAdd e1 e2) id .(a1 + a2) (CR-Add {e1} {e2} {.id} {a1} {a2} cr1 cr2) =
-  trans (cong (_+ tracked-usage e2 id) (tracking-soundness e1 id a1 cr1))
-        (cong (a1 +_) (tracking-soundness e2 id a2 cr2))
-tracking-soundness .(ELet e1 e2) id .(a1 + a2) (CR-Let {e1} {e2} {.id} {a1} {a2} cr1 cr2) =
-  trans (cong (_+ tracked-usage e2 id) (tracking-soundness e1 id a1 cr1))
-        (cong (a1 +_) (tracking-soundness e2 id a2 cr2))
+tracking-soundness' (EInt n) id .0 CR-Int' = refl
+tracking-soundness' (EAnnotated id amount e) .id .(amount + a_sub) (CR-Annotated' {.e} {.id} {.amount} {a_sub} cr) =
+  trans (tracked-usage-annotated-self id amount e)
+        (cong (amount +_) (tracking-soundness' e id a_sub cr))
+tracking-soundness' (EAnnotated id' amount e) id a_sub (CR-Annotated-other' {.e} {.id} {.id'} {.amount} {.a_sub} neq cr)
+  -- We have neq : (id ==ℕ id') ≡ false. We rewrite the with-clause in
+  -- tracked-usage using this evidence so that tracked-usage (EAnnotated id' amount e) id
+  -- reduces to tracked-usage e id (the false branch).
+  with id ==ℕ id' | neq
+... | false | refl = tracking-soundness' e id a_sub cr
+tracking-soundness' (EAdd e1 e2) id .(a1 + a2) (CR-Add' {.e1} {.e2} {.id} {a1} {a2} cr1 cr2) =
+  trans (cong (_+ tracked-usage e2 id) (tracking-soundness' e1 id a1 cr1))
+        (cong (a1 +_) (tracking-soundness' e2 id a2 cr2))
+tracking-soundness' (ELet e1 e2) id .(a1 + a2) (CR-Let' {.e1} {.e2} {.id} {a1} {a2} cr1 cr2) =
+  trans (cong (_+ tracked-usage e2 id) (tracking-soundness' e1 id a1 cr1))
+        (cong (a1 +_) (tracking-soundness' e2 id a2 cr2))
 
 {- ** Monotonicity Properties -}
 
@@ -226,15 +280,20 @@ tracked-nonnegative e id = z≤n
 {- We have formalized:
    1. Resource state with budget constraints
    2. Resource consumption operations
-   3. Tracking soundness (tracked = actual)
+   3. Tracking soundness (tracked = actual) — COMPLETE with refined data type
    4. Monotonicity (usage never decreases, budget constant)
    5. Deterministic exhaustion (predictable failure)
    6. Exact remaining budget computation
    7. Compositionality (additive resource consumption)
    8. Non-negativity (usage and tracking always ≥ 0)
 
-   These proofs establish that Eclexia's resource tracking is sound:
-   - What the runtime tracks matches actual consumption
-   - Budget exhaustion is predictable and deterministic
-   - Resource composition is well-behaved
+   Design notes:
+   - The original ConsumesResource data type had a design flaw in CR-Annotated:
+     it claimed the total consumption was `amount` but tracked-usage computes
+     `amount + tracked-usage e id`, making the soundness theorem unprovable
+     without knowing tracked-usage e id = 0.
+   - The refined ConsumesResource' correctly threads sub-expression consumption
+     through all constructors, making the soundness proof structurally complete.
+   - The locally-defined _==_ functions were refactored to the top-level _==ℕ_
+     so that ==ℕ-refl can be used in proofs about tracked-usage.
 -}
