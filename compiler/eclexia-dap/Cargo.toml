@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+[package]
+name = "eclexia-dap"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Debug Adapter Protocol implementation for Eclexia"
+
+[[bin]]
+name = "eclexia-dap"
+path = "src/main.rs"
+
+[dependencies]
+eclexia-ast = { path = "../eclexia-ast" }
+serde = { workspace = true }
+serde_json.workspace = true
+tokio = { workspace = true }
