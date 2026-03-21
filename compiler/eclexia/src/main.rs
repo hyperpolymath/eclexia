@@ -3,6 +3,7 @@
 
 //! Eclexia compiler and toolchain CLI.
 
+#![forbid(unsafe_code)]
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -277,9 +278,23 @@ enum Commands {
         #[arg(value_name = "FILE")]
         input: PathBuf,
 
-        /// Output format (sexpr, debug, hir, mir)
+        /// Output format (sexpr, json, debug, hir, mir)
         #[arg(short, long, default_value = "sexpr")]
         format: String,
+    },
+
+    /// Dump AST as S-expression (shorthand for parse --format sexpr)
+    DumpSexpr {
+        /// Input file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+    },
+
+    /// Dump AST as JSON (shorthand for parse --format json)
+    DumpJson {
+        /// Input file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
     },
 }
 
@@ -389,6 +404,12 @@ fn main() -> miette::Result<()> {
         }
         Commands::Parse { input, format } => {
             commands::parse_ast(&input, &format)?;
+        }
+        Commands::DumpSexpr { input } => {
+            commands::parse_ast(&input, "sexpr")?;
+        }
+        Commands::DumpJson { input } => {
+            commands::parse_ast(&input, "json")?;
         }
     }
 

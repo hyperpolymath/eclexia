@@ -1486,7 +1486,7 @@ fn mint_common_files(name: &str, template: &str) -> miette::Result<()> {
         edition = \"2025\"\n\
         license = \"PMPL-1.0-or-later\"\n\
         description = \"An Eclexia {template} project\"\n\
-        authors = [\"Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>\"]\n\n\
+        authors = [\"Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>\"]\n\n\
         [build]\n\
         output-type = \"{output_type}\"\n\n\
         [dependencies]\n\
@@ -3588,6 +3588,13 @@ pub fn interop_check(command: &str) -> miette::Result<()> {
 }
 
 /// Parse a file and display the AST in the requested format.
+///
+/// Supported formats:
+///   - "debug" -- Rust Debug pretty-print (default)
+///   - "sexpr" -- S-expression representation following JtV reference pattern
+///   - "json"  -- Pretty-printed JSON (structural, arena-resolved)
+///   - "hir"   -- HIR lowered form (Debug)
+///   - "mir"   -- MIR lowered form (Debug)
 pub fn parse_ast(input: &Path, format: &str) -> miette::Result<()> {
     let source = std::fs::read_to_string(input)
         .into_diagnostic()
@@ -3618,6 +3625,17 @@ pub fn parse_ast(input: &Path, format: &str) -> miette::Result<()> {
             let mir = eclexia_mir::lower_hir_file(&hir);
             println!("{:#?}", mir);
         }
+        "sexpr" | "s-expr" | "sexp" => {
+            println!("{}", sexpr::source_file_to_sexpr(&file));
+        }
+        "json" => {
+            let json = sexpr::source_file_to_json(&file);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json)
+                    .map_err(|e| miette::miette!("JSON serialization failed: {}", e))?
+            );
+        }
         "debug" | _ => {
             println!("{:#?}", file);
         }
@@ -3626,9 +3644,846 @@ pub fn parse_ast(input: &Path, format: &str) -> miette::Result<()> {
     Ok(())
 }
 
-// TODO: S-expression formatter requires reading the full eclexia-ast API
-// (arena types, ExprKind variants, StmtKind variants) which differ from
-// the assumed structure. Implement once API is documented.
-// For now, use `eclexia parse --format debug` for AST visualization.
+// ============================================================================
+// S-expression and JSON AST dump for Eclexia
 //
-// Planned formats: sexpr, json (requires serde feature on eclexia-ast)
+// Converts the arena-based Eclexia AST into S-expression and JSON
+// representations. Each arena index (ExprId, StmtId, TypeId) is resolved
+// against the SourceFile's arenas to produce concrete output.
+// ============================================================================
+
+mod sexpr {
+    use eclexia_ast::*;
+
+    /// Convert an entire SourceFile to S-expression format.
+    pub fn source_file_to_sexpr(file: &SourceFile) -> String {
+        let mut out = String::new();
+        out.push_str("(source-file");
+        for item in &file.items {
+            out.push_str("\n  ");
+            item_to_sexpr(item, file, &mut out, 2);
+        }
+        out.push(')');
+        out
+    }
+
+    /// Convert an entire SourceFile to a JSON value.
+    pub fn source_file_to_json(file: &SourceFile) -> serde_json::Value {
+        serde_json::json!({
+            "type": "source_file",
+            "items": file.items.iter().map(|i| item_to_json(i, file)).collect::<Vec<_>>()
+        })
+    }
+
+    // ---- S-expression helpers ----
+
+    fn indent_str(indent: usize) -> String {
+        " ".repeat(indent)
+    }
+
+    fn item_to_sexpr(item: &Item, file: &SourceFile, out: &mut String, indent: usize) {
+        match item {
+            Item::Function(f) => {
+                out.push_str(&format!("(fn \"{}\"", f.name));
+                if !f.type_params.is_empty() {
+                    out.push_str(" (type-params");
+                    for tp in &f.type_params {
+                        out.push_str(&format!(" \"{}\"", tp));
+                    }
+                    out.push(')');
+                }
+                // Parameters
+                out.push_str("\n");
+                out.push_str(&indent_str(indent + 2));
+                out.push_str("(params");
+                for p in &f.params {
+                    out.push_str(&format!(" (\"{}\"", p.name));
+                    if let Some(ty_id) = p.ty {
+                        out.push(' ');
+                        type_to_sexpr(ty_id, file, out);
+                    }
+                    out.push(')');
+                }
+                out.push(')');
+                // Return type
+                if let Some(ret) = f.return_type {
+                    out.push_str("\n");
+                    out.push_str(&indent_str(indent + 2));
+                    out.push_str("(returns ");
+                    type_to_sexpr(ret, file, out);
+                    out.push(')');
+                }
+                // Body
+                out.push_str("\n");
+                out.push_str(&indent_str(indent + 2));
+                block_to_sexpr(&f.body, file, out, indent + 2);
+                out.push(')');
+            }
+            Item::AdaptiveFunction(f) => {
+                out.push_str(&format!("(adaptive-fn \"{}\"", f.name));
+                out.push_str(&format!(" {} solutions)", f.solutions.len()));
+            }
+            Item::TypeDef(td) => {
+                out.push_str(&format!("(type-def \"{}\" {:?})", td.name, td.kind));
+            }
+            Item::Import(imp) => {
+                let path: Vec<&str> = imp.path.iter().map(|s| s.as_str()).collect();
+                out.push_str(&format!("(import \"{}\"", path.join("::")));
+                if let Some(alias) = &imp.alias {
+                    out.push_str(&format!(" :as \"{}\"", alias));
+                }
+                out.push(')');
+            }
+            Item::Const(c) => {
+                out.push_str(&format!("(const \"{}\" ", c.name));
+                expr_to_sexpr(c.value, file, out, indent + 2);
+                out.push(')');
+            }
+            Item::TraitDecl(t) => {
+                out.push_str(&format!("(trait \"{}\")", t.name));
+            }
+            Item::ImplBlock(ib) => {
+                out.push_str("(impl");
+                if let Some(tr) = &ib.trait_path {
+                    let trait_str: Vec<&str> = tr.iter().map(|s| s.as_str()).collect();
+                    out.push_str(&format!(" \"{}\"", trait_str.join("::")));
+                }
+                out.push(')');
+            }
+            Item::ModuleDecl(m) => {
+                out.push_str(&format!("(module \"{}\")", m.name));
+            }
+            Item::EffectDecl(e) => {
+                out.push_str(&format!("(effect \"{}\")", e.name));
+            }
+            Item::StaticDecl(s) => {
+                out.push_str(&format!("(static \"{}\")", s.name));
+            }
+            Item::ExternBlock(_) => {
+                out.push_str("(extern ...)");
+            }
+            Item::MacroDef(m) => {
+                out.push_str(&format!("(macro \"{}\")", m.name));
+            }
+            Item::Error(_) => {
+                out.push_str("(error)");
+            }
+        }
+    }
+
+    fn block_to_sexpr(block: &Block, file: &SourceFile, out: &mut String, indent: usize) {
+        out.push_str("(block");
+        for stmt_id in &block.stmts {
+            out.push_str("\n");
+            out.push_str(&indent_str(indent + 2));
+            stmt_to_sexpr(*stmt_id, file, out, indent + 2);
+        }
+        if let Some(expr_id) = block.expr {
+            out.push_str("\n");
+            out.push_str(&indent_str(indent + 2));
+            out.push_str("(tail ");
+            expr_to_sexpr(expr_id, file, out, indent + 4);
+            out.push(')');
+        }
+        out.push(')');
+    }
+
+    fn stmt_to_sexpr(id: StmtId, file: &SourceFile, out: &mut String, indent: usize) {
+        let stmt = &file.stmts[id];
+        match &stmt.kind {
+            StmtKind::Let { pattern, mutable, ty, value } => {
+                let tag = if *mutable { "let-mut" } else { "let" };
+                out.push_str(&format!("({} ", tag));
+                pattern_to_sexpr(pattern, out);
+                if let Some(ty_id) = ty {
+                    out.push_str(" (: ");
+                    type_to_sexpr(*ty_id, file, out);
+                    out.push(')');
+                }
+                out.push_str("\n");
+                out.push_str(&indent_str(indent + 2));
+                expr_to_sexpr(*value, file, out, indent + 2);
+                out.push(')');
+            }
+            StmtKind::Assign { target, value } => {
+                out.push_str("(assign ");
+                expr_to_sexpr(*target, file, out, indent + 2);
+                out.push(' ');
+                expr_to_sexpr(*value, file, out, indent + 2);
+                out.push(')');
+            }
+            StmtKind::Expr(e) => {
+                expr_to_sexpr(*e, file, out, indent);
+            }
+            StmtKind::Return(val) => {
+                out.push_str("(return");
+                if let Some(e) = val {
+                    out.push(' ');
+                    expr_to_sexpr(*e, file, out, indent + 2);
+                }
+                out.push(')');
+            }
+            StmtKind::While { condition, body } => {
+                out.push_str("(while ");
+                expr_to_sexpr(*condition, file, out, indent + 2);
+                out.push_str("\n");
+                out.push_str(&indent_str(indent + 2));
+                block_to_sexpr(body, file, out, indent + 2);
+                out.push(')');
+            }
+            StmtKind::For { pattern, iter, body } => {
+                out.push_str("(for ");
+                pattern_to_sexpr(pattern, out);
+                out.push(' ');
+                expr_to_sexpr(*iter, file, out, indent + 2);
+                out.push_str("\n");
+                out.push_str(&indent_str(indent + 2));
+                block_to_sexpr(body, file, out, indent + 2);
+                out.push(')');
+            }
+            StmtKind::Loop { label, body } => {
+                out.push_str("(loop");
+                if let Some(l) = label {
+                    out.push_str(&format!(" @{}", l));
+                }
+                out.push_str("\n");
+                out.push_str(&indent_str(indent + 2));
+                block_to_sexpr(body, file, out, indent + 2);
+                out.push(')');
+            }
+            StmtKind::Break { label, value } => {
+                out.push_str("(break");
+                if let Some(l) = label {
+                    out.push_str(&format!(" @{}", l));
+                }
+                if let Some(e) = value {
+                    out.push(' ');
+                    expr_to_sexpr(*e, file, out, indent + 2);
+                }
+                out.push(')');
+            }
+            StmtKind::Continue { label } => {
+                out.push_str("(continue");
+                if let Some(l) = label {
+                    out.push_str(&format!(" @{}", l));
+                }
+                out.push(')');
+            }
+            StmtKind::Error => {
+                out.push_str("(error)");
+            }
+        }
+    }
+
+    fn expr_to_sexpr(id: ExprId, file: &SourceFile, out: &mut String, indent: usize) {
+        let expr = &file.exprs[id];
+        match &expr.kind {
+            ExprKind::Literal(lit) => literal_to_sexpr(lit, out),
+            ExprKind::Var(name) => out.push_str(name.as_str()),
+            ExprKind::Binary { op, lhs, rhs } => {
+                let op_str = match op {
+                    BinaryOp::Add => "+",
+                    BinaryOp::Sub => "-",
+                    BinaryOp::Mul => "*",
+                    BinaryOp::Div => "/",
+                    BinaryOp::Rem => "%",
+                    BinaryOp::Pow => "**",
+                    BinaryOp::Eq => "==",
+                    BinaryOp::Ne => "!=",
+                    BinaryOp::Lt => "<",
+                    BinaryOp::Le => "<=",
+                    BinaryOp::Gt => ">",
+                    BinaryOp::Ge => ">=",
+                    BinaryOp::And => "&&",
+                    BinaryOp::Or => "||",
+                    BinaryOp::BitAnd => "&",
+                    BinaryOp::BitOr => "|",
+                    BinaryOp::BitXor => "^",
+                    BinaryOp::Shl => "<<",
+                    BinaryOp::Shr => ">>",
+                    BinaryOp::Range => "..",
+                    BinaryOp::RangeInclusive => "..=",
+                };
+                out.push_str(&format!("({} ", op_str));
+                expr_to_sexpr(*lhs, file, out, indent + 2);
+                out.push(' ');
+                expr_to_sexpr(*rhs, file, out, indent + 2);
+                out.push(')');
+            }
+            ExprKind::Unary { op, operand } => {
+                let op_str = match op {
+                    UnaryOp::Neg => "neg",
+                    UnaryOp::Not => "not",
+                    UnaryOp::BitNot => "bitnot",
+                };
+                out.push_str(&format!("({} ", op_str));
+                expr_to_sexpr(*operand, file, out, indent + 2);
+                out.push(')');
+            }
+            ExprKind::Call { func, args } => {
+                out.push_str("(call ");
+                expr_to_sexpr(*func, file, out, indent + 2);
+                for a in args {
+                    out.push(' ');
+                    expr_to_sexpr(*a, file, out, indent + 2);
+                }
+                out.push(')');
+            }
+            ExprKind::MethodCall { receiver, method, args } => {
+                out.push_str(&format!("(method-call \"{}\" ", method));
+                expr_to_sexpr(*receiver, file, out, indent + 2);
+                for a in args {
+                    out.push(' ');
+                    expr_to_sexpr(*a, file, out, indent + 2);
+                }
+                out.push(')');
+            }
+            ExprKind::Field { expr: e, field } => {
+                out.push_str(&format!("(field \"{}\" ", field));
+                expr_to_sexpr(*e, file, out, indent + 2);
+                out.push(')');
+            }
+            ExprKind::Index { expr: e, index } => {
+                out.push_str("(index ");
+                expr_to_sexpr(*e, file, out, indent + 2);
+                out.push(' ');
+                expr_to_sexpr(*index, file, out, indent + 2);
+                out.push(')');
+            }
+            ExprKind::If { condition, then_branch, else_branch } => {
+                out.push_str("(if ");
+                expr_to_sexpr(*condition, file, out, indent + 2);
+                out.push_str("\n");
+                out.push_str(&indent_str(indent + 2));
+                block_to_sexpr(then_branch, file, out, indent + 2);
+                if let Some(eb) = else_branch {
+                    out.push_str("\n");
+                    out.push_str(&indent_str(indent + 2));
+                    block_to_sexpr(eb, file, out, indent + 2);
+                }
+                out.push(')');
+            }
+            ExprKind::Match { scrutinee, arms } => {
+                out.push_str("(match ");
+                expr_to_sexpr(*scrutinee, file, out, indent + 2);
+                for arm in arms {
+                    out.push_str("\n");
+                    out.push_str(&indent_str(indent + 2));
+                    out.push_str("(arm ");
+                    pattern_to_sexpr(&arm.pattern, out);
+                    if let Some(g) = arm.guard {
+                        out.push_str(" (guard ");
+                        expr_to_sexpr(g, file, out, indent + 4);
+                        out.push(')');
+                    }
+                    out.push(' ');
+                    expr_to_sexpr(arm.body, file, out, indent + 4);
+                    out.push(')');
+                }
+                out.push(')');
+            }
+            ExprKind::Block(b) => block_to_sexpr(b, file, out, indent),
+            ExprKind::Lambda { params, body } => {
+                out.push_str("(lambda (params");
+                for p in params {
+                    out.push_str(&format!(" \"{}\"", p.name));
+                }
+                out.push_str(")\n");
+                out.push_str(&indent_str(indent + 2));
+                expr_to_sexpr(*body, file, out, indent + 2);
+                out.push(')');
+            }
+            ExprKind::Tuple(elems) => {
+                out.push_str("(tuple");
+                for e in elems {
+                    out.push(' ');
+                    expr_to_sexpr(*e, file, out, indent + 2);
+                }
+                out.push(')');
+            }
+            ExprKind::Array(elems) => {
+                out.push_str("(array");
+                for e in elems {
+                    out.push(' ');
+                    expr_to_sexpr(*e, file, out, indent + 2);
+                }
+                out.push(')');
+            }
+            ExprKind::ArrayRepeat { value, count } => {
+                out.push_str("(array-repeat ");
+                expr_to_sexpr(*value, file, out, indent + 2);
+                out.push(' ');
+                expr_to_sexpr(*count, file, out, indent + 2);
+                out.push(')');
+            }
+            ExprKind::Struct { name, fields } => {
+                out.push_str(&format!("(struct-lit \"{}\"", name));
+                for (fname, fval) in fields {
+                    out.push_str(&format!(" (\"{}\" ", fname));
+                    expr_to_sexpr(*fval, file, out, indent + 2);
+                    out.push(')');
+                }
+                out.push(')');
+            }
+            ExprKind::Resource(ra) => {
+                out.push_str(&format!("(resource {}{})", ra.value,
+                    ra.unit.as_ref().map(|u| format!(" \"{}\"", u)).unwrap_or_default()));
+            }
+            ExprKind::Cast { expr: e, target_ty } => {
+                out.push_str("(cast ");
+                expr_to_sexpr(*e, file, out, indent + 2);
+                out.push(' ');
+                type_to_sexpr(*target_ty, file, out);
+                out.push(')');
+            }
+            ExprKind::Try(e) => {
+                out.push_str("(try ");
+                expr_to_sexpr(*e, file, out, indent + 2);
+                out.push(')');
+            }
+            ExprKind::Borrow { expr: e, mutable } => {
+                let tag = if *mutable { "borrow-mut" } else { "borrow" };
+                out.push_str(&format!("({} ", tag));
+                expr_to_sexpr(*e, file, out, indent + 2);
+                out.push(')');
+            }
+            ExprKind::Deref(e) => {
+                out.push_str("(deref ");
+                expr_to_sexpr(*e, file, out, indent + 2);
+                out.push(')');
+            }
+            ExprKind::AsyncBlock(b) => {
+                out.push_str("(async ");
+                block_to_sexpr(b, file, out, indent + 2);
+                out.push(')');
+            }
+            ExprKind::Await(e) => {
+                out.push_str("(await ");
+                expr_to_sexpr(*e, file, out, indent + 2);
+                out.push(')');
+            }
+            ExprKind::Spawn(e) => {
+                out.push_str("(spawn ");
+                expr_to_sexpr(*e, file, out, indent + 2);
+                out.push(')');
+            }
+            ExprKind::Channel { elem_ty, capacity } => {
+                out.push_str("(channel");
+                if let Some(t) = elem_ty {
+                    out.push(' ');
+                    type_to_sexpr(*t, file, out);
+                }
+                if let Some(c) = capacity {
+                    out.push(' ');
+                    expr_to_sexpr(*c, file, out, indent + 2);
+                }
+                out.push(')');
+            }
+            ExprKind::Send { channel, value } => {
+                out.push_str("(send ");
+                expr_to_sexpr(*channel, file, out, indent + 2);
+                out.push(' ');
+                expr_to_sexpr(*value, file, out, indent + 2);
+                out.push(')');
+            }
+            ExprKind::Recv(e) => {
+                out.push_str("(recv ");
+                expr_to_sexpr(*e, file, out, indent + 2);
+                out.push(')');
+            }
+            ExprKind::Select { arms } => {
+                out.push_str("(select");
+                for arm in arms {
+                    out.push_str("\n");
+                    out.push_str(&indent_str(indent + 2));
+                    out.push_str("(arm ");
+                    expr_to_sexpr(arm.channel, file, out, indent + 4);
+                    if let Some(b) = &arm.binding {
+                        out.push_str(&format!(" \"{}\"", b));
+                    }
+                    out.push(' ');
+                    expr_to_sexpr(arm.body, file, out, indent + 4);
+                    out.push(')');
+                }
+                out.push(')');
+            }
+            ExprKind::YieldExpr(val) => {
+                out.push_str("(yield");
+                if let Some(e) = val {
+                    out.push(' ');
+                    expr_to_sexpr(*e, file, out, indent + 2);
+                }
+                out.push(')');
+            }
+            ExprKind::Handle { expr: e, handlers } => {
+                out.push_str("(handle ");
+                expr_to_sexpr(*e, file, out, indent + 2);
+                for h in handlers {
+                    out.push_str("\n");
+                    out.push_str(&indent_str(indent + 2));
+                    out.push_str(&format!("(handler \"{}::{}\" ", h.effect_name, h.op_name));
+                    block_to_sexpr(&h.body, file, out, indent + 4);
+                    out.push(')');
+                }
+                out.push(')');
+            }
+            ExprKind::ReturnExpr(val) => {
+                out.push_str("(return");
+                if let Some(e) = val {
+                    out.push(' ');
+                    expr_to_sexpr(*e, file, out, indent + 2);
+                }
+                out.push(')');
+            }
+            ExprKind::BreakExpr { label, value } => {
+                out.push_str("(break");
+                if let Some(l) = label {
+                    out.push_str(&format!(" @{}", l));
+                }
+                if let Some(e) = value {
+                    out.push(' ');
+                    expr_to_sexpr(*e, file, out, indent + 2);
+                }
+                out.push(')');
+            }
+            ExprKind::ContinueExpr { label } => {
+                out.push_str("(continue");
+                if let Some(l) = label {
+                    out.push_str(&format!(" @{}", l));
+                }
+                out.push(')');
+            }
+            ExprKind::PathExpr(segments) => {
+                let path: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
+                out.push_str(&format!("(path \"{}\")", path.join("::")));
+            }
+            ExprKind::MacroCall { name, args } => {
+                out.push_str(&format!("(macro-call \"{}\"", name));
+                for a in args {
+                    out.push(' ');
+                    expr_to_sexpr(*a, file, out, indent + 2);
+                }
+                out.push(')');
+            }
+            ExprKind::Error => {
+                out.push_str("(error)");
+            }
+        }
+    }
+
+    fn type_to_sexpr(id: TypeId, file: &SourceFile, out: &mut String) {
+        let ty = &file.types[id];
+        match &ty.kind {
+            TypeKind::Named { name, args } => {
+                if args.is_empty() {
+                    out.push_str(name.as_str());
+                } else {
+                    out.push_str(&format!("({}", name));
+                    for a in args {
+                        out.push(' ');
+                        type_to_sexpr(*a, file, out);
+                    }
+                    out.push(')');
+                }
+            }
+            TypeKind::Function { params, ret } => {
+                out.push_str("(fn (");
+                for (i, p) in params.iter().enumerate() {
+                    if i > 0 { out.push(' '); }
+                    type_to_sexpr(*p, file, out);
+                }
+                out.push_str(") -> ");
+                type_to_sexpr(*ret, file, out);
+                out.push(')');
+            }
+            TypeKind::Tuple(elems) => {
+                out.push_str("(tuple");
+                for e in elems {
+                    out.push(' ');
+                    type_to_sexpr(*e, file, out);
+                }
+                out.push(')');
+            }
+            TypeKind::Array { elem, size } => {
+                out.push_str("(array ");
+                type_to_sexpr(*elem, file, out);
+                if let Some(s) = size {
+                    out.push_str(&format!(" {}", s));
+                }
+                out.push(')');
+            }
+            TypeKind::Resource { base, dimension } => {
+                out.push_str(&format!("(resource \"{}\" {:?})", base, dimension));
+            }
+            TypeKind::Reference { ty: inner, mutable } => {
+                let tag = if *mutable { "&mut" } else { "&" };
+                out.push_str(&format!("({} ", tag));
+                type_to_sexpr(*inner, file, out);
+                out.push(')');
+            }
+            TypeKind::Optional(inner) => {
+                out.push_str("(? ");
+                type_to_sexpr(*inner, file, out);
+                out.push(')');
+            }
+            TypeKind::Infer => out.push('_'),
+            TypeKind::Error => out.push_str("(error)"),
+        }
+    }
+
+    fn pattern_to_sexpr(pat: &Pattern, out: &mut String) {
+        match pat {
+            Pattern::Wildcard => out.push('_'),
+            Pattern::Var(name) => out.push_str(name.as_str()),
+            Pattern::Literal(lit) => literal_to_sexpr(lit, out),
+            Pattern::Tuple(pats) => {
+                out.push_str("(tuple");
+                for p in pats {
+                    out.push(' ');
+                    pattern_to_sexpr(p, out);
+                }
+                out.push(')');
+            }
+            Pattern::Constructor { name, fields } => {
+                out.push_str(&format!("(ctor \"{}\"", name));
+                for f in fields {
+                    out.push(' ');
+                    pattern_to_sexpr(f, out);
+                }
+                out.push(')');
+            }
+            Pattern::Struct { name, fields, rest } => {
+                out.push_str(&format!("(struct-pat \"{}\"", name));
+                for fp in fields {
+                    out.push_str(&format!(" (\"{}\"", fp.name));
+                    if let Some(p) = &fp.pattern {
+                        out.push(' ');
+                        pattern_to_sexpr(p, out);
+                    }
+                    out.push(')');
+                }
+                if *rest { out.push_str(" .."); }
+                out.push(')');
+            }
+            Pattern::Slice(pats) => {
+                out.push_str("(slice");
+                for p in pats {
+                    out.push(' ');
+                    pattern_to_sexpr(p, out);
+                }
+                out.push(')');
+            }
+            Pattern::Or(pats) => {
+                out.push_str("(or");
+                for p in pats {
+                    out.push(' ');
+                    pattern_to_sexpr(p, out);
+                }
+                out.push(')');
+            }
+            Pattern::Range { start, end, inclusive } => {
+                let op = if *inclusive { "..=" } else { ".." };
+                out.push_str(&format!("({}", op));
+                if let Some(s) = start {
+                    out.push(' ');
+                    pattern_to_sexpr(s, out);
+                }
+                if let Some(e) = end {
+                    out.push(' ');
+                    pattern_to_sexpr(e, out);
+                }
+                out.push(')');
+            }
+            Pattern::Rest => out.push_str(".."),
+            Pattern::Binding { name, pattern } => {
+                out.push_str(&format!("(@ \"{}\" ", name));
+                pattern_to_sexpr(pattern, out);
+                out.push(')');
+            }
+            Pattern::Reference { pattern, mutable } => {
+                let tag = if *mutable { "&mut" } else { "&" };
+                out.push_str(&format!("({} ", tag));
+                pattern_to_sexpr(pattern, out);
+                out.push(')');
+            }
+        }
+    }
+
+    fn literal_to_sexpr(lit: &Literal, out: &mut String) {
+        match lit {
+            Literal::Int(n) => out.push_str(&format!("{}", n)),
+            Literal::Float(f) => out.push_str(&format!("{}", f)),
+            Literal::String(s) => out.push_str(&format!("{:?}", s.as_str())),
+            Literal::Char(c) => out.push_str(&format!("'{}'", c)),
+            Literal::Bool(b) => out.push_str(&format!("{}", b)),
+            Literal::Unit => out.push_str("()"),
+        }
+    }
+
+    // ---- JSON helpers ----
+
+    fn item_to_json(item: &Item, file: &SourceFile) -> serde_json::Value {
+        match item {
+            Item::Function(f) => serde_json::json!({
+                "kind": "function",
+                "name": f.name.as_str(),
+                "type_params": f.type_params.iter().map(|t| t.as_str()).collect::<Vec<_>>(),
+                "params": f.params.iter().map(|p| {
+                    serde_json::json!({
+                        "name": p.name.as_str(),
+                        "type": p.ty.map(|t| type_to_json(t, file))
+                    })
+                }).collect::<Vec<_>>(),
+                "return_type": f.return_type.map(|t| type_to_json(t, file)),
+                "body": block_to_json(&f.body, file)
+            }),
+            Item::Import(imp) => {
+                let path: Vec<&str> = imp.path.iter().map(|s| s.as_str()).collect();
+                serde_json::json!({
+                    "kind": "import",
+                    "path": path,
+                    "alias": imp.alias.as_ref().map(|a| a.as_str())
+                })
+            }
+            Item::Const(c) => serde_json::json!({
+                "kind": "const",
+                "name": c.name.as_str(),
+                "value": expr_to_json(c.value, file)
+            }),
+            _ => serde_json::json!({
+                "kind": format!("{:?}", std::mem::discriminant(item))
+            }),
+        }
+    }
+
+    fn block_to_json(block: &Block, file: &SourceFile) -> serde_json::Value {
+        serde_json::json!({
+            "kind": "block",
+            "stmts": block.stmts.iter().map(|s| stmt_to_json(*s, file)).collect::<Vec<_>>(),
+            "tail_expr": block.expr.map(|e| expr_to_json(e, file))
+        })
+    }
+
+    fn stmt_to_json(id: StmtId, file: &SourceFile) -> serde_json::Value {
+        let stmt = &file.stmts[id];
+        match &stmt.kind {
+            StmtKind::Let { pattern, mutable, ty, value } => serde_json::json!({
+                "kind": "let",
+                "mutable": mutable,
+                "pattern": format!("{:?}", pattern),
+                "type": ty.map(|t| type_to_json(t, file)),
+                "value": expr_to_json(*value, file)
+            }),
+            StmtKind::Assign { target, value } => serde_json::json!({
+                "kind": "assign",
+                "target": expr_to_json(*target, file),
+                "value": expr_to_json(*value, file)
+            }),
+            StmtKind::Expr(e) => expr_to_json(*e, file),
+            StmtKind::Return(val) => serde_json::json!({
+                "kind": "return",
+                "value": val.map(|e| expr_to_json(e, file))
+            }),
+            StmtKind::While { condition, body } => serde_json::json!({
+                "kind": "while",
+                "condition": expr_to_json(*condition, file),
+                "body": block_to_json(body, file)
+            }),
+            StmtKind::For { pattern, iter, body } => serde_json::json!({
+                "kind": "for",
+                "pattern": format!("{:?}", pattern),
+                "iter": expr_to_json(*iter, file),
+                "body": block_to_json(body, file)
+            }),
+            _ => serde_json::json!({"kind": format!("{:?}", stmt.kind)}),
+        }
+    }
+
+    fn expr_to_json(id: ExprId, file: &SourceFile) -> serde_json::Value {
+        let expr = &file.exprs[id];
+        match &expr.kind {
+            ExprKind::Literal(lit) => match lit {
+                Literal::Int(n) => serde_json::json!({"kind": "int", "value": n}),
+                Literal::Float(f) => serde_json::json!({"kind": "float", "value": f}),
+                Literal::String(s) => serde_json::json!({"kind": "string", "value": s.as_str()}),
+                Literal::Char(c) => serde_json::json!({"kind": "char", "value": c.to_string()}),
+                Literal::Bool(b) => serde_json::json!({"kind": "bool", "value": b}),
+                Literal::Unit => serde_json::json!({"kind": "unit"}),
+            },
+            ExprKind::Var(name) => serde_json::json!({"kind": "var", "name": name.as_str()}),
+            ExprKind::Binary { op, lhs, rhs } => serde_json::json!({
+                "kind": "binary",
+                "op": format!("{:?}", op),
+                "left": expr_to_json(*lhs, file),
+                "right": expr_to_json(*rhs, file)
+            }),
+            ExprKind::Unary { op, operand } => serde_json::json!({
+                "kind": "unary",
+                "op": format!("{:?}", op),
+                "operand": expr_to_json(*operand, file)
+            }),
+            ExprKind::Call { func, args } => serde_json::json!({
+                "kind": "call",
+                "func": expr_to_json(*func, file),
+                "args": args.iter().map(|a| expr_to_json(*a, file)).collect::<Vec<_>>()
+            }),
+            ExprKind::If { condition, then_branch, else_branch } => serde_json::json!({
+                "kind": "if",
+                "condition": expr_to_json(*condition, file),
+                "then": block_to_json(then_branch, file),
+                "else": else_branch.as_ref().map(|b| block_to_json(b, file))
+            }),
+            ExprKind::Block(b) => block_to_json(b, file),
+            ExprKind::Lambda { params, body } => serde_json::json!({
+                "kind": "lambda",
+                "params": params.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+                "body": expr_to_json(*body, file)
+            }),
+            _ => serde_json::json!({
+                "kind": format!("{:?}", std::mem::discriminant(&expr.kind))
+            }),
+        }
+    }
+
+    fn type_to_json(id: TypeId, file: &SourceFile) -> serde_json::Value {
+        let ty = &file.types[id];
+        match &ty.kind {
+            TypeKind::Named { name, args } => {
+                if args.is_empty() {
+                    serde_json::json!({"kind": "named", "name": name.as_str()})
+                } else {
+                    serde_json::json!({
+                        "kind": "named",
+                        "name": name.as_str(),
+                        "args": args.iter().map(|a| type_to_json(*a, file)).collect::<Vec<_>>()
+                    })
+                }
+            }
+            TypeKind::Function { params, ret } => serde_json::json!({
+                "kind": "function",
+                "params": params.iter().map(|p| type_to_json(*p, file)).collect::<Vec<_>>(),
+                "return": type_to_json(*ret, file)
+            }),
+            TypeKind::Tuple(elems) => serde_json::json!({
+                "kind": "tuple",
+                "elements": elems.iter().map(|e| type_to_json(*e, file)).collect::<Vec<_>>()
+            }),
+            TypeKind::Array { elem, size } => serde_json::json!({
+                "kind": "array",
+                "element": type_to_json(*elem, file),
+                "size": size
+            }),
+            TypeKind::Reference { ty: inner, mutable } => serde_json::json!({
+                "kind": "reference",
+                "mutable": mutable,
+                "inner": type_to_json(*inner, file)
+            }),
+            TypeKind::Optional(inner) => serde_json::json!({
+                "kind": "optional",
+                "inner": type_to_json(*inner, file)
+            }),
+            TypeKind::Infer => serde_json::json!({"kind": "infer"}),
+            _ => serde_json::json!({"kind": format!("{:?}", ty.kind)}),
+        }
+    }
+}
