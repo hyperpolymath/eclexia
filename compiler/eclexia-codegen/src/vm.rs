@@ -1859,12 +1859,72 @@ impl VirtualMachine {
                     )),
                 }
             }
-            "array_map" => Err(VmError::TypeError(
-                "array_map requires closure support (not yet available)".to_string(),
-            )),
-            "array_filter" => Err(VmError::TypeError(
-                "array_filter requires closure support (not yet available)".to_string(),
-            )),
+            "array_map" => {
+                // array_map(array, function) — apply function to each element
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "array_map expects (array, function)".to_string(),
+                    ));
+                }
+                let func_idx = match &args[1] {
+                    Value::Function(idx) => *idx,
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "array_map second argument must be a function".to_string(),
+                        ))
+                    }
+                };
+                match &args[0] {
+                    Value::Array(arr) => {
+                        let elements: Vec<Value> = arr.borrow().clone();
+                        let mut mapped_results = Vec::with_capacity(elements.len());
+                        for element in elements {
+                            // Call the mapping function with one argument
+                            self.call_function(func_idx, &[element])?;
+                            let result = self.execute()?;
+                            mapped_results.push(result);
+                        }
+                        Ok(Value::Array(Rc::new(RefCell::new(mapped_results))))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "array_map first argument must be an array".to_string(),
+                    )),
+                }
+            }
+            "array_filter" => {
+                // array_filter(array, predicate) — keep elements where predicate returns true
+                if args.len() != 2 {
+                    return Err(VmError::TypeError(
+                        "array_filter expects (array, function)".to_string(),
+                    ));
+                }
+                let func_idx = match &args[1] {
+                    Value::Function(idx) => *idx,
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "array_filter second argument must be a function".to_string(),
+                        ))
+                    }
+                };
+                match &args[0] {
+                    Value::Array(arr) => {
+                        let elements: Vec<Value> = arr.borrow().clone();
+                        let mut filtered_results = Vec::new();
+                        for element in elements {
+                            // Call the predicate function with one argument
+                            self.call_function(func_idx, &[element.clone()])?;
+                            let result = self.execute()?;
+                            if result.as_bool()? {
+                                filtered_results.push(element);
+                            }
+                        }
+                        Ok(Value::Array(Rc::new(RefCell::new(filtered_results))))
+                    }
+                    _ => Err(VmError::TypeError(
+                        "array_filter first argument must be an array".to_string(),
+                    )),
+                }
+            }
             "hash" => {
                 if args.len() != 1 {
                     return Err(VmError::TypeError("hash expects 1 argument".to_string()));

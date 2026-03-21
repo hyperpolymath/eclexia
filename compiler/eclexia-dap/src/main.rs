@@ -2,12 +2,13 @@
 //! Debug Adapter Protocol (DAP) implementation for Eclexia
 //!
 //! This is a minimal DAP adapter for Eclexia, focusing on resource-aware debugging.
+//! Communicates over TCP using async I/O via Tokio.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::{TcpListener, TcpStream};
 
+/// A DAP protocol request message.
 #[derive(Debug, Serialize, Deserialize)]
 struct DapRequest {
     seq: i64,
@@ -16,6 +17,7 @@ struct DapRequest {
     arguments: Option<serde_json::Value>,
 }
 
+/// A DAP protocol response message.
 #[derive(Debug, Serialize)]
 struct DapResponse {
     seq: i64,
@@ -27,9 +29,10 @@ struct DapResponse {
     body: Option<serde_json::Value>,
 }
 
+/// Entry point: bind a TCP listener and spawn a handler per client connection.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let listener = TcpListener::bind("127.0.0.1:4713")?;
+    let listener = TcpListener::bind("127.0.0.1:4713").await?;
     println!("Eclexia DAP server listening on 127.0.0.1:4713");
 
     loop {
@@ -42,6 +45,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
+/// Handle a single DAP client connection.
+///
+/// Reads newline-delimited JSON requests and writes JSON responses.
 async fn handle_client(stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
     let (reader, mut writer) = tokio::io::split(stream);
     let mut reader = BufReader::new(reader);
@@ -103,7 +109,7 @@ async fn handle_client(stream: TcpStream) -> Result<(), Box<dyn std::error::Erro
                     command: "threads".to_string(),
                     success: true,
                     message: None,
-                    body: Some(serde_json::json!({"threads": [{"id": 1, "name": "main"}]}));
+                    body: Some(serde_json::json!({"threads": [{"id": 1, "name": "main"}]})),
                 })?
             }
             "stackTrace" => {
@@ -125,7 +131,7 @@ async fn handle_client(stream: TcpStream) -> Result<(), Box<dyn std::error::Erro
                     command: "scopes".to_string(),
                     success: true,
                     message: None,
-                    body: Some(serde_json::json!({"scopes": [{"name": "Locals", "variablesReference": 1, "expensive": false}]}));
+                    body: Some(serde_json::json!({"scopes": [{"name": "Locals", "variablesReference": 1, "expensive": false}]})),
                 })?
             }
             "variables" => {

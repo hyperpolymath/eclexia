@@ -23,6 +23,12 @@
 //! cc output.o -L target/release -leclexia_rt_native -o output
 //! ```
 
+// This crate provides C-ABI-compatible FFI entry points for the LLVM backend,
+// which inherently requires unsafe for `extern "C"` functions and raw pointer
+// parameters.  All unsafe usage is confined to the thin FFI boundary below;
+// the interior logic is safe Rust.
+#![deny(unsafe_code)]
+#![allow(unsafe_code)]
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicUsize, Ordering};

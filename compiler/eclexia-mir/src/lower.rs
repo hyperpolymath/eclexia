@@ -1456,57 +1456,120 @@ impl<'hir> LoweringContext<'hir> {
                 }
             }
 
-            // Concurrency primitives - for now, emit Nop and return unit
-            // TODO: Implement proper runtime intrinsic calls
+            // Concurrency primitives — lower to runtime intrinsic Call instructions
+            // so that codegen backends can emit real spawn/channel/send/recv/select
+            // operations.  The interpreter already handles these via dedicated
+            // ExprKind variants; this path is for the compiled backends.
             hir::ExprKind::Spawn { body } => {
-                // Evaluate body for side effects, then emit Nop
-                let _ = self.lower_expr(*body);
-                self.emit(expr.span, InstructionKind::Nop);
-                Value::Constant(self.mir.constants.alloc(Constant {
+                // Lower the body expression to a value (typically a function ref)
+                let body_val = self.lower_expr(*body);
+                // Allocate a local to receive the task handle
+                let result_local = self.alloc_local(SmolStr::new("__spawn_result"), Ty::Primitive(PrimitiveTy::Unit), false);
+                // Emit a Call to the runtime intrinsic "__eclexia_spawn"
+                let intrinsic_name = self.mir.constants.alloc(Constant {
                     ty: Ty::Primitive(PrimitiveTy::Unit),
-                    kind: ConstantKind::Unit,
-                }))
+                    kind: ConstantKind::Function(SmolStr::new("__eclexia_spawn")),
+                });
+                self.emit(
+                    expr.span,
+                    InstructionKind::Call {
+                        target: Some(result_local),
+                        func: Value::Constant(intrinsic_name),
+                        args: vec![body_val],
+                        resource_budget: None,
+                    },
+                );
+                Value::Local(result_local)
             }
             hir::ExprKind::Channel { capacity, .. } => {
-                // Evaluate capacity for side effects if present
-                if let Some(cap) = capacity {
-                    let _ = self.lower_expr(*cap);
-                }
-                self.emit(expr.span, InstructionKind::Nop);
-                Value::Constant(self.mir.constants.alloc(Constant {
+                // Lower capacity to a value, defaulting to 0 (unbounded) if absent
+                let cap_val = if let Some(cap) = capacity {
+                    self.lower_expr(*cap)
+                } else {
+                    Value::Constant(self.mir.constants.alloc(Constant {
+                        ty: Ty::Primitive(PrimitiveTy::Int),
+                        kind: ConstantKind::Int(0),
+                    }))
+                };
+                let result_local = self.alloc_local(SmolStr::new("__channel_result"), Ty::Primitive(PrimitiveTy::Unit), false);
+                let intrinsic_name = self.mir.constants.alloc(Constant {
                     ty: Ty::Primitive(PrimitiveTy::Unit),
-                    kind: ConstantKind::Unit,
-                }))
+                    kind: ConstantKind::Function(SmolStr::new("__eclexia_channel")),
+                });
+                self.emit(
+                    expr.span,
+                    InstructionKind::Call {
+                        target: Some(result_local),
+                        func: Value::Constant(intrinsic_name),
+                        args: vec![cap_val],
+                        resource_budget: None,
+                    },
+                );
+                Value::Local(result_local)
             }
             hir::ExprKind::Send { channel, value } => {
-                // Evaluate both operands for side effects
-                let _ = self.lower_expr(*channel);
-                let _ = self.lower_expr(*value);
-                self.emit(expr.span, InstructionKind::Nop);
-                Value::Constant(self.mir.constants.alloc(Constant {
+                // Lower both the channel handle and the value to send
+                let chan_val = self.lower_expr(*channel);
+                let send_val = self.lower_expr(*value);
+                let result_local = self.alloc_local(SmolStr::new("__send_result"), Ty::Primitive(PrimitiveTy::Unit), false);
+                let intrinsic_name = self.mir.constants.alloc(Constant {
                     ty: Ty::Primitive(PrimitiveTy::Unit),
-                    kind: ConstantKind::Unit,
-                }))
+                    kind: ConstantKind::Function(SmolStr::new("__eclexia_send")),
+                });
+                self.emit(
+                    expr.span,
+                    InstructionKind::Call {
+                        target: Some(result_local),
+                        func: Value::Constant(intrinsic_name),
+                        args: vec![chan_val, send_val],
+                        resource_budget: None,
+                    },
+                );
+                Value::Local(result_local)
             }
             hir::ExprKind::Recv { channel } => {
-                let _ = self.lower_expr(*channel);
-                self.emit(expr.span, InstructionKind::Nop);
-                Value::Constant(self.mir.constants.alloc(Constant {
+                let chan_val = self.lower_expr(*channel);
+                let result_local = self.alloc_local(SmolStr::new("__recv_result"), Ty::Primitive(PrimitiveTy::Unit), false);
+                let intrinsic_name = self.mir.constants.alloc(Constant {
                     ty: Ty::Primitive(PrimitiveTy::Unit),
-                    kind: ConstantKind::Unit,
-                }))
+                    kind: ConstantKind::Function(SmolStr::new("__eclexia_recv")),
+                });
+                self.emit(
+                    expr.span,
+                    InstructionKind::Call {
+                        target: Some(result_local),
+                        func: Value::Constant(intrinsic_name),
+                        args: vec![chan_val],
+                        resource_budget: None,
+                    },
+                );
+                Value::Local(result_local)
             }
             hir::ExprKind::Select { arms } => {
-                // Evaluate all arms for side effects
+                // Lower each arm's channel and body, collecting them as argument
+                // pairs for the runtime intrinsic.
+                let mut arm_values = Vec::new();
                 for arm in arms {
-                    let _ = self.lower_expr(arm.channel);
-                    let _ = self.lower_expr(arm.body);
+                    let chan_val = self.lower_expr(arm.channel);
+                    let body_val = self.lower_expr(arm.body);
+                    arm_values.push(chan_val);
+                    arm_values.push(body_val);
                 }
-                self.emit(expr.span, InstructionKind::Nop);
-                Value::Constant(self.mir.constants.alloc(Constant {
+                let result_local = self.alloc_local(SmolStr::new("__select_result"), Ty::Primitive(PrimitiveTy::Unit), false);
+                let intrinsic_name = self.mir.constants.alloc(Constant {
                     ty: Ty::Primitive(PrimitiveTy::Unit),
-                    kind: ConstantKind::Unit,
-                }))
+                    kind: ConstantKind::Function(SmolStr::new("__eclexia_select")),
+                });
+                self.emit(
+                    expr.span,
+                    InstructionKind::Call {
+                        target: Some(result_local),
+                        func: Value::Constant(intrinsic_name),
+                        args: arm_values,
+                        resource_budget: None,
+                    },
+                );
+                Value::Local(result_local)
             }
             hir::ExprKind::Yield { value } => {
                 if let Some(val) = value {
