@@ -9,6 +9,7 @@
 //! - Provider abstraction for real-time and forecasted grid data
 //! - Local fallback heuristics for offline operation
 
+#![forbid(unsafe_code)]
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 use std::error::Error;

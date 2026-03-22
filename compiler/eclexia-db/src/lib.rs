@@ -33,6 +33,7 @@
 //! let type_errors = queries::type_check(&db, source); // re-runs parse + type_check
 //! ```
 
+#![forbid(unsafe_code)]
 pub mod queries;
 pub mod vfs;
 

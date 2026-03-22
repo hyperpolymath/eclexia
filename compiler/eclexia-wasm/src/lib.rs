@@ -38,6 +38,7 @@
 //! - WASI preview1 integration available (enable with `with_wasi(true)`)
 //! - Indirect calls via basic function table only
 
+#![forbid(unsafe_code)]
 use eclexia_ast::types::{PrimitiveTy, Ty};
 use eclexia_codegen::{Backend, CodegenError};
 use eclexia_mir::{

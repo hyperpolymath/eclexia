@@ -34,6 +34,7 @@
 //! - Reverse dependency lookup for incremental recompilation
 //! - Cycle detection
 
+#![forbid(unsafe_code)]
 pub mod dep_graph;
 pub mod interface;
 pub mod parallel;

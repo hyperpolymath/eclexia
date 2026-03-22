@@ -2,6 +2,7 @@
 
 //! RFC6455-compatible websocket frame codec.
 
+#![forbid(unsafe_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpCode {
     Continuation = 0x0,

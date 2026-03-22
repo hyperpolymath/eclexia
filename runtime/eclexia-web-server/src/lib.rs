@@ -3,6 +3,7 @@
 
 //! Lightweight HTTP server/router foundation for Eclexia.
 
+#![forbid(unsafe_code)]
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};

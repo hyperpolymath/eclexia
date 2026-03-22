@@ -2,6 +2,7 @@
 
 //! OS signal mapping and parsing utilities.
 
+#![forbid(unsafe_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Signal {
     Hup,

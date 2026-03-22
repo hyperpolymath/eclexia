@@ -1,6 +1,6 @@
 = Eclexia Bidirectional ABI/FFI Layer
 :author: Jonathan D.A. Jewell
-:email: jonathan.jewell@open.ac.uk
+:email: j.d.a.jewell@open.ac.uk
 :revdate: 2026-02-24
 :toc:
 :spdx: PMPL-1.0-or-later

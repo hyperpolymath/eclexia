@@ -2,6 +2,7 @@
 
 //! Template engine with variable, `if`, and `each` block support.
 
+#![forbid(unsafe_code)]
 use serde_json::Value;
 use std::collections::HashMap;
 

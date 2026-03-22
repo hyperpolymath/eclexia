@@ -15,6 +15,7 @@
 //! - Resource tracking as explicit operations
 //! - Ready for optimization and analysis
 
+#![forbid(unsafe_code)]
 mod lower;
 mod optimize;
 

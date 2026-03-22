@@ -14,6 +14,7 @@
 //! - Comments (line and block)
 //! - Annotation syntax (@requires, @provides, etc.)
 
+#![forbid(unsafe_code)]
 use eclexia_ast::span::Span;
 use logos::Logos;
 use smol_str::SmolStr;

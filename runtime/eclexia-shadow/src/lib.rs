@@ -6,6 +6,7 @@
 //! Shadow prices represent the marginal cost of consuming one unit of a resource.
 //! They guide adaptive selection and scheduling under resource constraints.
 
+#![forbid(unsafe_code)]
 use eclexia_ast::dimension::Dimension;
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;

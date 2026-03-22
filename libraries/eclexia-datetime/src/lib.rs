@@ -2,6 +2,7 @@
 
 //! Date/time utility helpers.
 
+#![forbid(unsafe_code)]
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn unix_timestamp_secs() -> u64 {

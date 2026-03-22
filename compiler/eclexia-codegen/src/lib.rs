@@ -15,6 +15,7 @@
 //! - Adaptive function dispatch
 //! - Efficient calling conventions
 
+#![forbid(unsafe_code)]
 pub mod bytecode;
 mod vm;
 

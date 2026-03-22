@@ -28,6 +28,7 @@
 //! - aarch64 (ARM64)
 //! - riscv64
 
+#![forbid(unsafe_code)]
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::{

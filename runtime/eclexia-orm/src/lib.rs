@@ -2,6 +2,7 @@
 
 //! Lightweight parameterized SQL query builder.
 
+#![forbid(unsafe_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Null,

@@ -2,6 +2,7 @@
 
 //! Serialization helpers for JSON, MessagePack, CBOR, and Protobuf envelope.
 
+#![forbid(unsafe_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     Json,

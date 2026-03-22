@@ -2,6 +2,7 @@
 
 //! CLI argument parsing helpers.
 
+#![forbid(unsafe_code)]
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default)]

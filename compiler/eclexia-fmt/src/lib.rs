@@ -6,6 +6,7 @@
 //! This crate provides AST-based formatting with economics-aware formatting
 //! for resource blocks, adaptive functions, and dimensional literals.
 
+#![forbid(unsafe_code)]
 mod printer;
 
 use eclexia_ast::SourceFile;

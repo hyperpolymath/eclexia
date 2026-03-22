@@ -10,7 +10,7 @@ Every Eclexia package must have a `package.toml` file in its root directory.
 [package]
 name = "my-package"
 version = "0.1.0"
-authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
 edition = "2025"
 description = "A sample Eclexia package"
 license = "PMPL-1.0-or-later"

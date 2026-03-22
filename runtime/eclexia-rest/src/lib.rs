@@ -2,6 +2,7 @@
 
 //! REST utilities on top of `eclexia-web-server`.
 
+#![forbid(unsafe_code)]
 use eclexia_web_server::{Method, Request, Response, Router};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;

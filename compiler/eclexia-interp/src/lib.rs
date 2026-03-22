@@ -11,6 +11,7 @@
 //! - Resource tracking (simulated)
 //! - Shadow price computation (simplified)
 
+#![forbid(unsafe_code)]
 mod builtins;
 mod env;
 mod error;

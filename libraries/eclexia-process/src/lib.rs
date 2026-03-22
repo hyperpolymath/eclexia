@@ -2,6 +2,7 @@
 
 //! Child process execution helpers.
 
+#![forbid(unsafe_code)]
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};

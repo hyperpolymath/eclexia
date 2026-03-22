@@ -11,6 +11,7 @@
 //! The evaluator operates on MIR instructions and produces
 //! simplified constants where possible.
 
+#![forbid(unsafe_code)]
 pub mod const_fold;
 pub mod resource_verify;
 

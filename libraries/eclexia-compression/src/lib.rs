@@ -2,6 +2,7 @@
 
 //! Compression abstractions with real codec backends and RLE fallback.
 
+#![forbid(unsafe_code)]
 use std::io::Write;
 use std::process::{Command, Stdio};
 

@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 // SPDX-License-Identifier: PMPL-1.0-or-later
 //! Debug Adapter Protocol (DAP) implementation for Eclexia
 //!

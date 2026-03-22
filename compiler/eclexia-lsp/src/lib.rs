@@ -16,5 +16,6 @@
 //! - Signature help (function parameters with types)
 //! - Code formatting (via eclexia-fmt)
 
+#![forbid(unsafe_code)]
 pub mod server;
 pub mod symbols;

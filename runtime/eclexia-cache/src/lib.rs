@@ -2,6 +2,7 @@
 
 //! In-memory cache with LRU eviction and optional TTL.
 
+#![forbid(unsafe_code)]
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
 use std::time::{Duration, Instant};

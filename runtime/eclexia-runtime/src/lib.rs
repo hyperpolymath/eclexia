@@ -9,6 +9,7 @@
 //! - Adaptive function decision making
 //! - Carbon-aware scheduling integration
 
+#![forbid(unsafe_code)]
 mod adaptive;
 mod carbon;
 mod health;

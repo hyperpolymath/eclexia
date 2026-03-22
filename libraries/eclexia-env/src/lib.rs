@@ -2,6 +2,7 @@
 
 //! Environment variable helpers.
 
+#![forbid(unsafe_code)]
 use std::collections::BTreeMap;
 
 pub fn get(key: &str) -> Option<String> {

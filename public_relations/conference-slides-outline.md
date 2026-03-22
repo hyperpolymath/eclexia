@@ -445,7 +445,7 @@ CONTRIBUTORS NEEDED:
 [Your photo]
 
 Jonathan D.A. Jewell
-jonathan.jewell@open.ac.uk
+j.d.a.jewell@open.ac.uk
 
 @eclexia_lang
 github.com/hyperpolymath/eclexia

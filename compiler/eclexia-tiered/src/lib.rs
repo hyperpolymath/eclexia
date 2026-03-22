@@ -28,6 +28,7 @@
 //!
 //! File system watching with debounced incremental rebuilds.
 
+#![forbid(unsafe_code)]
 pub mod profile;
 pub mod tier;
 pub mod watch;

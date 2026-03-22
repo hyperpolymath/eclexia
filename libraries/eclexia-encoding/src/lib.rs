@@ -2,6 +2,7 @@
 
 //! Encoding utilities: hex, base64, URL encoding.
 
+#![forbid(unsafe_code)]
 const BASE64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 pub fn hex_encode(bytes: &[u8]) -> String {

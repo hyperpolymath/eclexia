@@ -40,6 +40,7 @@
 //! - `__eclexia_query_shadow_price(ptr)` - Query shadow price
 //! - `__eclexia_range(i64, i64, i1)` - Create range object
 
+#![forbid(unsafe_code)]
 use eclexia_ast::types::{PrimitiveTy, Ty};
 use eclexia_codegen::{Backend, CodegenError};
 use eclexia_mir::{

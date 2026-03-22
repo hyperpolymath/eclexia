@@ -5,6 +5,7 @@
 //! guarantees about selector validity and HTML well-formedness.
 //! Targets both native (testing/SSR) and WASM (browser) execution.
 
+#![forbid(unsafe_code)]
 use serde::{Deserialize, Serialize};
 use std::fmt;
 

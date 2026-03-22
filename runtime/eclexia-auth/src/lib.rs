@@ -2,6 +2,7 @@
 
 //! Authentication helpers with HS256 JWT-compatible token support.
 
+#![forbid(unsafe_code)]
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use serde::{Deserialize, Serialize};

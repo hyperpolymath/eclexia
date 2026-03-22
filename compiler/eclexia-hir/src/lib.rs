@@ -15,6 +15,7 @@
 //! - Method calls desugared to function calls
 //! - Implicit conversions made explicit
 
+#![forbid(unsafe_code)]
 mod lower;
 
 pub use lower::{lower_source_file, LoweringContext};

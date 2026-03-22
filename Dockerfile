@@ -113,6 +113,6 @@ CMD ["eclexia", "--help"]
 LABEL org.opencontainers.image.title="Eclexia" \
       org.opencontainers.image.description="Resource-aware programming language" \
       org.opencontainers.image.version="0.1.0" \
-      org.opencontainers.image.authors="Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>" \
+      org.opencontainers.image.authors="Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>" \
       org.opencontainers.image.source="https://github.com/hyperpolymath/eclexia" \
       org.opencontainers.image.licenses="PMPL-1.0-or-later"

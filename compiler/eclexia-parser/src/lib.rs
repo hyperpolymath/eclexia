@@ -10,6 +10,7 @@
 //! - Incremental parsing support (future)
 //! - Full source span preservation
 
+#![forbid(unsafe_code)]
 mod error;
 mod expr;
 

@@ -31,6 +31,7 @@
 //! });
 //! ```
 
+#![forbid(unsafe_code)]
 mod channel;
 mod executor;
 mod parallel;

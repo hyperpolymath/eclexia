@@ -19,6 +19,7 @@
 //! - **Transfer functions** — propagate abstract state through
 //!   each MIR instruction kind
 
+#![forbid(unsafe_code)]
 pub mod domains;
 pub mod resource;
 pub mod transfer;

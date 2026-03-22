@@ -2,6 +2,7 @@
 
 //! UUID v4 generation and validation.
 
+#![forbid(unsafe_code)]
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 

@@ -13,6 +13,7 @@
 //! - Traits, impl blocks, modules, effects
 //! - Standard expressions and statements
 
+#![forbid(unsafe_code)]
 pub mod dimension;
 pub mod span;
 pub mod types;

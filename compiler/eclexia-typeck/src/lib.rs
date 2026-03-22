@@ -9,6 +9,7 @@
 //! - Constraint solving for resource bounds
 //! - Effect tracking
 
+#![forbid(unsafe_code)]
 mod env;
 mod error;
 mod infer;

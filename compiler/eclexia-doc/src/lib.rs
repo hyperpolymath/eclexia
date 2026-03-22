@@ -6,6 +6,7 @@
 //! Generates HTML documentation from Eclexia source files,
 //! similar to rustdoc for Rust.
 
+#![forbid(unsafe_code)]
 use eclexia_ast::{Function, Item, SourceFile, TypeDef};
 use smol_str::SmolStr;
 

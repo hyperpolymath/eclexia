@@ -18,6 +18,7 @@
 //!       <name>-<version>.tar
 //! ```
 
+#![forbid(unsafe_code)]
 use eclexia_web_server::{Method, Request, Response, Router};
 use serde::{Deserialize, Serialize};
 use std::fs;

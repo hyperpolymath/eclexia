@@ -2,6 +2,7 @@
 
 //! Queue abstractions: in-memory and durable file-backed queue.
 
+#![forbid(unsafe_code)]
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};

@@ -2,6 +2,7 @@
 
 //! gRPC service registry and wire framing primitives.
 
+#![forbid(unsafe_code)]
 use std::collections::HashMap;
 use std::sync::Arc;
 

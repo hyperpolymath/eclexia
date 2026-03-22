@@ -3,6 +3,7 @@
 
 //! Linting and static analysis for Eclexia code.
 
+#![forbid(unsafe_code)]
 pub mod diagnostics;
 pub mod rules;
 

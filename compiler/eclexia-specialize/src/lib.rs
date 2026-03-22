@@ -14,6 +14,7 @@
 //!   when constraints are statically resolvable
 //! - **Dead solution elimination** — remove unreachable solution branches
 
+#![forbid(unsafe_code)]
 pub mod binding_time;
 pub mod residualize;
 

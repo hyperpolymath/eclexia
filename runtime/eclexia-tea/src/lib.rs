@@ -4,6 +4,7 @@
 //! Provides a Model-Update-View loop for building interactive applications
 //! with Eclexia, targeting both native and WASM execution.
 
+#![forbid(unsafe_code)]
 use serde::{Deserialize, Serialize};
 use std::fmt;
 

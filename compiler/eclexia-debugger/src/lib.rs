@@ -3,6 +3,7 @@
 
 //! Interactive debugger for Eclexia programs.
 
+#![forbid(unsafe_code)]
 pub mod breakpoint;
 pub mod inspection;
 pub mod session;

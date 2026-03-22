@@ -2,6 +2,7 @@
 
 //! GraphQL query parsing and schema execution primitives.
 
+#![forbid(unsafe_code)]
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
