@@ -77,7 +77,7 @@
 - **Native compilation end-to-end:** LLVM backend generates .ll but linking to runtime is manual (static library exists, automatic linking not wired)
 - **WASM GC:** No garbage collection in WASM linear memory; bump allocator defined but not yet wired
 - **Runtime system metrics:** scheduler/profiler/carbon/shadow implemented but not wired to real OS metrics (except RSS memory on Linux)
-- **Macro expansion in HIR:** MacroCall lowered to HIR variant but MIR emits Nop — only interpreter supports macro eval
+- **Macro expansion in MIR:** MacroCall emits `__eclexia_macro_expand` intrinsic call (runtime hook) — interpreter has full expansion, compiled path delegates to runtime
 - **Measured benchmarks:** None — all performance claims are projections
 - **Package registry deployment:** Server stub exists (filesystem backend, 3 routes), not deployed
 - **Formal proofs:** ShadowPrices.v uses 4 Axioms for LP foundations (not Admitted — these are honest axioms with citations)

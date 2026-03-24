@@ -1581,16 +1581,45 @@ impl<'hir> LoweringContext<'hir> {
                     kind: ConstantKind::Unit,
                 }))
             }
-            hir::ExprKind::MacroCall { args, .. } => {
-                // Evaluate all arguments for side effects
+            hir::ExprKind::MacroCall { name, args } => {
+                // Lower macro arguments to MIR values
+                let mut arg_values: Vec<Value> = Vec::with_capacity(args.len() + 1);
+
+                // First argument: the macro name as a string constant
+                let name_const = self.mir.constants.alloc(Constant {
+                    ty: Ty::Primitive(PrimitiveTy::String),
+                    kind: ConstantKind::String(name.clone()),
+                });
+                arg_values.push(Value::Constant(name_const));
+
+                // Remaining arguments: the evaluated macro arguments
                 for arg in args {
-                    let _ = self.lower_expr(*arg);
+                    let val = self.lower_expr(*arg);
+                    arg_values.push(val);
                 }
-                self.emit(expr.span, InstructionKind::Nop);
-                Value::Constant(self.mir.constants.alloc(Constant {
+
+                // Emit a call to the runtime macro expansion intrinsic.
+                // The runtime is responsible for looking up the macro definition
+                // and performing template expansion.
+                let result_local = self.alloc_local(
+                    SmolStr::new("__macro_result"),
+                    Ty::Primitive(PrimitiveTy::Unit),
+                    false,
+                );
+                let intrinsic_name = self.mir.constants.alloc(Constant {
                     ty: Ty::Primitive(PrimitiveTy::Unit),
-                    kind: ConstantKind::Unit,
-                }))
+                    kind: ConstantKind::Function(SmolStr::new("__eclexia_macro_expand")),
+                });
+                self.emit(
+                    expr.span,
+                    InstructionKind::Call {
+                        target: Some(result_local),
+                        func: Value::Constant(intrinsic_name),
+                        args: arg_values,
+                        resource_budget: None,
+                    },
+                );
+                Value::Local(result_local)
             }
         }
     }
