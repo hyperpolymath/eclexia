@@ -22,7 +22,7 @@
 
 use crate::{
     AdaptiveFunction, Block, EffectHandler, Expr, ExprId, ExprKind, Function,
-    ImplBlock, Item, MatchArm, Param, Pattern, SelectArm, SourceFile, Stmt,
+    ImplBlock, Item, MatchArm, Param, Pattern, SourceFile, Stmt,
     StmtId, StmtKind, TraitDecl,
 };
 

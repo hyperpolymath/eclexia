@@ -103,6 +103,16 @@ impl<'src> Parser<'src> {
     /// Parse a single top-level item.
     /// Parse a single top-level item (e.g., function, type definition, import).
     fn parse_item(&mut self, file: &mut SourceFile) -> ParseResult<Item> {
+        // Skip doc comments (/// and /** */ style) preceding items.
+        // Doc comments are lexed as tokens but currently do not attach to
+        // AST nodes — skipping them here prevents parse errors.
+        while matches!(
+            self.peek().kind,
+            TokenKind::DocComment(_) | TokenKind::BlockDocComment(_)
+        ) {
+            self.advance();
+        }
+
         // Parse attributes (#[test], #[bench], etc.)
         let attributes = self.parse_attributes()?;
 
