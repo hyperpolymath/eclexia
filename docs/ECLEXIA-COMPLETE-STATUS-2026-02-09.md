@@ -262,13 +262,13 @@ These exist with their own tests. Four are now wired into CLI via `build --analy
 - **Action:** Create GitHub wiki
 
 ### 6.9 PanLL (Next-Gen IDE) — NO ECLEXIA SUPPORT
-- Path: `/var/mnt/eclipse/repos/panll`
+- Path: `/var$REPOS_DIR/panll`
 - Status: v0.1.0-alpha (95% complete), ReScript + Tauri 2.0
 - Three-pane layout: Symbolic (Pane-L) / Neural (Pane-N) / World (Pane-W)
 - **Action:** Add eclexia as native language in PanLL, integrate into Pane-L constraints
 
 ### 6.10 OPSM (Odds-and-Sods Package Manager) — ECLEXIA SUPPORT ADDED
-- Path: `/var/mnt/eclipse/repos/odds-and-sods-package-manager`
+- Path: `/var$REPOS_DIR/odds-and-sods-package-manager`
 - Status: v1.1.0 production, Elixir/BEAM, **14 registry adapters** (was 13), trust pipeline
 - **DONE 2026-02-09:** Eclexia adapter added (commit `a081d67`), 4 tests pass
 - Files: `opsm_ex/lib/opsm/registries/eclexia.ex`, wired in `registry.ex` + `types.ex`
@@ -500,7 +500,7 @@ These exist with their own tests. Four are now wired into CLI via `build --analy
 | 14.4 | Runtime support for JTV execution model | 8h | TODO |
 | 14.5 | Formal proof: injection impossibility in JTV blocks | 6h | TODO |
 
-**Context:** JTV (Julia The Viper) at `/var/mnt/eclipse/repos/julia-the-viper/` is a
+**Context:** JTV (Julia The Viper) at `/var$REPOS_DIR/julia-the-viper/` is a
 Harvard Architecture language where code injection is grammatically impossible.
 "Addition blocks" = Data Language (only + operations). "Harvard blocks" = separation
 between Data and Control sublanguages. eclexia-jtv would inject JTV's safe Data
@@ -523,7 +523,7 @@ Language blocks into eclexia for provably-secure data handling.
 | 15.12 | GQL-DT / FBQL-DT interop (Lean 4 + Zig, dependent-typed queries) | 8h | TODO |
 | 15.13 | VQL dependent-types variant (if distinct from standard VQL) | 4h | TODO |
 
-**Context:** ALL languages in `/var/mnt/eclipse/repos/nextgen-languages/` MUST have
+**Context:** ALL languages in `/var$REPOS_DIR/nextgen-languages/` MUST have
 bidirectional interop with eclexia. This is non-negotiable — eclexia must be able to
 call into every sibling language AND every sibling language must be able to call into
 eclexia's resource runtime via the C ABI header (`eclexia_ffi.h`).
@@ -810,7 +810,7 @@ Each example must be verified to: (a) parse, (b) type-check, (c) interpret, (d) 
 
 See Priority 4 in task list for full list of 36 example programs.
 
-Existing examples at `/var/mnt/eclipse/repos/eclexia/examples/` (36 files):
+Existing examples at `/var$REPOS_DIR/eclexia/examples/` (36 files):
 
 **WORKING (34, verified by `target/debug/eclexia run` on 2026-02-09):**
 - `hello_world.ecl` — Hello World, basic println (WORKING)
@@ -881,14 +881,14 @@ Various conformance tests in `tests/conformance/invalid/` (19 files)
 ## 13. EXTERNAL TOOL INTEGRATION (PanLL, OPSM)
 
 ### PanLL (Next-Gen IDE)
-- **Path:** `/var/mnt/eclipse/repos/panll`
+- **Path:** `/var$REPOS_DIR/panll`
 - **Status:** v0.1.0-alpha, ReScript + Tauri 2.0, 33 tests passing
 - **Architecture:** Three-pane (Symbolic/Neural/World), anti-crash library, vexometer
 - **Eclexia integration:** NOT STARTED
 - **Plan:** Pane-L enforces eclexia constraints, Pane-N shows reasoning, Pane-W displays results
 
 ### OPSM (Odds-and-Sods Package Manager)
-- **Path:** `/var/mnt/eclipse/repos/odds-and-sods-package-manager`
+- **Path:** `/var$REPOS_DIR/odds-and-sods-package-manager`
 - **Status:** v1.1.0 production, Elixir/BEAM, 8 registries, trust pipeline
 - **Eclexia integration:** NOT STARTED
 - **Plan:** Add eclexia-verifier as 6th trust service, add eclexia package format
@@ -928,32 +928,32 @@ Various conformance tests in `tests/conformance/invalid/` (19 files)
 
 ### Key Paths
 ```
-/var/mnt/eclipse/repos/eclexia/                    # Main repo (25 crates)
-/var/mnt/eclipse/repos/eclexia/compiler/           # Compiler crates
-/var/mnt/eclipse/repos/eclexia/runtime/            # Runtime system
-/var/mnt/eclipse/repos/eclexia/stdlib/             # Standard library (.ecl)
-/var/mnt/eclipse/repos/eclexia/formal/             # Coq/Agda proofs
-/var/mnt/eclipse/repos/eclexia/editors/            # VSCode extension
-/var/mnt/eclipse/repos/eclexia/ffi/               # Zig FFI
-/var/mnt/eclipse/repos/eclexia/deploy/            # Docker/K8s
-/var/mnt/eclipse/repos/eclexia/docs/              # Tutorials, reference
-/var/mnt/eclipse/repos/eclexia/examples/          # Example .ecl files
-/var/mnt/eclipse/repos/eclexia/tests/             # Conformance tests
-/var/mnt/eclipse/repos/eclexia/.machine_readable/ # SCM metadata
-/var/mnt/eclipse/repos/eclexia/.github/           # 17+ workflows
+/var$REPOS_DIR/eclexia/                    # Main repo (25 crates)
+/var$REPOS_DIR/eclexia/compiler/           # Compiler crates
+/var$REPOS_DIR/eclexia/runtime/            # Runtime system
+/var$REPOS_DIR/eclexia/stdlib/             # Standard library (.ecl)
+/var$REPOS_DIR/eclexia/formal/             # Coq/Agda proofs
+/var$REPOS_DIR/eclexia/editors/            # VSCode extension
+/var$REPOS_DIR/eclexia/ffi/               # Zig FFI
+/var$REPOS_DIR/eclexia/deploy/            # Docker/K8s
+/var$REPOS_DIR/eclexia/docs/              # Tutorials, reference
+/var$REPOS_DIR/eclexia/examples/          # Example .ecl files
+/var$REPOS_DIR/eclexia/tests/             # Conformance tests
+/var$REPOS_DIR/eclexia/.machine_readable/ # SCM metadata
+/var$REPOS_DIR/eclexia/.github/           # 17+ workflows
 
 # Related repos
-/var/mnt/eclipse/repos/gitbot-fleet/              # Bot fleet (9 bots)
-/var/mnt/eclipse/repos/.git-private-farm/         # Multi-forge mirroring (28+ repos)
-/var/mnt/eclipse/repos/hypatia/                   # CI/CD intelligence
-/var/mnt/eclipse/repos/echidna/                   # Theorem proving (17 backends)
-/var/mnt/eclipse/repos/verisimdb-data/            # Vulnerability data
-/var/mnt/eclipse/repos/panic-attacker/            # Security scanner
-/var/mnt/eclipse/repos/sustainabot/               # Ecological monitoring
-/var/mnt/eclipse/repos/julia-the-viper/           # JTV language
-/var/mnt/eclipse/repos/panll/                     # Next-gen IDE
-/var/mnt/eclipse/repos/odds-and-sods-package-manager/  # Package manager
-/var/mnt/eclipse/repos/scan-results/eclexia.json  # Panic-attack results
+/var$REPOS_DIR/gitbot-fleet/              # Bot fleet (9 bots)
+/var$REPOS_DIR/.git-private-farm/         # Multi-forge mirroring (28+ repos)
+/var$REPOS_DIR/hypatia/                   # CI/CD intelligence
+/var$REPOS_DIR/echidna/                   # Theorem proving (17 backends)
+/var$REPOS_DIR/verisimdb-data/            # Vulnerability data
+/var$REPOS_DIR/panic-attacker/            # Security scanner
+/var$REPOS_DIR/sustainabot/               # Ecological monitoring
+/var$REPOS_DIR/julia-the-viper/           # JTV language
+/var$REPOS_DIR/panll/                     # Next-gen IDE
+/var$REPOS_DIR/odds-and-sods-package-manager/  # Package manager
+/var$REPOS_DIR/scan-results/eclexia.json  # Panic-attack results
 ```
 
 ### Stats

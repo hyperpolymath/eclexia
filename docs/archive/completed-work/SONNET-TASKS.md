@@ -65,13 +65,13 @@
 ## TASK 1: Wire concurrency expressions through HIR lowering (HIGH)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/compiler/eclexia-hir/src/lower.rs` (lines 1058-1083)
+- `/var$REPOS_DIR/eclexia/compiler/eclexia-hir/src/lower.rs` (lines 1058-1083)
 
 **Problem:** All concurrency-related AST expressions (`Spawn`, `Channel`, `Send`, `Recv`, `Select`, `YieldExpr`) and `MacroCall` are lowered to `ExprKind::Literal(Literal::Unit)` in HIR. This means the compiler silently discards these constructs in the bytecode/codegen path. There are NOTE comments on lines 1066, 1070, 1075, 1079, and 1082 marking each as pending.
 
 **What to do:**
 
-1. Add new `ExprKind` variants in `/var/mnt/eclipse/repos/eclexia/compiler/eclexia-hir/src/lib.rs` for concurrency:
+1. Add new `ExprKind` variants in `/var$REPOS_DIR/eclexia/compiler/eclexia-hir/src/lib.rs` for concurrency:
    - `Spawn { body: ExprId }`
    - `Channel { elem_ty: Option<TypeId>, capacity: Option<ExprId> }`
    - `Send { channel: ExprId, value: ExprId }`
@@ -94,7 +94,7 @@ cargo test --workspace --lib 2>&1 | tail -20
 ## TASK 2: Implement concurrency expressions in the interpreter (HIGH)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/compiler/eclexia-interp/src/eval.rs` (lines 689-707)
+- `/var$REPOS_DIR/eclexia/compiler/eclexia-interp/src/eval.rs` (lines 689-707)
 
 **Problem:** All six concurrency expressions (`Spawn`, `Channel`, `Send`, `Recv`, `Select`, `YieldExpr`) return `RuntimeError::custom("... not yet supported in interpreter")`. The `eclexia-async` crate already has a working async runtime with channels, tasks, and parallel iterators (162 lines, 10 tests). These need to be connected.
 
@@ -107,7 +107,7 @@ cargo test --workspace --lib 2>&1 | tail -20
 5. For `Recv`: extract the channel receiver, call `.recv()`.
 6. For `Select`: implement using `tokio::select!` or a polling loop over multiple receivers.
 7. For `YieldExpr`: call `tokio::task::yield_now()`.
-8. Add the new `Value` variants (`TaskHandle`, `Sender`, `Receiver`) to `/var/mnt/eclipse/repos/eclexia/compiler/eclexia-interp/src/value.rs`.
+8. Add the new `Value` variants (`TaskHandle`, `Sender`, `Receiver`) to `/var$REPOS_DIR/eclexia/compiler/eclexia-interp/src/value.rs`.
 9. Add at least 3 tests: spawn+join, channel send/recv, yield.
 
 **Verification:**
@@ -123,7 +123,7 @@ cargo test -p eclexia-interp --lib 2>&1 | tail -20
 ## TASK 3: Complete Coq proof admits in Typing.v (MEDIUM)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/formal/coq/src/Typing.v` (lines 317, 383, 391, 396, 461)
+- `/var$REPOS_DIR/eclexia/formal/coq/src/Typing.v` (lines 317, 383, 391, 396, 461)
 
 **Problem:** Three theorems have `Admitted` in Typing.v:
 - `weakening` (line 317): one admit remains for the variable case weakening lemma.
@@ -142,7 +142,7 @@ Total: 3 theorems with 4 `Admitted` uses.
 
 **Verification:**
 ```bash
-cd /var/mnt/eclipse/repos/eclexia/formal/coq
+cd /var$REPOS_DIR/eclexia/formal/coq
 coqc -R src Eclexia src/Syntax.v src/Typing.v src/ShadowPrices.v 2>&1
 # Should report 0 errors. All Admitted should be gone from Typing.v.
 grep -c "Admitted" src/Typing.v
@@ -154,7 +154,7 @@ grep -c "Admitted" src/Typing.v
 ## TASK 4: Complete Coq proof admits in ShadowPrices.v (MEDIUM)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/formal/coq/src/ShadowPrices.v` (lines 163, 190, 212, 232, 332)
+- `/var$REPOS_DIR/eclexia/formal/coq/src/ShadowPrices.v` (lines 163, 190, 212, 232, 332)
 
 **Problem:** Five theorems have `Admitted`:
 - `strong_duality` (line 163): requires Farkas' lemma.
@@ -177,7 +177,7 @@ Total: 5 `Admitted` uses.
 
 **Verification:**
 ```bash
-cd /var/mnt/eclipse/repos/eclexia/formal/coq
+cd /var$REPOS_DIR/eclexia/formal/coq
 coqc -R src Eclexia src/Syntax.v src/ShadowPrices.v 2>&1
 grep -c "Admitted" src/ShadowPrices.v
 # Expected output: 0 (or 1 if strong_duality is made an Axiom)
@@ -188,7 +188,7 @@ grep -c "Admitted" src/ShadowPrices.v
 ## TASK 5: Remove old cranelift_backend.rs placeholder stub (LOW)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/compiler/eclexia-codegen/src/cranelift_backend.rs` (44 lines)
+- `/var$REPOS_DIR/eclexia/compiler/eclexia-codegen/src/cranelift_backend.rs` (44 lines)
 
 **Problem:** This file contains an empty placeholder `CraneliftBackend` struct that always returns `Err(CodegenError::UnsupportedFeature(...))`. The real Cranelift backend lives in the separate `eclexia-cranelift` crate (`compiler/eclexia-cranelift/src/lib.rs`, 1937 lines) and works correctly. The stub in `eclexia-codegen` shadows the real one and may confuse users of the codegen crate.
 
@@ -203,7 +203,7 @@ grep -c "Admitted" src/ShadowPrices.v
 ```bash
 cargo build --workspace 2>&1 | tail -5
 cargo test --workspace --lib 2>&1 | tail -5
-grep -r "eclexia_codegen::CraneliftBackend" /var/mnt/eclipse/repos/eclexia/compiler/ --include="*.rs"
+grep -r "eclexia_codegen::CraneliftBackend" /var$REPOS_DIR/eclexia/compiler/ --include="*.rs"
 # Expected: no results (nobody should be using the stub anymore)
 ```
 
@@ -212,7 +212,7 @@ grep -r "eclexia_codegen::CraneliftBackend" /var/mnt/eclipse/repos/eclexia/compi
 ## TASK 6: Wire remaining reactive crates into CLI (MEDIUM)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/compiler/eclexia/src/commands.rs`
+- `/var$REPOS_DIR/eclexia/compiler/eclexia/src/commands.rs`
 
 **Problem:** The ../../roadmap/ROADMAP.adoc (line 58) and ../../../QUICK_STATUS.md (line 73) state that 4 of 7 reactive crates are wired into `build --analyze`: absinterp, comptime, specialize, effects. The remaining 3 -- `eclexia-db`, `eclexia-modules`, `eclexia-tiered` -- are partially wired. Specifically:
 - `eclexia-db` is used in `build --analyze` for salsa-based incremental checking (line 869 of commands.rs), but only for a single file -- multi-file incremental builds do not use it.
@@ -242,8 +242,8 @@ cargo run -- build --analyze /tmp/eclexia-test-project/src/main.ecl 2>&1
 ## TASK 7: Implement concurrency builtins in bytecode VM (MEDIUM)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/compiler/eclexia-codegen/src/bytecode.rs`
-- `/var/mnt/eclipse/repos/eclexia/compiler/eclexia-codegen/src/vm.rs`
+- `/var$REPOS_DIR/eclexia/compiler/eclexia-codegen/src/bytecode.rs`
+- `/var$REPOS_DIR/eclexia/compiler/eclexia-codegen/src/vm.rs`
 
 **Problem:** The stdlib `async.ecl` declares concurrency builtins (`task_spawn`, `task_await`, `task_yield`, `task_sleep`, `channel_create`, `channel_send`, `channel_recv`, `channel_try_recv`, `channel_select`, `parallel_all`, `parallel_race`) but the bytecode VM does not implement any of them. When `CallBuiltin` encounters these names, they are not dispatched.
 
@@ -273,7 +273,7 @@ cargo run -- build examples/fibonacci_adaptive.ecl 2>&1 | tail -5
 ## TASK 8: Add real memory tracking to profiler (LOW)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/runtime/eclexia-runtime/src/profiler.rs` (line 128)
+- `/var$REPOS_DIR/eclexia/runtime/eclexia-runtime/src/profiler.rs` (line 128)
 
 **Problem:** The profiler's `end_span` method on line 128 sets `memory_bytes: 0.0` with the comment "memory tracking requires OS integration". Energy and carbon are estimated from wall-clock time, but memory is always zero. The `SpanAggregate` also never accumulates memory (`total_memory_bytes` is always 0.0).
 
@@ -297,7 +297,7 @@ cargo test -p eclexia-runtime --lib test_begin_end_span 2>&1
 ## TASK 9: Implement Cranelift string data sections (LOW)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/compiler/eclexia-cranelift/src/lib.rs` (lines 636-638)
+- `/var$REPOS_DIR/eclexia/compiler/eclexia-cranelift/src/lib.rs` (lines 636-638)
 
 **Problem:** String constants in the Cranelift backend are lowered to `iconst(I64, 0)` (a null pointer placeholder). The comment on line 637 says "Placeholder: real string data needs module-level data sections." This means any Eclexia program using string literals cannot produce correct native code through Cranelift.
 
@@ -321,7 +321,7 @@ cargo test -p eclexia-cranelift --lib 2>&1 | tail -20
 ## TASK 10: Implement Range/RangeInclusive in Cranelift backend (LOW)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/compiler/eclexia-cranelift/src/lib.rs` (lines 853-854, 913-914)
+- `/var$REPOS_DIR/eclexia/compiler/eclexia-cranelift/src/lib.rs` (lines 853-854, 913-914)
 
 **Problem:** Both integer and float binary operations for `Range` and `RangeInclusive` emit `iconst(I64, 0)` -- a placeholder zero value. The comments say "range values need runtime support." This means `for i in 0..10` compiles to nothing useful in Cranelift.
 
@@ -377,7 +377,7 @@ cargo test --workspace --lib 2>&1 | tail -5
 ## TASK 12: Complete WASM backend complex type support (MEDIUM)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/compiler/eclexia-wasm/src/lib.rs`
+- `/var$REPOS_DIR/eclexia/compiler/eclexia-wasm/src/lib.rs`
 
 **Problem:** The WASM backend generates valid `.wasm` binaries for arithmetic and control flow, but the file header (lines 28-32) documents three major limitations:
 1. Strings are stored in data section with fixed offsets (no GC/malloc)
@@ -408,7 +408,7 @@ cargo run -- build --target wasm /tmp/test_tuple.ecl 2>&1
 ## TASK 13: Connect LLVM backend to runtime linking (LOW)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/compiler/eclexia-llvm/src/lib.rs`
+- `/var$REPOS_DIR/eclexia/compiler/eclexia-llvm/src/lib.rs`
 
 **Problem:** The LLVM backend generates textual `.ll` IR files and can optionally invoke `llc` to produce `.o` object files. However, the generated object files are not linked to the Eclexia runtime. The QUICK_STATUS.md (line 71) confirms "linking to runtime is still manual." The IR includes runtime hooks (`eclexia_rt_start`, `eclexia_rt_stop`, resource tracking metadata) but there is no C/Rust library that implements these symbols.
 
@@ -438,13 +438,13 @@ cargo run -- build --target llvm /tmp/test_llvm.ecl 2>&1
 ## TASK 14: Implement package registry server stub (LOW)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/compiler/eclexia/src/registry.rs` (125 lines)
+- `/var$REPOS_DIR/eclexia/compiler/eclexia/src/registry.rs` (125 lines)
 
 **Problem:** The registry client exists and can fetch metadata, download tarballs, and verify checksums. However, there is no registry server. The client points to `https://registry.eclexia.dev` which does not exist. The STATE.scm lists package-registry completion at 0%.
 
 **What to do:**
 
-1. Create a minimal registry server in `/var/mnt/eclipse/repos/eclexia/runtime/eclexia-registry-server/` as a new crate. Use `eclexia-web-server` (587 lines, already in workspace) or `eclexia-rest` (393 lines) as the HTTP foundation.
+1. Create a minimal registry server in `/var$REPOS_DIR/eclexia/runtime/eclexia-registry-server/` as a new crate. Use `eclexia-web-server` (587 lines, already in workspace) or `eclexia-rest` (393 lines) as the HTTP foundation.
 2. Implement three endpoints:
    - `GET /packages/:name/:version` -- return package metadata JSON.
    - `GET /packages/:name/:version/download` -- serve the tarball.
@@ -464,7 +464,7 @@ cargo test -p eclexia-registry-server --lib 2>&1 | tail -10
 ## TASK 15: Add WASI integration to WASM backend (LOW)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/compiler/eclexia-wasm/src/lib.rs`
+- `/var$REPOS_DIR/eclexia/compiler/eclexia-wasm/src/lib.rs`
 
 **Problem:** The WASM backend header (line 31) lists "No WASI integration yet" as a limitation. Without WASI, WASM modules cannot do file I/O, access environment variables, or interact with the system clock -- making the stdlib `io.ecl` and `time.ecl` modules unusable in WASM targets.
 
@@ -533,17 +533,17 @@ cargo test --workspace --lib 2>&1 | grep "test result"
 ## TASK 17: Fix interop bridge configurations (LOW)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/interop/wokelang_bridge.toml`
-- `/var/mnt/eclipse/repos/eclexia/interop/phronesis_bridge.toml`
-- `/var/mnt/eclipse/repos/eclexia/interop/betlang_bridge.toml`
-- `/var/mnt/eclipse/repos/eclexia/interop/affinescript_bridge.toml`
-- `/var/mnt/eclipse/repos/eclexia/ffi/`
+- `/var$REPOS_DIR/eclexia/interop/wokelang_bridge.toml`
+- `/var$REPOS_DIR/eclexia/interop/phronesis_bridge.toml`
+- `/var$REPOS_DIR/eclexia/interop/betlang_bridge.toml`
+- `/var$REPOS_DIR/eclexia/interop/affinescript_bridge.toml`
+- `/var$REPOS_DIR/eclexia/ffi/`
 
 **Problem:** The interop directory contains 4 bridge configuration TOML files and an INTEROP_STATUS.md, but the `ffi/` directory (which should contain the Zig FFI implementations per the ABI/FFI standard) is empty or minimal. The bridge configs exist but there is no code that reads or validates them.
 
 **What to do:**
 
-1. Create a bridge configuration parser in `/var/mnt/eclipse/repos/eclexia/compiler/eclexia/src/interop.rs` that reads `*_bridge.toml` files.
+1. Create a bridge configuration parser in `/var$REPOS_DIR/eclexia/compiler/eclexia/src/interop.rs` that reads `*_bridge.toml` files.
 2. Add a CLI command `eclexia interop check` that validates all bridge configurations:
    - Check that referenced FFI entry points exist.
    - Check that the target language repo exists locally.
@@ -558,8 +558,8 @@ cargo test --workspace --lib 2>&1 | grep "test result"
 cargo build --workspace 2>&1 | tail -5
 # Test interop check (once implemented):
 # cargo run -- interop check 2>&1
-ls /var/mnt/eclipse/repos/eclexia/ffi/zig/src/
-ls /var/mnt/eclipse/repos/eclexia/generated/abi/
+ls /var$REPOS_DIR/eclexia/ffi/zig/src/
+ls /var$REPOS_DIR/eclexia/generated/abi/
 ```
 
 ---
@@ -567,8 +567,8 @@ ls /var/mnt/eclipse/repos/eclexia/generated/abi/
 ## TASK 18: Update STATE.scm with honest completion percentages (HIGH)
 
 **Files:**
-- `/var/mnt/eclipse/repos/eclexia/STATE.scm`
-- `/var/mnt/eclipse/repos/eclexia/.machine_readable/STATE.scm`
+- `/var$REPOS_DIR/eclexia/STATE.scm`
+- `/var$REPOS_DIR/eclexia/.machine_readable/STATE.scm`
 
 **Problem:** The root STATE.scm has not been updated since 2026-02-06. Several completion percentages are inaccurate:
 - `codegen` listed at 95% -- accurate for bytecode, but Cranelift/LLVM/WASM have gaps.
@@ -594,9 +594,9 @@ ls /var/mnt/eclipse/repos/eclexia/generated/abi/
 **Verification:**
 ```bash
 # Verify STATE.scm is valid Scheme:
-guile -c '(load "/var/mnt/eclipse/repos/eclexia/STATE.scm")' 2>&1
+guile -c '(load "/var$REPOS_DIR/eclexia/STATE.scm")' 2>&1
 # Or just check syntax:
-grep "overall-completion" /var/mnt/eclipse/repos/eclexia/STATE.scm
+grep "overall-completion" /var$REPOS_DIR/eclexia/STATE.scm
 ```
 
 ---
@@ -619,19 +619,19 @@ cargo test -p eclexia --test conformance_tests 2>&1
 cargo clippy --workspace 2>&1
 
 # 5. Count remaining TODOs/stubs
-grep -r "TODO\|FIXME\|HACK\|placeholder\|stub" --include="*.rs" /var/mnt/eclipse/repos/eclexia/compiler/ /var/mnt/eclipse/repos/eclexia/runtime/ /var/mnt/eclipse/repos/eclexia/libraries/ | grep -v target/ | grep -v "// Placeholder:" | wc -l
+grep -r "TODO\|FIXME\|HACK\|placeholder\|stub" --include="*.rs" /var$REPOS_DIR/eclexia/compiler/ /var$REPOS_DIR/eclexia/runtime/ /var$REPOS_DIR/eclexia/libraries/ | grep -v target/ | grep -v "// Placeholder:" | wc -l
 
 # 6. Count remaining Admitted proofs
-grep -c "Admitted" /var/mnt/eclipse/repos/eclexia/formal/coq/src/*.v
+grep -c "Admitted" /var$REPOS_DIR/eclexia/formal/coq/src/*.v
 
 # 7. Count unwraps in production code (excluding tests)
-grep -r "\.unwrap()" --include="*.rs" /var/mnt/eclipse/repos/eclexia/compiler/ /var/mnt/eclipse/repos/eclexia/runtime/ | grep -v "#\[cfg(test)\]" | grep -v "mod tests" | grep -v "/target/" | wc -l
+grep -r "\.unwrap()" --include="*.rs" /var$REPOS_DIR/eclexia/compiler/ /var$REPOS_DIR/eclexia/runtime/ | grep -v "#\[cfg(test)\]" | grep -v "mod tests" | grep -v "/target/" | wc -l
 
 # 8. Verify all tests pass (should be 0 failures)
 cargo test --workspace 2>&1 | grep "test result"
 
 # 9. Security scan
-# panic-attack assail /var/mnt/eclipse/repos/eclexia --output /tmp/eclexia-final-scan.json
+# panic-attack assail /var$REPOS_DIR/eclexia --output /tmp/eclexia-final-scan.json
 
 # 10. Coverage check
 # cargo llvm-cov --workspace --html

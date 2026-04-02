@@ -11,15 +11,15 @@ panic_attack_bin=""
 
 if command -v panic-attack >/dev/null 2>&1; then
   panic_attack_bin="$(command -v panic-attack)"
-elif [ -x "/var/mnt/eclipse/repos/panic-attacker/target/release/panic-attack" ]; then
-  panic_attack_bin="/var/mnt/eclipse/repos/panic-attacker/target/release/panic-attack"
+elif [ -x "/var$REPOS_DIR/panic-attacker/target/release/panic-attack" ]; then
+  panic_attack_bin="/var$REPOS_DIR/panic-attacker/target/release/panic-attack"
 elif [ -x "../panic-attacker/target/release/panic-attack" ]; then
   panic_attack_bin="../panic-attacker/target/release/panic-attack"
 fi
 
 if [ -z "$panic_attack_bin" ]; then
   echo "panic-attack is not installed or not on PATH" >&2
-  echo "build it in /var/mnt/eclipse/repos/panic-attacker first" >&2
+  echo "build it in /var$REPOS_DIR/panic-attacker first" >&2
   exit 2
 fi
 

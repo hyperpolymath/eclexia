@@ -269,7 +269,7 @@ All documentation files synchronized with current state:
 
 ### Quick Start
 ```bash
-cd /var/mnt/eclipse/repos/eclexia
+cd /var$REPOS_DIR/eclexia
 
 # Verify everything still builds
 cargo build --release
@@ -498,7 +498,7 @@ cargo run -- fmt src/main.ecl
 
 ## Quick Reference Card
 
-**Project Root:** `/var/mnt/eclipse/repos/eclexia`
+**Project Root:** `/var$REPOS_DIR/eclexia`
 **Completion:** 97%
 **Main Branch:** `main`
 **Test Status:** 9/9 passing (100%)
