@@ -845,21 +845,21 @@ mod tests {
             assert_eq!(r.value, 100.0);
             assert_eq!(r.unit.as_str(), "J");
         } else {
-            panic!("Expected resource literal");
+            panic!("Expected resource literal, got {:?}", tokens[0].kind);
         }
 
         if let TokenKind::Resource(r) = &tokens[1].kind {
             assert_eq!(r.value, 5.0);
             assert_eq!(r.unit.as_str(), "ms");
         } else {
-            panic!("Expected resource literal");
+            panic!("Expected resource literal, got {:?}", tokens[1].kind);
         }
 
         if let TokenKind::Resource(r) = &tokens[2].kind {
             assert_eq!(r.value, 10.0);
             assert_eq!(r.unit.as_str(), "gCO2e");
         } else {
-            panic!("Expected resource literal");
+            panic!("Expected resource literal, got {:?}", tokens[2].kind);
         }
     }
 
@@ -897,13 +897,13 @@ mod tests {
         if let TokenKind::String(s) = &tokens[0].kind {
             assert_eq!(s.as_str(), "hello world");
         } else {
-            panic!("Expected string literal");
+            panic!("Expected string literal, got {:?}", tokens[0].kind);
         }
 
         if let TokenKind::String(s) = &tokens[1].kind {
             assert_eq!(s.as_str(), "with\nescape");
         } else {
-            panic!("Expected string literal");
+            panic!("Expected string literal, got {:?}", tokens[1].kind);
         }
     }
 
@@ -1022,7 +1022,7 @@ mod tests {
         if let TokenKind::String(s) = &tokens[0].kind {
             assert_eq!(s.as_str(), "AB");
         } else {
-            panic!("Expected string literal");
+            panic!("Expected string literal, got {:?}", tokens[0].kind);
         }
     }
 
@@ -1033,7 +1033,7 @@ mod tests {
         if let TokenKind::String(s) = &tokens[0].kind {
             assert_eq!(s.as_str(), "\u{03C0}"); // π
         } else {
-            panic!("Expected string literal");
+            panic!("Expected string literal, got {:?}", tokens[0].kind);
         }
     }
 

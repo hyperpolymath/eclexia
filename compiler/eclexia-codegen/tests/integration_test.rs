@@ -76,7 +76,7 @@ fn test_simple_arithmetic() {
     // Verify result
     match result {
         VmValue::Int(n) => assert_eq!(n, 15, "Expected 5 + 10 = 15"),
-        _ => panic!("Expected integer result"),
+        other => panic!("Expected integer result, got {other:?}"),
     }
 }
 
@@ -134,7 +134,7 @@ fn test_local_variables() {
 
     match result {
         VmValue::Int(n) => assert_eq!(n, 42, "Expected x = 42"),
-        _ => panic!("Expected integer result"),
+        other => panic!("Expected integer result, got {other:?}"),
     }
 }
 
@@ -187,6 +187,6 @@ fn test_comparison_operations() {
 
     match result {
         VmValue::Bool(b) => assert!(b, "Expected 10 > 5 = true"),
-        _ => panic!("Expected boolean result"),
+        other => panic!("Expected boolean result, got {other:?}"),
     }
 }

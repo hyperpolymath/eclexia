@@ -386,9 +386,9 @@ mod tests {
         }
     }
 
-    fn expect_err<T, E: std::fmt::Debug>(res: Result<T, E>) -> E {
+    fn expect_err<T: std::fmt::Debug, E: std::fmt::Debug>(res: Result<T, E>) -> E {
         match res {
-            Ok(_) => panic!("Expected Err, got Ok"),
+            Ok(val) => panic!("Expected Err, got Ok({val:?})"),
             Err(err) => err,
         }
     }

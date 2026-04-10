@@ -44,12 +44,12 @@ The `eclexia interop check` command validates all bridge configurations:
 | Oblibeny | Stub | Recently added, no source |
 | Error-Lang | Unknown | Needs investigation |
 
-### Query Languages (VQL/GQL)
+### Query Languages (VCL/GQL)
 
 | Language | Variant | Status |
 |----------|---------|--------|
-| VQL | Standard | Integrated via VeriSimDB |
-| VQL-DT | Dependent Types | Needs eclexia type bridge |
+| VCL | Standard | Integrated via VeriSimDB |
+| VCL-DT | Dependent Types | Needs eclexia type bridge |
 | GQL-DT | Dependent Types | Needs eclexia type bridge |
 | FBQL-DT | Dependent Types | Needs eclexia type bridge |
 

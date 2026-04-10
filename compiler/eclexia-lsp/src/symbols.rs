@@ -896,7 +896,7 @@ mod tests {
         let lookup = table.lookup(&SmolStr::new("test"));
         match lookup {
             Some(sym) => assert_eq!(sym.kind, SymbolKind::Function),
-            None => panic!("Expected symbol to be defined"),
+            None => panic!("Expected symbol 'test' to be defined, got None"),
         }
     }
 

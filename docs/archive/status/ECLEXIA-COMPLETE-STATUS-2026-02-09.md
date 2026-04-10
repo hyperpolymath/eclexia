@@ -233,8 +233,8 @@ These exist with their own tests. Four are now wired into CLI via `build --analy
 
 ### 6.3 Hypatia — PARTIAL
 - hypatia-scan.yml workflow exists, CII badge tracking active
-- Missing: eclexia-specific Logtalk rules, NEUROSYM.scm empty, verisimdb not wired
-- **Action:** Create rules, populate NEUROSYM.scm, wire verisimdb
+- Missing: eclexia-specific Logtalk rules, NEUROSYM.scm empty, verisim not wired
+- **Action:** Create rules, populate NEUROSYM.scm, wire verisim
 
 ### 6.4 Echidna — ZERO INTEGRATION
 - 17 prover backends available (Coq, Lean 4, Isabelle/HOL, Agda, Z3, CVC5, ACL2, PVS, HOL4, Mizar, HOL Light, Metamath, Vampire, E Prover, SPASS, Alt-Ergo, Idris2)
@@ -250,7 +250,7 @@ These exist with their own tests. Four are now wired into CLI via `build --analy
 
 ### 6.6 VeriSimDB — INGESTED (2026-02-09)
 - Scan: 6 weak points, 132 unwrap_calls, 28 unsafe blocks, 100 panic sites (rerun 2026-02-11; not yet ingested)
-- Commit `9ef8bab` in verisimdb-data repo, pushed to GitHub + GitLab
+- Commit `9ef8bab` in verisim-data repo, pushed to GitHub + GitLab
 - **Action:** Set up automated re-scanning via PAT
 
 ### 6.7 Sustainabot — PARTIAL
@@ -376,7 +376,7 @@ These exist with their own tests. Four are now wired into CLI via `build --analy
 | 5.2 | Enroll eclexia in gitbot-fleet supervision | 2h | TODO |
 | 5.3 | Configure echidna to verify eclexia proofs | 4h | TODO |
 | 5.4 | Wire hypatia with eclexia-specific Logtalk rules | 4h | TODO |
-| 5.5 | Ingest eclexia scan into verisimdb-data | 30min | DONE 2026-02-09 (commit 9ef8bab in verisimdb-data — 15 weak pts, 327 unwraps, 28 unsafe, 48 panic sites) |
+| 5.5 | Ingest eclexia scan into verisim-data | 30min | DONE 2026-02-09 (commit 9ef8bab in verisim-data — 15 weak pts, 327 unwraps, 28 unsafe, 48 panic sites) |
 | 5.6 | Populate NEUROSYM.scm | 1h | TODO |
 | 5.7 | Configure sustainabot-eclexia integration | 2h | TODO |
 | 5.8 | Ensure gitbot-fleet continuously monitors eclexia | 1h | TODO |
@@ -519,17 +519,17 @@ Language blocks into eclexia for provably-secure data handling.
 | 15.8 | Oblibeny interop (spec only — design phase) | 2h | TODO |
 | 15.9 | Betlang interop (Racket+Rust DSL — Rust FFI) | 4h | TODO |
 | 15.10 | Anvomidav interop (Rust DSL — direct Rust FFI) | 4h | TODO |
-| 15.11 | VQL standard interop (ReScript, VeriSimDB query language) | 6h | TODO |
+| 15.11 | VCL standard interop (ReScript, VeriSimDB query language) | 6h | TODO |
 | 15.12 | GQL-DT / FBQL-DT interop (Lean 4 + Zig, dependent-typed queries) | 8h | TODO |
-| 15.13 | VQL dependent-types variant (if distinct from standard VQL) | 4h | TODO |
+| 15.13 | VCL dependent-types variant (if distinct from standard VCL) | 4h | TODO |
 
 **Context:** ALL languages in `/var$REPOS_DIR/nextgen-languages/` MUST have
 bidirectional interop with eclexia. This is non-negotiable — eclexia must be able to
 call into every sibling language AND every sibling language must be able to call into
 eclexia's resource runtime via the C ABI header (`eclexia_ffi.h`).
 
-**Query languages (GQL + VQL):** Both standard AND dependent-type variants are included.
-VQL (VeriSimDB's query language, ReScript) enables resource-tracked database queries.
+**Query languages (GQL + VCL):** Both standard AND dependent-type variants are included.
+VCL (VeriSimDB's query language, ReScript) enables resource-tracked database queries.
 GQL-DT/FBQL-DT (Lean 4 + Zig) provides compile-time DB constraint verification with
 dependent types. Both can leverage eclexia's resource budget system for query cost tracking.
 
@@ -947,7 +947,7 @@ Various conformance tests in `tests/conformance/invalid/` (19 files)
 /var$REPOS_DIR/.git-private-farm/         # Multi-forge mirroring (28+ repos)
 /var$REPOS_DIR/hypatia/                   # CI/CD intelligence
 /var$REPOS_DIR/echidna/                   # Theorem proving (17 backends)
-/var$REPOS_DIR/verisimdb-data/            # Vulnerability data
+/var$REPOS_DIR/verisim-data/            # Vulnerability data
 /var$REPOS_DIR/panic-attacker/            # Security scanner
 /var$REPOS_DIR/sustainabot/               # Ecological monitoring
 /var$REPOS_DIR/julia-the-viper/           # JTV language
@@ -1023,7 +1023,7 @@ Include date and any notes.
 | 2026-02-09 | 2.1-2.2 | .eclb binary bytecode format | Commit 5bb9512. 8-byte header (magic "ECLB" + version) + JSON body. write_eclb/read_eclb/is_eclb_path. |
 | 2026-02-09 | 1.3,1.6-1.10 | Documentation honesty pass (6 docs) | Commit a26acbe. GETTING_STARTED (def→fn, status disclaimer), SELF-HOSTING-ROADMAP (100%→~55%), MULTICOMPILER-ARCHITECTURE (VISION DOCUMENT), docs/roadmap/ROADMAP.adoc (completion/date/license), IMPLEMENTATION_ROADMAP (SPDX typo), WHITEPAPER (projected vs measured note) |
 | 2026-02-09 | 2.9 (partial) | Fix 3 dangerous production unwrap() calls | Commit 6eb2b45. modules (file_name), REPL debugger (flush), LSP symbols (position). 88% remaining are test-only. |
-| 2026-02-09 | 5.5 | Ingest eclexia scan into verisimdb-data | Commit 9ef8bab (verisimdb-data). 15 weak pts, pushed GitHub + GitLab. |
+| 2026-02-09 | 5.5 | Ingest eclexia scan into verisim-data | Commit 9ef8bab (verisim-data). 15 weak pts, pushed GitHub + GitLab. |
 | 2026-02-09 | 2.8 (partial) | Wire 4/7 reactive crates into CLI | Commits d5241ab + 0441089. absinterp, comptime, specialize, effects via `build --analyze`. |
 | 2026-02-09 | 4.1,4.2,4.3,4.8,4.11 | 4 new examples + bytecode round-trip | hello_world, fibonacci, traits_and_impls, generics (commit f39fe28). .eclb round-trip verified. |
 | 2026-02-09 | 2.14 (partial) | CallBuiltin VM instruction | Commit 36b686c. ~20 builtins dispatched from bytecode path. `build` now works on files using println etc. |
@@ -1370,8 +1370,8 @@ extern "WASM" {
 | 2026-02-09 | V10: Integration tests stabilized (unique temp files + `CARGO_BIN_EXE_eclexia`), Result Ok/Err pattern mismatch fixed, scheduler tests corrected to use `energy` shadow price key, `comprehensive_opportunity.ecl` verified with observe-shadow/carbon-report, `bench_energy.ecl` repaired, all 31 examples interpret/run successfully, wasm unused-variable warning cleared. |
 | 2026-02-09 | V9: Session 10 continuation — MIR adaptive def lowering fix completed (2 bugs: missing parent params in local_map + clone-replace arena loss). Safe fallback for unknown locals in ExprKind::Local. 5 new example programs: macros, hashmaps, higher_order, recursion, type_system. 24/29 examples working (was 19/24). STATE.scm updated. 271 lib + 51 conformance tests passing. |
 | 2026-02-09 | V8: Sessions 9-10 — 4/7 reactive crates wired (added specialize+effects), shadow prices live (ShadowPriceRegistry+ShadowPriceEngine), CallBuiltin VM instruction (build works with builtins), MIR adaptive def fix (build --analyze works on adaptive def), 4 new examples (hello_world, fibonacci, traits_and_impls, generics), 19/24 examples working, .eclb round-trip verified, full verification audit with 11 discrepancies found and fixed. Overall ~65%. |
-| 2026-02-09 | V7: Session 8 — DEEP VERIFICATION AUDIT of all completed items (13 verification tasks). BUGS FIXED: enum variant matching (Pattern::Var→compare), Value::Struct PartialEq (was always false). All 11 examples now correct. Conformance: 51/51 pass, 271 lib tests pass. Doc honesty: 7 docs verified (A+ to B+ grades). Infrastructure: SEAM_ANALYSIS exists, INTEROP_STATUS missing, OPSM adapter missing, verisimdb scan exists, stdlib/async.ecl verified. panic-attack: 15 weak pts, 327 unwraps (corrected from 331), 28 unsafe, 48 panic sites, 49990 lines. Known remaining issues: `build` fails on files using builtins (println), `build --analyze` panics on adaptive def. Overall ~62%. |
-| 2026-02-09 | V6: Session 7 — .eclb binary format (8-byte header), doc honesty pass (6 docs: GETTING_STARTED, SELF-HOSTING-ROADMAP, MULTICOMPILER-ARCHITECTURE, ROADMAP, IMPLEMENTATION_ROADMAP, WHITEPAPER), 3 dangerous production unwraps fixed, verisimdb ingested, `build --analyze` wires eclexia-absinterp + eclexia-comptime into CLI. 5 commits + 1 verisimdb. Overall ~60%. |
+| 2026-02-09 | V7: Session 8 — DEEP VERIFICATION AUDIT of all completed items (13 verification tasks). BUGS FIXED: enum variant matching (Pattern::Var→compare), Value::Struct PartialEq (was always false). All 11 examples now correct. Conformance: 51/51 pass, 271 lib tests pass. Doc honesty: 7 docs verified (A+ to B+ grades). Infrastructure: SEAM_ANALYSIS exists, INTEROP_STATUS missing, OPSM adapter missing, verisim scan exists, stdlib/async.ecl verified. panic-attack: 15 weak pts, 327 unwraps (corrected from 331), 28 unsafe, 48 panic sites, 49990 lines. Known remaining issues: `build` fails on files using builtins (println), `build --analyze` panics on adaptive def. Overall ~62%. |
+| 2026-02-09 | V6: Session 7 — .eclb binary format (8-byte header), doc honesty pass (6 docs: GETTING_STARTED, SELF-HOSTING-ROADMAP, MULTICOMPILER-ARCHITECTURE, ROADMAP, IMPLEMENTATION_ROADMAP, WHITEPAPER), 3 dangerous production unwraps fixed, verisim ingested, `build --analyze` wires eclexia-absinterp + eclexia-comptime into CLI. 5 commits + 1 verisim. Overall ~60%. |
 | 2026-02-09 | V5: Session 6 — bytecode serde + .eclb file format, extern block type checking + interpreter stubs (FFI foundation), stdlib/async.ecl (concurrency stdlib), 11 working example programs, clippy lint pass (zero errors), panic-attack scan (15 weak pts, 327 unwraps). Section 20 concurrency marked DONE. Overall ~58%. |
 | 2026-02-09 | V4: Updated after session 5 — runtime stubs implemented (25 tests), dimension comparison fix (0 conformance skips), bytecode serialization, seam analysis (2 critical fixes), interop bridges, documentation honesty pass, reqwest upgrade. 271 lib tests, 51 conformance. Echidna verify: 5/6 QED. |
 | 2026-02-09 | V3: Added advanced compiler extensions, interoperability/FFI plan, website/playground plan (eclexia.org, playground.eclexia.org, PWAs), concurrency library, additional tools/frameworks/libraries, funding/business documents, parallelisation. |

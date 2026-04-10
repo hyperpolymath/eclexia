@@ -391,7 +391,7 @@ mod tests {
             MountResult::Mounted(elem) => {
                 assert_eq!(elem.selector, "#app");
             }
-            _ => panic!("Expected Mounted result"),
+            other => panic!("Expected Mounted result, got {other:?}"),
         }
     }
 
@@ -400,7 +400,7 @@ mod tests {
         let result = mount("", "<div>Hello</div>");
         match result {
             MountResult::InvalidSelector(_) => {}
-            _ => panic!("Expected InvalidSelector"),
+            other => panic!("Expected InvalidSelector, got {other:?}"),
         }
     }
 
@@ -409,7 +409,7 @@ mod tests {
         let result = mount("#app", "<div><p></div>");
         match result {
             MountResult::InvalidHtml(_) => {}
-            _ => panic!("Expected InvalidHtml"),
+            other => panic!("Expected InvalidHtml, got {other:?}"),
         }
     }
 

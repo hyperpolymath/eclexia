@@ -2704,24 +2704,24 @@ mod tests {
             .unwrap_ok();
 
         let keys = builtin_hashmap_keys(&[map.clone()]).unwrap_ok();
-        if let Value::Array(arr) = keys {
+        if let Value::Array(arr) = &keys {
             assert_eq!(arr.borrow().len(), 2);
         } else {
-            panic!("Expected array of keys");
+            panic!("Expected array of keys, got {keys:?}");
         }
 
         let values = builtin_hashmap_values(&[map.clone()]).unwrap_ok();
-        if let Value::Array(arr) = values {
+        if let Value::Array(arr) = &values {
             assert_eq!(arr.borrow().len(), 2);
         } else {
-            panic!("Expected array of values");
+            panic!("Expected array of values, got {values:?}");
         }
 
         let entries = builtin_hashmap_entries(&[map]).unwrap_ok();
-        if let Value::Array(arr) = entries {
+        if let Value::Array(arr) = &entries {
             assert_eq!(arr.borrow().len(), 2);
         } else {
-            panic!("Expected array of entries");
+            panic!("Expected array of entries, got {entries:?}");
         }
     }
 
@@ -2785,14 +2785,14 @@ mod tests {
             .unwrap_ok();
 
         let keys = builtin_sortedmap_keys(&[map]).unwrap_ok();
-        if let Value::Array(arr) = keys {
+        if let Value::Array(arr) = &keys {
             let borrowed = arr.borrow();
             assert_eq!(borrowed.len(), 3);
             assert_eq!(borrowed[0], Value::String(SmolStr::new("a")));
             assert_eq!(borrowed[1], Value::String(SmolStr::new("b")));
             assert_eq!(borrowed[2], Value::String(SmolStr::new("c")));
         } else {
-            panic!("Expected array of keys");
+            panic!("Expected array of keys, got {keys:?}");
         }
     }
 
@@ -2820,19 +2820,19 @@ mod tests {
         .unwrap_ok();
 
         let min = builtin_sortedmap_min_key(&[map.clone()]).unwrap_ok();
-        if let Value::Tuple(elems) = min {
+        if let Value::Tuple(elems) = &min {
             assert_eq!(elems[0], Value::String(SmolStr::new("2023")));
             assert_eq!(elems[1], Value::Float(1.5));
         } else {
-            panic!("Expected tuple (key, value)");
+            panic!("Expected tuple (key, value), got {min:?}");
         }
 
         let max = builtin_sortedmap_max_key(&[map]).unwrap_ok();
-        if let Value::Tuple(elems) = max {
+        if let Value::Tuple(elems) = &max {
             assert_eq!(elems[0], Value::String(SmolStr::new("2025")));
             assert_eq!(elems[1], Value::Float(3.5));
         } else {
-            panic!("Expected tuple (key, value)");
+            panic!("Expected tuple (key, value), got {max:?}");
         }
     }
 
@@ -2856,11 +2856,11 @@ mod tests {
         ])
         .unwrap_ok();
 
-        if let Value::Array(arr) = range {
+        if let Value::Array(arr) = &range {
             let borrowed = arr.borrow();
             assert_eq!(borrowed.len(), 3); // 2022, 2023, 2024
         } else {
-            panic!("Expected array of entries");
+            panic!("Expected array of entries, got {range:?}");
         }
     }
 
@@ -3000,10 +3000,10 @@ mod tests {
         let b = make_array(vec![Value::Int(3), Value::Int(4), Value::Int(5)]);
 
         let result = builtin_set_union(&[a, b]).unwrap_ok();
-        if let Value::Array(arr) = result {
+        if let Value::Array(arr) = &result {
             assert_eq!(arr.borrow().len(), 5); // {1,2,3,4,5}
         } else {
-            panic!("Expected array");
+            panic!("Expected array, got {result:?}");
         }
     }
 
@@ -3013,10 +3013,10 @@ mod tests {
         let b = make_array(vec![Value::Int(2), Value::Int(3), Value::Int(4)]);
 
         let result = builtin_set_intersection(&[a, b]).unwrap_ok();
-        if let Value::Array(arr) = result {
+        if let Value::Array(arr) = &result {
             assert_eq!(arr.borrow().len(), 2); // {2, 3}
         } else {
-            panic!("Expected array");
+            panic!("Expected array, got {result:?}");
         }
     }
 
@@ -3026,10 +3026,10 @@ mod tests {
         let b = make_array(vec![Value::Int(2), Value::Int(4)]);
 
         let result = builtin_set_difference(&[a, b]).unwrap_ok();
-        if let Value::Array(arr) = result {
+        if let Value::Array(arr) = &result {
             assert_eq!(arr.borrow().len(), 2); // {1, 3}
         } else {
-            panic!("Expected array");
+            panic!("Expected array, got {result:?}");
         }
     }
 
@@ -3039,10 +3039,10 @@ mod tests {
         let b = make_array(vec![Value::Int(2), Value::Int(3), Value::Int(4)]);
 
         let result = builtin_set_symmetric_difference(&[a, b]).unwrap_ok();
-        if let Value::Array(arr) = result {
+        if let Value::Array(arr) = &result {
             assert_eq!(arr.borrow().len(), 2); // {1, 4}
         } else {
-            panic!("Expected array");
+            panic!("Expected array, got {result:?}");
         }
     }
 
@@ -3069,10 +3069,10 @@ mod tests {
         ]);
 
         let result = builtin_set_from_array(&[arr]).unwrap_ok();
-        if let Value::Array(deduped) = result {
+        if let Value::Array(deduped) = &result {
             assert_eq!(deduped.borrow().len(), 3); // {1, 2, 3}
         } else {
-            panic!("Expected array");
+            panic!("Expected array, got {result:?}");
         }
     }
 
@@ -3089,11 +3089,11 @@ mod tests {
         ]);
 
         let both = builtin_set_intersection(&[markets.clone(), tech_exchanges.clone()]).unwrap_ok();
-        if let Value::Array(arr) = both {
+        if let Value::Array(arr) = &both {
             assert_eq!(arr.borrow().len(), 1); // {"NASDAQ"}
             assert_eq!(arr.borrow()[0], Value::String(SmolStr::new("NASDAQ")));
         } else {
-            panic!("Expected array");
+            panic!("Expected array, got {both:?}");
         }
     }
 

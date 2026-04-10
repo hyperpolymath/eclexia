@@ -2424,7 +2424,7 @@ mod tests {
             assert_eq!(af.name.as_str(), "sort");
             assert_eq!(af.solutions.len(), 1);
         } else {
-            panic!("Expected adaptive function");
+            panic!("Expected adaptive function, got {:?}", file.items[0]);
         }
     }
 
