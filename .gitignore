@@ -63,3 +63,11 @@ temp/
 # Fuzzing runtime outputs
 fuzz/artifacts/
 fuzz/corpus/
+target/
+node_modules/
+_build/
+deps/
+.elixir_ls/
+.cache/
+build/
+dist/
