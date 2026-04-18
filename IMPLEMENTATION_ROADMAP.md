@@ -595,7 +595,7 @@ tracing-subscriber = "0.3"
 **Technology**: Just (command runner) + Cargo
 
 ```just
-# justfile
+# Justfile
 default:
     @just --list
 

@@ -75,7 +75,7 @@ When reviewing code in this repository, apply these standards strictly.
 | Violation | Should Be |
 |-----------|-----------|
 | Docker | Podman |
-| Makefile | justfile |
+| Makefile | Justfile |
 | GitHub Actions self-reference | GitLab CI preferred for personal projects |
 | npm/yarn | pnpm (if JS unavoidable) |
 | pip/poetry | Reject (avoid Python) |
