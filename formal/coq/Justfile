@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Justfile for Eclexia formal verification
+
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+default:
+    @just --list --unsorted
+
+build-mk:
+    coq_makefile -f _CoqProject -o build.mk
+
+all: build-mk
+    make -f build.mk
+
+clean:
+    @if [ -f build.mk ]; then make -f build.mk clean; fi
+    rm -f build.mk build.mk.conf Makefile.coq Makefile.coq.conf
+
+install: build-mk
+    make -f build.mk install
+
+check:
+    coqc -R src Eclexia src/*.v
