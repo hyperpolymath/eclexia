@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Traits and impl blocks — demonstrating Eclexia's trait system.
 
 type Circle = { radius: Float }

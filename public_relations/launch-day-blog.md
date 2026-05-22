@@ -320,7 +320,7 @@ See [docs/roadmap/SELF-HOSTING-ROADMAP.md](../docs/roadmap/SELF-HOSTING-ROADMAP.
 
 ## Try It Now
 
-Eclexia is **100% open source** under the Palimpsest License (PMPL-1.0-or-later).
+Eclexia is **100% open source** under the Palimpsest License (MPL-2.0).
 
 **Get started in 60 seconds:**
 

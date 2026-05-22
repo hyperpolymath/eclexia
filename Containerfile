@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Multi-stage Containerfile for Eclexia (Podman + Chainguard)
 # Target: <50MB image, <5min build time
 
@@ -68,4 +68,4 @@ LABEL org.opencontainers.image.title="Eclexia" \
       org.opencontainers.image.version="0.1.0" \
       org.opencontainers.image.authors="Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>" \
       org.opencontainers.image.source="https://github.com/hyperpolymath/eclexia" \
-      org.opencontainers.image.licenses="PMPL-1.0-or-later"
+      org.opencontainers.image.licenses="MPL-2.0"

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Conformance test: no solution satisfies constraints
 // Expected: FAIL with ResourceViolation (no valid solution)
 

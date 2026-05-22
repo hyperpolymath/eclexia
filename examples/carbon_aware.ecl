@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Carbon-aware computation — demonstrates resource-constrained scheduling.
 //
 // Eclexia's economics-as-code model lets functions declare carbon budgets.

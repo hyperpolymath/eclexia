@@ -1,6 +1,6 @@
 # Extended Proofs and Detailed Derivations
 
-<!-- SPDX-License-Identifier: PMPL-1.0-or-later -->
+<!-- SPDX-License-Identifier: MPL-2.0 -->
 <!-- SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell -->
 
 **Version:** 1.0
@@ -1187,4 +1187,4 @@ No matter what algorithm does, adversary forces ratio 2. □
 
 **Document Version:** 1.0
 **Last Updated:** December 2025
-**License:** PMPL-1.0-or-later
+**License:** MPL-2.0

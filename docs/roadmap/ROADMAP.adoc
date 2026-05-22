@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 = Eclexia Roadmap
 
 This document outlines the development roadmap for Eclexia, tracking progress and planned milestones.
@@ -26,7 +26,7 @@ Release-readiness audit: link:../reports/V1-READINESS-AUDIT-2026-02-24.md[V1-REA
 - [x] Security documentation (SECURITY.md)
 - [x] Code of Conduct (CODE_OF_CONDUCT.md)
 - [x] Contributing guidelines (CONTRIBUTING.md)
-- [x] License setup (PMPL-1.0-or-later)
+- [x] License setup (MPL-2.0)
 - [x] GitHub workflows (CodeQL, Dependabot)
 - [x] Issue templates (bug report, feature request, documentation, question)
 

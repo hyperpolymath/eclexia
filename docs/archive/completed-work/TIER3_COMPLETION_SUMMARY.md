@@ -637,4 +637,4 @@ The language is now ready for real-world use in research, education, and industr
 
 **Author:** Jonathan D.A. Jewell
 **Date:** 2026-02-07
-**License:** PMPL-1.0-or-later
+**License:** MPL-2.0

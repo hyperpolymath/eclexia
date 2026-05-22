@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Eclexia package registry server.
@@ -194,7 +194,7 @@ mod tests {
             version: "1.0.0".to_string(),
             description: Some("A test package".to_string()),
             authors: vec!["Test Author".to_string()],
-            license: Some("PMPL-1.0-or-later".to_string()),
+            license: Some("MPL-2.0".to_string()),
             repository: None,
             dependencies: vec![],
             checksum: "abc123".to_string(),

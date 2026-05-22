@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! eclexia-dom: High-assurance DOM mounter for Eclexia
 //!
 //! Provides validated, safe DOM mounting operations with proven

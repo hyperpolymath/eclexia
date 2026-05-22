@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Package management for Eclexia projects.
@@ -115,7 +115,7 @@ pub fn create_manifest(name: String, authors: Vec<String>, output: OutputType) -
             authors,
             edition: "2025".to_string(),
             description: None,
-            license: Some("PMPL-1.0-or-later".to_string()),
+            license: Some("MPL-2.0".to_string()),
             repository: None,
         },
         dependencies: HashMap::new(),

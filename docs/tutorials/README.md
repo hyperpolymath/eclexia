@@ -188,7 +188,7 @@ Each tutorial includes:
 
 **Author:** Jonathan D.A. Jewell
 
-**License:** PMPL-1.0-or-later
+**License:** MPL-2.0
 
 **Last Updated:** 2026-02-07
 

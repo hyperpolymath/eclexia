@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Dimensional type system — demonstrates resource-typed computation.
 //
 // Eclexia tracks physical dimensions (energy, time, carbon, memory)

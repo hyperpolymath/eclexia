@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! Command implementations for the Eclexia CLI.
@@ -1467,7 +1467,7 @@ fn mint_common_files(name: &str, template: &str) -> miette::Result<()> {
         eclexia run src/main.ecl\n\
         ```\n\n\
         ## License\n\n\
-        PMPL-1.0-or-later\n",
+        MPL-2.0\n",
         name, template
     );
     std::fs::write(format!("{}/README.md", name), readme).into_diagnostic()?;
@@ -1478,13 +1478,13 @@ fn mint_common_files(name: &str, template: &str) -> miette::Result<()> {
         _ => "bin",
     };
     let config = format!(
-        "# SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "# SPDX-License-Identifier: MPL-2.0\n\
         # Eclexia project configuration\n\n\
         [package]\n\
         name = \"{name}\"\n\
         version = \"0.1.0\"\n\
         edition = \"2025\"\n\
-        license = \"PMPL-1.0-or-later\"\n\
+        license = \"MPL-2.0\"\n\
         description = \"An Eclexia {template} project\"\n\
         authors = [\"Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>\"]\n\n\
         [build]\n\
@@ -1509,7 +1509,7 @@ fn mint_common_files(name: &str, template: &str) -> miette::Result<()> {
 /// Mint a binary application project.
 fn mint_bin(name: &str) -> miette::Result<()> {
     let main = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! {name} — An Eclexia application.\n\n\
         def main() -> Unit\n\
         \x20   @requires: energy < 10J\n\
@@ -1521,7 +1521,7 @@ fn mint_bin(name: &str) -> miette::Result<()> {
     std::fs::write(format!("{}/src/main.ecl", name), main).into_diagnostic()?;
 
     let test = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! Tests for {name}.\n\n\
         #[test]\n\
         def test_hello() -> Unit {{\n\
@@ -1536,7 +1536,7 @@ fn mint_bin(name: &str) -> miette::Result<()> {
 /// Mint a library project.
 fn mint_lib(name: &str) -> miette::Result<()> {
     let lib = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! {name} — An Eclexia library.\n\
         //!\n\
         //! ## Usage\n\
@@ -1564,7 +1564,7 @@ fn mint_lib(name: &str) -> miette::Result<()> {
     std::fs::write(format!("{}/src/lib.ecl", name), lib).into_diagnostic()?;
 
     let test = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! Tests for {name}.\n\n\
         import {name}\n\n\
         #[test]\n\
@@ -1589,7 +1589,7 @@ fn mint_web(name: &str) -> miette::Result<()> {
 
     // Main entry point with TEA architecture
     let main = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! {name} — A TEA (The Elm Architecture) web application.\n\
         //!\n\
         //! Model-Update-View architecture with resource-aware rendering.\n\n\
@@ -1663,7 +1663,7 @@ fn mint_web(name: &str) -> miette::Result<()> {
 
     // Router component (compatible with cadre-router pattern)
     let router = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! Router for {name} — type-safe URL routing.\n\
         //!\n\
         //! Compatible with cadre-router patterns.\n\n\
@@ -1718,7 +1718,7 @@ fn mint_web(name: &str) -> miette::Result<()> {
 /// Mint a CLI tool project.
 fn mint_cli(name: &str) -> miette::Result<()> {
     let main = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! {name} — A command-line tool.\n\n\
         /// CLI argument configuration.\n\
         type Args {{\n\
@@ -1772,7 +1772,7 @@ fn mint_cli(name: &str) -> miette::Result<()> {
 /// Mint an MCP server project.
 fn mint_mcp(name: &str) -> miette::Result<()> {
     let main = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! {name} — An MCP (Model Context Protocol) server.\n\
         //!\n\
         //! Exposes tools for AI agents over stdin/stdout JSON-RPC.\n\n\
@@ -1837,7 +1837,7 @@ fn mint_ssg(name: &str) -> miette::Result<()> {
     std::fs::create_dir_all(format!("{}/output", name)).into_diagnostic()?;
 
     let main = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! {name} — A resource-aware static site generator.\n\
         //!\n\
         //! Generates static HTML from content files with energy/carbon budgets.\n\n\
@@ -1893,7 +1893,7 @@ fn mint_ssg(name: &str) -> miette::Result<()> {
 /// Mint an LSP extension project.
 fn mint_lsp(name: &str) -> miette::Result<()> {
     let main = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! {name} — An Eclexia language server extension.\n\
         //!\n\
         //! Extends the base eclexia-lsp with custom diagnostics or completions.\n\n\
@@ -1924,7 +1924,7 @@ fn mint_lsp(name: &str) -> miette::Result<()> {
 /// Mint a developer tool project.
 fn mint_tool(name: &str) -> miette::Result<()> {
     let main = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! {name} — An Eclexia developer tool.\n\n\
         /// Tool configuration.\n\
         type Config {{\n\
@@ -1959,7 +1959,7 @@ fn mint_framework(name: &str) -> miette::Result<()> {
     std::fs::create_dir_all(format!("{}/src/middleware", name)).into_diagnostic()?;
 
     let lib = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! {name} — An Eclexia application framework.\n\
         //!\n\
         //! Provides middleware, routing, and lifecycle management\n\
@@ -2021,7 +2021,7 @@ fn mint_framework(name: &str) -> miette::Result<()> {
     std::fs::write(format!("{}/src/lib.ecl", name), lib).into_diagnostic()?;
 
     let example = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! Example application using {name}.\n\n\
         import {name}\n\n\
         def handle_index(ctx: {name}::Context) -> {name}::Context {{\n\
@@ -2047,7 +2047,7 @@ fn mint_db_connector(name: &str) -> miette::Result<()> {
 
     // Idris2 ABI spec
     let abi = format!(
-        "-- SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "-- SPDX-License-Identifier: MPL-2.0\n\
         -- {name} database connector ABI definitions\n\
         --\n\
         -- Formally verified interface with dependent type proofs.\n\n\
@@ -2085,7 +2085,7 @@ fn mint_db_connector(name: &str) -> miette::Result<()> {
 
     // Zig FFI implementation
     let ffi = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         // {name} database connector FFI implementation\n\n\
         const std = @import(\"std\");\n\n\
         pub const ConnHandle = opaque {{}};\n\n\
@@ -2124,7 +2124,7 @@ fn mint_db_connector(name: &str) -> miette::Result<()> {
 
     // Zig build file
     let build_zig = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\n\
         const std = @import(\"std\");\n\n\
         pub fn build(b: *std.Build) void {{\n\
         \x20   const target = b.standardTargetOptions(.{{}});\n\
@@ -2150,7 +2150,7 @@ fn mint_db_connector(name: &str) -> miette::Result<()> {
 
     // Eclexia binding (user-facing API)
     let binding = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! {name} — Database connector for Eclexia.\n\
         //!\n\
         //! ## Usage\n\
@@ -2214,7 +2214,7 @@ fn mint_db_connector(name: &str) -> miette::Result<()> {
 
     // Example main using the connector
     let main = format!(
-        "// SPDX-License-Identifier: PMPL-1.0-or-later\n\
+        "// SPDX-License-Identifier: MPL-2.0\n\
         //! Example usage of {name} connector.\n\n\
         import {name_under}\n\n\
         def main() -> Unit {{\n\

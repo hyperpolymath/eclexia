@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 
 //! Serialization helpers for JSON, MessagePack, CBOR, and Protobuf envelope.
 

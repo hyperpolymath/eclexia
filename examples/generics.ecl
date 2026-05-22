@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Generics — demonstrating generic functions and type parameters.
 
 fn identity<T>(x: T) -> T {

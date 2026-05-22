@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Loops and iteration in Eclexia
 
 fn fizzbuzz(n: Int) -> String {

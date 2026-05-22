@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Conformance test: impossible combined constraints
 // Expected: FAIL with ResourceViolation (cannot satisfy both energy and latency)
 

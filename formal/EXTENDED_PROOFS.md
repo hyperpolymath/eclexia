@@ -2,7 +2,7 @@
 
 **Status:** In Progress
 **Date:** 2026-02-07
-**License:** PMPL-1.0-or-later
+**License:** MPL-2.0
 
 ---
 
@@ -589,4 +589,4 @@ To contribute proofs:
 **Document Version:** 1.0.0
 **Last Updated:** 2026-02-07
 **Maintainer:** Jonathan D.A. Jewell
-**License:** PMPL-1.0-or-later
+**License:** MPL-2.0

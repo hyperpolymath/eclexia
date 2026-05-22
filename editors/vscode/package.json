@@ -4,7 +4,7 @@
   "description": "Language support for Eclexia - Economics-as-Code with shadow pricing",
   "version": "0.1.0",
   "publisher": "hyperpolymath",
-  "license": "PMPL-1.0-or-later",
+  "license": "MPL-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyperpolymath/eclexia"

@@ -601,7 +601,7 @@ Eclexia makes it possible to write:
 
 ## 📜 License
 
-Eclexia is licensed under the [Palimpsest License (PMPL-1.0-or-later)](LICENSE).
+Eclexia is licensed under the [Palimpsest License (MPL-2.0)](LICENSE).
 
 The Palimpsest License is a copyleft license designed for the climate crisis era, ensuring:
 - ✅ Free use for sustainability-aligned purposes

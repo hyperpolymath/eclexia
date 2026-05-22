@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Opportunity stress-test: adaptive budgeting, shadow prices, collections
 
 adaptive def ledger_analytics(values: [Float], categories: [String]) -> Result<Float, String>

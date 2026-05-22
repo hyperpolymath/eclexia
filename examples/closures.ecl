@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Closures and higher-order functions in Eclexia
 
 fn apply(f: (Int) -> Int, x: Int) -> Int {

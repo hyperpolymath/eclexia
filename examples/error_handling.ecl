@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Error handling with Result and Option types in Eclexia
 
 fn safe_divide(a: Float, b: Float) -> Result[Float, String] {

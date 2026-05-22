@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Conformance test: combined energy + time constraints
 // Expected: Success, both resource types tracked correctly
 

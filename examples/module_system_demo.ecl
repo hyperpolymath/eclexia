@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Module system demo.
 // NOTE: Qualified paths (math::add) are not yet supported in expression parsing,
 // and bytecode lowering ignores module items. Keep top-level duplicates for now.

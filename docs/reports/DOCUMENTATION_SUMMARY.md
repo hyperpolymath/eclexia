@@ -372,4 +372,4 @@ This fulfills **Task #9: Build Documentation System** from the production comple
 
 **Author:** Jonathan D.A. Jewell
 **Date:** 2026-02-07
-**License:** PMPL-1.0-or-later
+**License:** MPL-2.0

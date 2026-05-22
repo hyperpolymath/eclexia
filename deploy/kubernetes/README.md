@@ -266,5 +266,5 @@ kubectl delete pvc -l app.kubernetes.io/name=eclexia -n eclexia
 
 ---
 
-**License:** PMPL-1.0-or-later
+**License:** MPL-2.0
 **Maintainer:** Jonathan D.A. Jewell

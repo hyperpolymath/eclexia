@@ -196,4 +196,4 @@ Or use the [LSP Inspector](https://github.com/microsoft/language-server-protocol
 
 ## License
 
-PMPL-1.0-or-later
+MPL-2.0

@@ -3,7 +3,7 @@
 **Build Status:** 25 crates compiling, 507 total tests (446 lib + 32/32 valid + 19/19 invalid conformance), zero clippy warnings, zero failures
 **Security:** 20 production unwraps (down from 100+), 28 unsafe blocks (all FFI), 0 clippy warnings
 **Conformance:** 32/32 valid + 19/19 invalid passing (0 skips)
-**License:** All files PMPL-1.0-or-later
+**License:** All files MPL-2.0
 **Examples:** 11 working .ecl programs in examples/
 **SONNET-TASKS:** All 18 tasks complete
 

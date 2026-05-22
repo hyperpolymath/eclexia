@@ -755,5 +755,5 @@ Keywords reserved but not yet implemented:
 
 **Document Version:** 1.0.0
 **Eclexia Version:** 0.1.0
-**License:** PMPL-1.0-or-later
+**License:** MPL-2.0
 **Copyright:** 2025 Jonathan D.A. Jewell

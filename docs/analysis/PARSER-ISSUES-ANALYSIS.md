@@ -522,4 +522,4 @@ fn apply(f: fn(Int) -> Int, x: Int) -> Int { f(x) }
 
 **Maintainer:** Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 **Date:** 2026-02-07
-**License:** PMPL-1.0-or-later
+**License:** MPL-2.0

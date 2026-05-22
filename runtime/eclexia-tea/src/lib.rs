@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! eclexia-tea: The Elm Architecture (TEA) runtime for Eclexia
 //!
 //! Provides a Model-Update-View loop for building interactive applications

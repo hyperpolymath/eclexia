@@ -1,4 +1,4 @@
-;; SPDX-License-Identifier: PMPL-1.0-or-later
+;; SPDX-License-Identifier: MPL-2.0
 ;; SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 ;;; SATELLITE_ANCHOR_TEMPLATE.scm — Template for downstream/satellite repositories
 ;;;

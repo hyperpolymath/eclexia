@@ -1,6 +1,6 @@
 # Formal Verification of Eclexia
 
-<!-- SPDX-License-Identifier: PMPL-1.0-or-later -->
+<!-- SPDX-License-Identifier: MPL-2.0 -->
 <!-- SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell -->
 
 **Version:** 1.0
@@ -1767,7 +1767,7 @@ Legend: ✓ = Complete, ◐ = Partial, ○ = TODO
 
 **Document Version:** 1.0
 **Last Updated:** December 2025
-**License:** PMPL-1.0-or-later
+**License:** MPL-2.0
 
 ```bibtex
 @techreport{eclexia2025verification,

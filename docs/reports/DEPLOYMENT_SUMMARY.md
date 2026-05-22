@@ -593,4 +593,4 @@ This fulfills **Task #11: Deployment Infrastructure** from the production comple
 
 **Author:** Jonathan D.A. Jewell
 **Date:** 2026-02-07
-**License:** PMPL-1.0-or-later
+**License:** MPL-2.0

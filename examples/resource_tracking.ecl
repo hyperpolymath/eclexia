@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Resource tracking demo — shows @requires budgets and shadow prices.
 
 // Cheap computation with tight energy budget
