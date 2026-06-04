@@ -158,6 +158,44 @@ impl<'a> TypeChecker<'a> {
             },
         );
 
+        // Echo (structured-loss) intrinsics.
+        //   echo         : ((A) -> B, A) -> Echo[A, B]   -- intro: echo of f at x
+        //   echo_witness : (Echo[A, B]) -> A             -- retained witness (proj1)
+        //   echo_base    : (Echo[A, B]) -> B             -- observed base f x
+        // A and B are the shared builtin type variables 0 and 1, matching the
+        // Some/Ok convention in this prelude.
+        let echo_ty = || Ty::Echo {
+            domain: Box::new(Ty::Var(TypeVar::new(0))),
+            codomain: Box::new(Ty::Var(TypeVar::new(1))),
+        };
+        env.insert_mono(
+            SmolStr::new("echo"),
+            Ty::Function {
+                params: vec![
+                    Ty::Function {
+                        params: vec![Ty::Var(TypeVar::new(0))],
+                        ret: Box::new(Ty::Var(TypeVar::new(1))),
+                    },
+                    Ty::Var(TypeVar::new(0)),
+                ],
+                ret: Box::new(echo_ty()),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("echo_witness"),
+            Ty::Function {
+                params: vec![echo_ty()],
+                ret: Box::new(Ty::Var(TypeVar::new(0))),
+            },
+        );
+        env.insert_mono(
+            SmolStr::new("echo_base"),
+            Ty::Function {
+                params: vec![echo_ty()],
+                ret: Box::new(Ty::Var(TypeVar::new(1))),
+            },
+        );
+
         // Collection builtins: HashMap
         let hashmap_ty = Ty::Named {
             name: SmolStr::new("HashMap"),
@@ -717,6 +755,10 @@ impl<'a> TypeChecker<'a> {
                 base: *base,
                 dimension: *dimension,
             },
+            Ty::Echo { domain, codomain } => Ty::Echo {
+                domain: Box::new(self.freshen_ty_with_map(domain, mapping)),
+                codomain: Box::new(self.freshen_ty_with_map(codomain, mapping)),
+            },
             Ty::Var(var) => {
                 let entry = mapping.entry(*var).or_insert_with(|| {
                     let fresh = self.fresh_var();
@@ -1047,6 +1089,17 @@ impl<'a> TypeChecker<'a> {
                                 }
                             }
                         }
+                    }
+                    // Echo[A, B] — the fiber / structured-loss type of a
+                    // map A -> B (the type-theoretic fibre, see Ty::Echo).
+                    // First-class like Resource, recognised by name here.
+                    if name.as_str() == "Echo" && args.len() == 2 {
+                        let domain = self.resolve_ast_type(args[0]);
+                        let codomain = self.resolve_ast_type(args[1]);
+                        return Ty::Echo {
+                            domain: Box::new(domain),
+                            codomain: Box::new(codomain),
+                        };
                     }
                     let arg_tys: Vec<Ty> = args.iter().map(|a| self.resolve_ast_type(*a)).collect();
                     Ty::Named {

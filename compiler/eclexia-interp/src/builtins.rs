@@ -737,6 +737,84 @@ pub fn register(env: &Environment) {
             func: builtin_unwrap,
         }),
     );
+
+    // Echo (structured-loss) intrinsics. `echo` itself is intercepted in
+    // the evaluator (call_value_inner) because it must apply the function
+    // argument to compute the base; the stub below only fires if it is
+    // somehow called outside that path. `echo_witness` / `echo_base` are
+    // pure projections over the runtime echo value (a tagged "Echo" struct
+    // with `witness` and `base` fields).
+    env.define(
+        SmolStr::new("echo"),
+        Value::Builtin(BuiltinFn {
+            name: "echo",
+            func: builtin_echo_stub,
+        }),
+    );
+    env.define(
+        SmolStr::new("echo_witness"),
+        Value::Builtin(BuiltinFn {
+            name: "echo_witness",
+            func: builtin_echo_witness,
+        }),
+    );
+    env.define(
+        SmolStr::new("echo_base"),
+        Value::Builtin(BuiltinFn {
+            name: "echo_base",
+            func: builtin_echo_base,
+        }),
+    );
+}
+
+/// Construct a runtime echo value: a tagged struct carrying the retained
+/// witness and the observed base. Shared by the evaluator's `echo`
+/// interception and any other producer.
+pub fn make_echo(witness: Value, base: Value) -> Value {
+    let mut fields = HashMap::new();
+    fields.insert(SmolStr::new("witness"), witness);
+    fields.insert(SmolStr::new("base"), base);
+    Value::Struct {
+        name: SmolStr::new("Echo"),
+        fields,
+    }
+}
+
+/// Read a field of a runtime echo value, checking the tag.
+fn echo_field(args: &[Value], field: &str, who: &str) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::ArityMismatch {
+            expected: 1,
+            got: args.len(),
+            hint: None,
+        });
+    }
+    match &args[0] {
+        Value::Struct { name, fields } if name.as_str() == "Echo" => fields
+            .get(field)
+            .cloned()
+            .ok_or_else(|| RuntimeError::custom(format!("malformed echo value passed to {}", who))),
+        other => Err(RuntimeError::type_error("Echo", other.type_name())),
+    }
+}
+
+/// `echo_witness(e)` — the retained witness (proj1 of the fibre).
+fn builtin_echo_witness(args: &[Value]) -> RuntimeResult<Value> {
+    echo_field(args, "witness", "echo_witness")
+}
+
+/// `echo_base(e)` — the observed base value `f x` (the collapsed output).
+fn builtin_echo_base(args: &[Value]) -> RuntimeResult<Value> {
+    echo_field(args, "base", "echo_base")
+}
+
+/// Defensive stub: `echo` is handled in the evaluator so it can apply the
+/// function argument. Reaching here means it was used as a bare value in a
+/// position the evaluator does not intercept.
+fn builtin_echo_stub(_args: &[Value]) -> RuntimeResult<Value> {
+    Err(RuntimeError::custom(
+        "echo must be applied directly, e.g. echo(f, x)".to_string(),
+    ))
 }
 
 fn builtin_println(args: &[Value]) -> RuntimeResult<Value> {

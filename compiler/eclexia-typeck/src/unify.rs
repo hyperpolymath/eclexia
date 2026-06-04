@@ -23,6 +23,9 @@ impl TypeChecker<'_> {
             }
             Ty::Tuple(elems) => elems.iter().any(|e| self.occurs_check(v, e)),
             Ty::Array { elem, .. } => self.occurs_check(v, &elem),
+            Ty::Echo { domain, codomain } => {
+                self.occurs_check(v, &domain) || self.occurs_check(v, &codomain)
+            }
             Ty::ForAll { body, .. } => self.occurs_check(v, &body),
             _ => false,
         }
@@ -124,6 +127,20 @@ impl TypeChecker<'_> {
 
             (Ty::Array { elem: e1, .. }, Ty::Array { elem: e2, .. }) => {
                 self.unify_with_occurs_check(e1, e2, span)
+            }
+
+            (
+                Ty::Echo {
+                    domain: d1,
+                    codomain: c1,
+                },
+                Ty::Echo {
+                    domain: d2,
+                    codomain: c2,
+                },
+            ) => {
+                self.unify_with_occurs_check(d1, d2, span)?;
+                self.unify_with_occurs_check(c1, c2, span)
             }
 
             (Ty::Named { name: n1, args: a1 }, Ty::Named { name: n2, args: a2 }) if n1 == n2 => {
