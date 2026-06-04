@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # Eclexia Progress Report - 2026-02-07 Session 4
 
 ## ✅ MAJOR BREAKTHROUGH: 78% → 93.75% Parse Success

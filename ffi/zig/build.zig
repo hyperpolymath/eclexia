@@ -1,10 +1,11 @@
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 // Eclexia Resource System — FFI Build Configuration
 //
 // Builds libeclexia_ffi (.so/.dylib/.dll) and static (.a) library.
 // Includes SIMD-optimised resource tracking, lock-free shadow prices,
 // and bidirectional FFI for the Eclexia runtime.
 //
-// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 const std = @import("std");

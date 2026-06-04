@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # Eclexia Public Relations Comprehensive Toolkit
 
 **All-in-one document with every template and resource.**

@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # Eclexia for Visual Studio Code
 
 Language support for [Eclexia](https://github.com/hyperpolymath/eclexia) - the Economics-as-Code programming language with shadow pricing and resource awareness.

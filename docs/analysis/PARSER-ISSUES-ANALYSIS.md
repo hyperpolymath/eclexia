@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # Eclexia Parser Issues Analysis
 **Initial Analysis:** 2026-02-07 (5/32 passing, 15.6%)
 **Progress Update:** 2026-02-07 (Parser + runtime improvements completed)

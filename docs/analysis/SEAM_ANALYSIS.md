@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # Seam Analysis Report — 2026-02-09
 
 Audit of crate boundaries for type safety, error propagation, and coverage.

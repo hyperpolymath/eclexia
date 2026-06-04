@@ -1,5 +1,6 @@
-#![forbid(unsafe_code)]
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+#![forbid(unsafe_code)]
 //! Debug Adapter Protocol (DAP) implementation for Eclexia
 //!
 //! This is a minimal DAP adapter for Eclexia, focusing on resource-aware debugging.

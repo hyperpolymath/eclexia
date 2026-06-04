@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: MPL-2.0
+-- Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 ||| Eclexia Resource System — Bidirectional ABI
 |||
 ||| Defines the Application Binary Interface for Eclexia's resource tracking,

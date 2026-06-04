@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # Eclexia Implementation Plan: LLVM Backend & Production (Updated Feb 11, 2026)
 
 **Date:** 2026-02-11

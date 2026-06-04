@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # First Tweet / Social Media Launch
 
 **Goal:** Announce Eclexia with maximum impact and shareability
@@ -205,7 +209,7 @@ Try it RIGHT NOW:
 📚 Docs: github.com/hyperpolymath/eclexia
 💬 Chat: discord.gg/eclexia
 
-100% open source (Palimpsest License). (10/12)
+100% open source (MPL-2.0). (10/12)
 ```
 
 **Tweet 11:**

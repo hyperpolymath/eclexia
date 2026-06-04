@@ -1,6 +1,10 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # Eclexia: Code That Cares About the Planet
 
-[![License: PMPL-1.0](https://img.shields.io/badge/License-PMPL--1.0-blue.svg)](https://github.com/hyperpolymath/palimpsest-license)
+[![License: MPL-2.0](https://img.shields.io/badge/License-PMPL--1.0-blue.svg)](https://github.com/hyperpolymath/palimpsest-license)
 [![Build Status](https://github.com/hyperpolymath/eclexia/workflows/CI/badge.svg)](https://github.com/hyperpolymath/eclexia/actions)
 [![Carbon Aware](https://img.shields.io/badge/carbon-aware-green.svg)](docs/CARBON_APIS.md)
 
@@ -601,9 +605,9 @@ Eclexia makes it possible to write:
 
 ## 📜 License
 
-Eclexia is licensed under the [Palimpsest License (MPL-2.0)](LICENSE).
+Eclexia is licensed under the [MPL-2.0 (MPL-2.0)](LICENSE).
 
-The Palimpsest License is a copyleft license designed for the climate crisis era, ensuring:
+The MPL-2.0 is a copyleft license designed for the climate crisis era, ensuring:
 - ✅ Free use for sustainability-aligned purposes
 - ✅ Modifications must remain open source
 - ✅ Patent protections for contributors

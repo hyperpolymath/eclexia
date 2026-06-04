@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # ECLEXIA: Complete Project Status, Priority Plan & Thread Decomposition
 # Generated: 2026-02-09 (KEEP UPDATED EVERY SESSION)
 # Author: Claude Code (Opus 4.6) for Jonathan D.A. Jewell

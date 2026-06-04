@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # Eclexia Wiki Home
 
 Eclexia is a programming language project focused on Economics-as-Code: making energy, latency, memory, and carbon constraints first-class in software.

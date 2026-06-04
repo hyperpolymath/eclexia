@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # Launch Day Blog Post: Eclexia v0.1 Alpha
 
 **Publication Date:** [DATE]
@@ -320,7 +324,7 @@ See [docs/roadmap/SELF-HOSTING-ROADMAP.md](../docs/roadmap/SELF-HOSTING-ROADMAP.
 
 ## Try It Now
 
-Eclexia is **100% open source** under the Palimpsest License (MPL-2.0).
+Eclexia is **100% open source** under the MPL-2.0 (MPL-2.0).
 
 **Get started in 60 seconds:**
 

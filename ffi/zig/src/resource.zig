@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 // Eclexia Resource System — Bidirectional Zig FFI
 //
 // Implements the C-compatible FFI declared in src/abi/ResourceABI.idr
@@ -9,7 +11,6 @@
 //   - Zero-copy:  Budget passing across FFI boundary
 //   - Cache-aligned: All hot structs on 64-byte boundaries
 //
-// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 const std = @import("std");

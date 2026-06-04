@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # Kubernetes Deployment for Eclexia
 
 This directory contains Kubernetes manifests for deploying Eclexia in production.

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 = Conformance Example: Compiler ↔ Runtime Seam
 
 1. `cargo run -p eclexia -- profile examples/hello_world.ecl --format json --observe-shadow --carbon-report`

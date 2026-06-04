@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # Getting Started with Eclexia
 
 Eclexia is an "Economics-as-Code" programming language that brings resource-aware computing to software development. This guide will help you get up and running quickly.

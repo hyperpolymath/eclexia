@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 = Seam Checklist: Compiler ↔ Runtime
 
 * Confirm `eclexia build --analyze` instantiates `Runtime` in `run_mir_analysis` output paths (component: `compiler/eclexia/src/commands.rs`).

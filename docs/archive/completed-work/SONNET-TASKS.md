@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # SONNET-TASKS.md -- Eclexia Completion Tasks
 
 > **Generated:** 2026-02-12 by Opus 4.6 audit
