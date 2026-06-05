@@ -196,6 +196,27 @@ impl<'a> TypeChecker<'a> {
             },
         );
 
+        // landauer_cost(states, temperature_K) : Resource[Energy]
+        //   The Landauer energy to irreversibly erase a fibre of `states`
+        //   distinguishable witnesses down to one base, k_B * T * ln(states).
+        //   This is how Echo's structured information loss enters the resource
+        //   economy (THEORY.md S5.5): keeping the echo's witness is reversible
+        //   (states = 1, zero cost, Bennett); collapsing it costs energy
+        //   (Landauer). Proven in formal/coq/src/EchoThermo.v.
+        env.insert_mono(
+            SmolStr::new("landauer_cost"),
+            Ty::Function {
+                params: vec![
+                    Ty::Primitive(PrimitiveTy::Int),
+                    Ty::Primitive(PrimitiveTy::Float),
+                ],
+                ret: Box::new(Ty::Resource {
+                    base: PrimitiveTy::Float,
+                    dimension: Dimension::energy(),
+                }),
+            },
+        );
+
         // Collection builtins: HashMap
         let hashmap_ty = Ty::Named {
             name: SmolStr::new("HashMap"),

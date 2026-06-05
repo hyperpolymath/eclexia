@@ -765,6 +765,50 @@ pub fn register(env: &Environment) {
             func: builtin_echo_base,
         }),
     );
+
+    // Landauer cost of erasing structured loss — wires Echo into the
+    // energy resource economy (see formal/coq/src/EchoThermo.v).
+    env.define(
+        SmolStr::new("landauer_cost"),
+        Value::Builtin(BuiltinFn {
+            name: "landauer_cost",
+            func: builtin_landauer_cost,
+        }),
+    );
+}
+
+/// `landauer_cost(states, temperature_K) : Resource[Energy]`.
+///
+/// The minimum energy to irreversibly erase a fibre of `states`
+/// distinguishable witnesses down to its single base: `E = k_B * T *
+/// ln(states)` joules. A reversible collapse (`states <= 1`, i.e. the echo
+/// retains its witness) erases nothing and costs zero — Bennett's result,
+/// the runtime image of `EchoThermo.bennett_reversible_is_free`.
+fn builtin_landauer_cost(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 2 {
+        return Err(RuntimeError::ArityMismatch {
+            expected: 2,
+            got: args.len(),
+            hint: Some("landauer_cost(states, temperature_K)".to_string()),
+        });
+    }
+    let states = args[0]
+        .as_int()
+        .ok_or_else(|| RuntimeError::type_error("Int (number of states)", args[0].type_name()))?;
+    let temp_k = args[1]
+        .as_float()
+        .ok_or_else(|| RuntimeError::type_error("Float (temperature in K)", args[1].type_name()))?;
+
+    // Boltzmann constant (J/K). Reversible collapses (<= 1 state) are free.
+    const K_B: f64 = 1.380_649e-23;
+    let nats = if states <= 1 { 0.0 } else { (states as f64).ln() };
+    let energy = K_B * temp_k * nats;
+
+    Ok(Value::Resource {
+        value: energy,
+        dimension: eclexia_ast::dimension::Dimension::energy(),
+        unit: Some(SmolStr::new("J")),
+    })
 }
 
 /// Construct a runtime echo value: a tagged struct carrying the retained

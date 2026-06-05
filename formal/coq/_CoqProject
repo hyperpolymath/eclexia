@@ -11,6 +11,7 @@
 src/Syntax.v
 src/Typing.v
 src/Echo.v
+src/EchoThermo.v
 # TODO: Add these as they are implemented:
 # src/Semantics.v
 # src/Substitution.v
