@@ -156,7 +156,7 @@ Definition shadow_price (lp : LinearProgram) (sol : Solution) (i : nat) (lambda 
     (A^T λ ≥ c). Then c^T x ≤ (A^T λ)^T x = λ^T (Ax) ≤ λ^T b.
     All three steps are elementwise list operations on (lp_constraints lp).
 
-    Axiomatic: requires list-level dot-product associativity and the matrix
+    Why an axiom: requires list-level dot-product associativity and the matrix
     transpose lemma (A^T λ)^T x = λ^T (Ax). *)
 Axiom weak_duality :
   forall (lp : LinearProgram) (primal_sol : Solution) (dual_sol : DualSolution),
@@ -180,7 +180,7 @@ Axiom weak_duality :
     is ≥ 0 (feasibility: b_i ≥ a_i^T x*, non-negativity: λ*_i ≥ 0), all
     terms must be zero.
 
-    Axiomatic alongside strong_duality: the circular dependency arises because
+    Why an axiom, alongside strong_duality: the circular dependency arises because
     proofs of complementary_slackness typically invoke strong_duality, and the
     standard "constructive" proof of strong_duality uses complementary slackness
     to certify the pivot. We break the cycle by axiomatizing both. *)
@@ -209,7 +209,7 @@ Axiom complementary_slackness :
     dual optimal). The bound Rabs(Δv - λ_i ε) ≤ ε comes from the Lipschitz
     constant of v being bounded by ‖λ*‖_1.
 
-    Axiomatic: requires Coquelicot's real analysis or Mathlib4's
+    Why an axiom: requires Coquelicot's real analysis or Mathlib4's
     LinearProgramming.duality.sensitivity for the Lipschitz / piecewise-linear
     structure proof. *)
 Axiom lp_sensitivity :
@@ -512,7 +512,7 @@ Qed.
     The optimal dual at that basis satisfies strong duality (Theorem 4.4,
     Bertsimas & Tsitsiklis, "Introduction to Linear Optimization", 1997).
 
-    Axiomatic: requires a formalized pivot step, a finite basis enumeration,
+    Why an axiom: requires a formalized pivot step, a finite basis enumeration,
     and the Bland's-rule cycle-prevention argument. None of these are defined
     in this file. The axiom is NOT USED in current theorems — this section
     documents proof debt for future formalization. *)

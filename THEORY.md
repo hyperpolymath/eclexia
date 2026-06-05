@@ -458,6 +458,24 @@ Dual to graded monads, graded comonads model *coeffects* (context requirements):
 D_C(A) = A @requires C
 ```
 
+**Example (Echo — the graded comonad of structured loss).** For a map
+`f : A → B`, the echo type `Echo[A, B]` (the fibre `Echo f y := Σ(x:A). f x ≡ y`)
+carries, alongside each observed base `y = f x`, the witness `x` that `f`
+collapsed. Reading it as a graded comonad of *loss*:
+- the counit `ε = echo_base : Echo[A, B] → B` extracts the observable output,
+  discarding the witness;
+- the witness is the retained coeffect — the context `f` erased;
+- the grade is the *thermodynamic* cost of that erasure. Collapsing a fibre of
+  `N` distinguishable witnesses to one base erases `log₂ N` bits, costing
+  `k_B · T · ln N` of energy by Landauer's principle. Retaining the echo keeps
+  the computation reversible (Bennett): grade `0`.
+
+This makes information loss a first-class citizen of the same resource economy
+as energy/time/carbon: `landauer_cost(N, T) : Resource[Energy]` prices it, and
+`formal/coq/src/EchoThermo.v` proves the discrete shadow (reversible ⇔ zero
+cost; every genuine collapse costs ≥ 1 bit; erasure is monotone). The fibre /
+total-space soundness lives in `formal/coq/src/Echo.v` (`A ≃ Σ(y:B). Echo f y`).
+
 ### 5.6 Adjunctions
 
 **Proposition 5.1.** There is an adjunction:

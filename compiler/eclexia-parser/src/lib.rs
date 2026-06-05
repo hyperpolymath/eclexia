@@ -54,6 +54,9 @@ impl<'src> Parser<'src> {
         let mut file = SourceFile::new();
 
         while !self.is_eof() {
+            // Token offset before this iteration, used to guarantee forward
+            // progress below.
+            let before = self.peek().span.start;
             match self.parse_item(&mut file) {
                 Ok(item) => file.items.push(item),
                 Err(e) => {
@@ -64,6 +67,18 @@ impl<'src> Parser<'src> {
                     // a node for every span in the source
                     file.items.push(eclexia_ast::Item::Error(error_span));
                 }
+            }
+            // Guarantee forward progress. `recover_to_item` stops on
+            // item-start tokens, but `parse_item` rejects some of them
+            // (e.g. a top-level `enum`, which is not a supported item
+            // shorthand). Without this guard the loop would re-error on the
+            // same token forever, accumulating errors + placeholders until
+            // it runs out of memory (found by fuzzing — OOM in
+            // `parse_file` -> `parse_item` -> `unexpected_token`). If a whole
+            // iteration consumed no input, force one token so we always
+            // advance.
+            if !self.is_eof() && self.peek().span.start == before {
+                self.advance();
             }
         }
 
@@ -2490,5 +2505,27 @@ mod tests {
         let has_function = file.items.iter().any(|i| matches!(i, Item::Function(_)));
         assert!(has_error, "Expected an error item node");
         assert!(has_function, "Expected the good function to be parsed");
+    }
+
+    #[test]
+    fn parse_file_terminates_on_unhandled_item_token() {
+        // Regression (found by fuzzing — OOM): `enum` is a recovery
+        // stop-token in `recover_to_item`, but `parse_item` rejects it, so
+        // before the forward-progress guard in `parse_file` the loop spun
+        // forever, accumulating errors + Item::Error placeholders until it
+        // ran out of memory. Parsing must now terminate with a parse error.
+        let (file, errors) = parse("enum Foo {}");
+        assert!(!errors.is_empty(), "expected a parse error for top-level enum");
+        // It also makes progress past the offending token rather than
+        // emitting a single error in an unbounded loop.
+        assert!(
+            file.items.len() < 100,
+            "parser emitted an unbounded number of items: {}",
+            file.items.len()
+        );
+
+        // A run of unhandled stop-tokens must also terminate.
+        let (_f, errs) = parse("enum enum enum");
+        assert!(!errs.is_empty());
     }
 }

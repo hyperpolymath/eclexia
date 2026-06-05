@@ -753,6 +753,10 @@ fn freshen_type_with_map(
             base: *base,
             dimension: *dimension,
         },
+        Ty::Echo { domain, codomain } => Ty::Echo {
+            domain: Box::new(freshen_type_with_map(checker, domain, mapping)),
+            codomain: Box::new(freshen_type_with_map(checker, codomain, mapping)),
+        },
         Ty::Var(var) => {
             let entry = mapping.entry(*var).or_insert_with(|| {
                 let fresh = checker.fresh_var();

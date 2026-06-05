@@ -1568,6 +1568,25 @@ impl Interpreter {
                 })
             }
 
+            // `echo(f, x)` is the structured-loss intro. It is handled here
+            // rather than as a plain builtin because it must apply `f` to `x`
+            // to compute the observed base `f x`; the resulting echo value
+            // retains the witness `x` alongside that base, so inputs that `f`
+            // collapses to the same output stay distinguishable.
+            Value::Builtin(builtin) if builtin.name == "echo" => {
+                if args.len() != 2 {
+                    return Err(RuntimeError::ArityMismatch {
+                        expected: 2,
+                        got: args.len(),
+                        hint: Some("echo(f, x): a function and a witness".to_string()),
+                    });
+                }
+                let f = args[0].clone();
+                let witness = args[1].clone();
+                let base = self.call_value(&f, std::slice::from_ref(&witness), file)?;
+                Ok(crate::builtins::make_echo(witness, base))
+            }
+
             Value::Builtin(builtin) => (builtin.func)(args),
 
             _ => Err(RuntimeError::NotCallable {

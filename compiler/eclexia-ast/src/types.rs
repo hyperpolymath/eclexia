@@ -37,6 +37,24 @@ pub enum Ty {
         dimension: Dimension,
     },
 
+    /// Echo type: the fiber (preimage space) of a map `domain -> codomain`.
+    ///
+    /// `Echo[A, B]` is Eclexia's first-class notion of *structured loss*:
+    /// the type of echoes of some collapsing map `f : A -> B`, each echo
+    /// pairing a retained witness `x : A` with the observed base `f x : B`
+    /// (the type-theoretic fibre `Echo f y := Σ (x : A). f x ≡ y`, from the
+    /// echo-types development). Distinct inputs that `f` collapses to the
+    /// same output remain distinguishable as distinct echoes — loss that is
+    /// not total erasure. Read as a graded comonad of loss (THEORY.md §5.5),
+    /// `echo_base` is the counit (the observable residue) and the witness is
+    /// the retained context.
+    Echo {
+        /// The domain `A` (the type of retained witnesses).
+        domain: Box<Ty>,
+        /// The codomain `B` (the type of observed bases).
+        codomain: Box<Ty>,
+    },
+
     /// Type variable (for inference)
     Var(TypeVar),
 
@@ -59,6 +77,7 @@ impl Ty {
             Ty::Function { params, ret } => params.iter().any(|t| t.has_vars()) || ret.has_vars(),
             Ty::Tuple(elems) => elems.iter().any(|t| t.has_vars()),
             Ty::Array { elem, .. } => elem.has_vars(),
+            Ty::Echo { domain, codomain } => domain.has_vars() || codomain.has_vars(),
             Ty::ForAll { body, .. } => body.has_vars(),
             _ => false,
         }
@@ -344,6 +363,9 @@ impl std::fmt::Display for Ty {
             Ty::Resource { base, dimension } => {
                 write!(f, "{}[{}]", base.name(), dimension)
             }
+            Ty::Echo { domain, codomain } => {
+                write!(f, "Echo[{}, {}]", domain, codomain)
+            }
             Ty::Var(v) => write!(f, "?{}", v.0),
             Ty::ForAll { vars, body } => {
                 write!(f, "∀")?;
@@ -358,5 +380,45 @@ impl std::fmt::Display for Ty {
             Ty::Error => write!(f, "{{error}}"),
             Ty::Never => write!(f, "!"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn echo(domain: Ty, codomain: Ty) -> Ty {
+        Ty::Echo {
+            domain: Box::new(domain),
+            codomain: Box::new(codomain),
+        }
+    }
+
+    #[test]
+    fn echo_displays_with_bracket_syntax() {
+        let t = echo(Ty::int(), Ty::bool());
+        assert_eq!(t.to_string(), "Echo[Int, Bool]");
+    }
+
+    #[test]
+    fn echo_nests_in_display() {
+        let t = echo(Ty::int(), echo(Ty::string(), Ty::bool()));
+        assert_eq!(t.to_string(), "Echo[Int, Echo[String, Bool]]");
+    }
+
+    #[test]
+    fn echo_has_vars_follows_components() {
+        // No variables in either component.
+        assert!(!echo(Ty::int(), Ty::bool()).has_vars());
+        // A variable in the domain is observed.
+        assert!(echo(Ty::Var(TypeVar::new(0)), Ty::bool()).has_vars());
+        // A variable in the codomain is observed.
+        assert!(echo(Ty::int(), Ty::Var(TypeVar::new(1))).has_vars());
+    }
+
+    #[test]
+    fn echo_is_not_a_resource() {
+        // Echo is its own former, distinct from the Resource former.
+        assert!(!echo(Ty::int(), Ty::int()).is_resource());
     }
 }
