@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: MPL-2.0
+# Mustfile.a2ml — Physical state contract for eclexia
+# Author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+#
+# What MUST be true about this repository. Hard requirements.
+# Run with: must check    Fix with: must fix (where a deterministic fix exists)
+#
+# NOTE (2026-06-13): this REPLACES the file the estate branch carried over
+# from rsr-template-repo unsubstituted. That template Mustfile asserted the
+# OLD nested layout (contractiles/bust/, contractiles/dust/,
+# self-validating/k9-svc/, 6a2/anchors/) as critical — but the template's
+# own delivered 06-12 layout is FLAT. The checks below match eclexia's
+# ACTUAL flat layout. The template drift is recorded for upstream fix.
+
+@abstract:
+Physical-state invariants for eclexia. Hard requirements — CI and
+pre-commit hooks fail if any critical check fails.
+@end
+
+## File Presence
+
+### license-present
+- description: LICENSE file must exist (MPL-2.0)
+- run: test -f LICENSE
+- severity: critical
+
+### readme-present
+- description: a README must exist
+- run: test -f README.md || test -f README.adoc
+- severity: critical
+
+### security-policy
+- description: SECURITY.md must exist
+- run: test -f SECURITY.md
+- severity: critical
+
+### governance-docs
+- description: GOVERNANCE.adoc, MAINTAINERS.adoc, CODEOWNERS must exist
+- run: test -f GOVERNANCE.adoc && test -f MAINTAINERS.adoc && test -f .github/CODEOWNERS
+- severity: critical
+
+### anchor-present
+- description: root anchor declaration must exist (eclexia is upstream-canonical)
+- run: test -f ANCHOR.scm
+- severity: critical
+
+### machine-readable-dir
+- description: .machine_readable/ directory must exist
+- run: test -d .machine_readable
+- severity: critical
+
+## Directory Structure (FLAT contractile layout, 06-12 standard)
+
+### contractiles-flat-present
+- description: All six flat contractile files + Justfile exist
+- run: for f in Adjustfile Bustfile Dustfile Intentfile Mustfile Trustfile; do test -f .machine_readable/contractiles/$f.a2ml || exit 1; done; test -f .machine_readable/contractiles/Justfile
+- severity: critical
+
+### six-a-two-present
+- description: 6a2 directory has the seven core metadata files + AI manifest
+- run: for f in STATE META ECOSYSTEM AGENTIC NEUROSYM PLAYBOOK 0-AI-MANIFEST; do test -f .machine_readable/6a2/$f.a2ml || exit 1; done
+- severity: critical
+
+### bot-directives-trio
+- description: bot_directives carries the estate trio
+- run: test -f .machine_readable/bot_directives/hypatia.a2ml && test -f .machine_readable/bot_directives/gitbot-fleet.a2ml && test -f .machine_readable/bot_directives/git-private-farm.a2ml
+- severity: critical
+
+### self-validating-present
+- description: self-validating/ exists with k9 templates + examples (flat, no k9-svc subdir)
+- run: test -d .machine_readable/self-validating && test -d .machine_readable/self-validating/examples && test -f .machine_readable/self-validating/template-kennel.k9.ncl
+- severity: warning
+
+## Build & Proof Integrity
+
+### workspace-builds
+- description: the cargo workspace compiles
+- run: cargo build --workspace
+- severity: critical
+
+### coq-proofs-compile
+- description: the Coq metatheory compiles (incl. axiom-free EchoThermo.v)
+- run: make -C formal/coq
+- severity: critical
+
+## Template Integrity
+
+### no-placeholder-values
+- description: no unsubstituted template placeholders remain in contractiles
+- run: test -z "$(grep -rn '{{' .machine_readable/contractiles/ 2>/dev/null)"
+- severity: critical
+
+### no-template-identity-leak
+- description: no contractile still claims to be rsr-template-repo
+- run: test -z "$(grep -rln 'rsr-template-repo' .machine_readable/contractiles/ 2>/dev/null | grep -v 'NOTE\|template drift')"
+- severity: warning
+- notes: guards against re-importing the un-substituted template Mustfile

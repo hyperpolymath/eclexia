@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: MPL-2.0
+# Dustfile.a2ml — cleanup, hygiene & recovery contract for eclexia
+#
+# Format: TOML-A2ML (parses with tomllib; `#` comments, [section], key = "value")
+#
+# Provenance: flat-contractile completion of the estate layout (estate
+# branch supplied no flat Dustfile; pre-estate nested contractiles/dust/
+# never existed in this repo). Added 2026-06-13.
+
+[dustfile]
+version = "1.0.0"
+format = "a2ml"
+repo = "eclexia"
+last-updated = "2026-06-13"
+
+# ============================================================
+# Recovery & rollback tasks
+# ============================================================
+
+[[tasks]]
+name = "source-rollback"
+doc = "Revert all uncommitted source changes to last commit."
+tag = "rollback"
+cmd = "git checkout HEAD -- ."
+
+[[tasks]]
+name = "clean-build"
+doc = "Remove Rust + Coq build artifacts."
+tag = "clean"
+cmd = "cargo clean && find formal/coq -name '*.vo' -o -name '*.glob' -delete"
+
+[[tasks]]
+name = "rebuild"
+doc = "Cold rebuild + full test."
+tag = "verify"
+cmd = "cargo build --workspace && cargo test --workspace"
+
+# ============================================================
+# Cleanup policy
+# ============================================================
+
+[cleanup]
+build-artifacts = "target/ (cargo), *.vo/*.glob/*.vok/*.vos (coq), *.eclb (serialized bytecode), *.wasm/*.ll (backend output); all gitignored"
+generated-dirs = "target/ is gitignored; safe to delete at any time (cargo clean)"
+stale-branch-policy = "session/* and claude/* branches are dispositioned (landing / superseded / abandoned) at checkpoint; bots never delete branches"
+artifact-retention = "not-applicable"
+artifact-retention-reason = "eclexia publishes no long-lived build artifacts; everything is rebuilt from source"
+cache-policy = "CI caches the cargo registry + target dir + coq build; invalidation follows the workflow definitions"
+
+# ============================================================
+# Hygiene
+# ============================================================
+
+[hygiene]
+code-hygiene = "cargo fmt + cargo clippy --workspace -- -D warnings (zero warnings); 28 unsafe blocks are FFI-only; ~20 audited production unwraps remain"
+proof-hygiene = "make -C formal/coq exits 0; trusted base (Typing/Echo/EchoThermo) axiom-free; ShadowPrices.v axioms documented + cited"
+dead-code-rule = "unused crates / modules are removed, not left to rot; the workspace builds with no dead_code allows beyond documented stubs"
+todo-tracking = "repo-wide TODOs and 'Known Gaps' go to GitHub issues; inline TODOs are scoped to a tracked issue"
+linting = "cargo clippy (Rust); eclexia-lint provides in-language lints for .ecl programs"
+formatting = "cargo fmt (Rust); eclexia-fmt for .ecl sources"
+
+# ============================================================
+# Reversibility
+# ============================================================
+
+[reversibility]
+backup-before-destructive = true
+rollback-mechanism = "git-revert (main is append-only; superseded docs get banners, not deletion)"
+data-retention-policy = "not-applicable"
+data-retention-reason = "eclexia holds no runtime data under version control; shadow-price defaults live in source"
