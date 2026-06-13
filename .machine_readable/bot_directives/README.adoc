@@ -1,0 +1,50 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell
+= Bot directives — eclexia
+:toc:
+
+== Purpose
+
+Per-repo directives for automated agents operating on
+`hyperpolymath/eclexia`. These files tell bots what this repository
+considers safe, what is forbidden, and which findings are already
+adjudicated, so automated runs do not relitigate settled decisions or
+touch protected surfaces.
+
+== Precedence
+
+. Maintainer instruction (see `MAINTAINERS.adoc`) — always wins.
+. These directives.
+. Bot built-in defaults.
+
+== Files
+
+Estate-standard trio (net-new 2026-06-13):
+
+* `hypatia.a2ml` — Hypatia scanner config pointers + pre-adjudicated
+  finding classes (unsafe-FFI blocks, the documented ShadowPrices.v
+  axioms, audited unwraps), grounded in the repo's `Security` /
+  `Known Gaps` facts.
+* `gitbot-fleet.a2ml` — fleet roster, branch policy, never-touch paths,
+  per-bot constraints.
+* `git-private-farm.a2ml` — `.git-private-farm` propagation contract;
+  propagation is **live** here (the repo ships
+  `.github/workflows/instant-sync.yml`).
+
+Repo-specific per-bot files (pre-existing): `rhodibot.a2ml`,
+`echidnabot.a2ml`, `sustainabot.a2ml`, `glambot.a2ml`, `seambot.a2ml`,
+`finishbot.a2ml`, `robot-repo-automaton.a2ml`, and the legacy
+`README.a2ml` (kept for the existing per-bot constraint records).
+
+== Repo-specific ground rules (summary)
+
+* eclexia is the **upstream-canonical anchor** (`ANCHOR.scm` authority =
+  `upstream-canonical`); semantics live here, satellites consume them.
+* Semantic-authority surfaces are bot-off-limits: `THEORY.md`,
+  `SPECIFICATION.md`, `PROOFS.md`, `formal/coq/src/`, `formal/agda/`,
+  `.claude/CLAUDE.md`, `ANCHOR.scm`.
+* The Coq trusted base (`Typing.v`, `Echo.v`, `EchoThermo.v`) is
+  axiom-free; `ShadowPrices.v`'s five axioms are documented LP-theory
+  axioms, not debt.
+* CI green precedes merge; bots never auto-merge and never delete
+  branches. Escalation channel is an issue, not PR-comment spam.

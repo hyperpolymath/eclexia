@@ -4,41 +4,64 @@
 # STATE.a2ml — Eclexia project state
 [metadata]
 project = "eclexia"
-version = "1.0"
-last-updated = "2026-02-12"
+version = "1.1"
+last-updated = "2026-06-13"
 status = "active"
-session = "converted from scheme — 2026-04-11"
+session = "2026-06-13 estate-standardization + Echo currency checkpoint"
 
 [project-context]
 name = "Eclexia"
-purpose = """Economics-as-Code with shadow pricing and dimensional analysis"""
-completion-percentage = 75
+purpose = """Economics-as-Code: a resource-typed language with shadow pricing and
+dimensional analysis, where what you give up is priced. Structured information
+loss is now first-class: the Echo[A,B] type former retains a collapsed fibre's
+witness, and erasing it is priced in the same currency as energy/time/carbon via
+Landauer's principle."""
+completion-percentage = 77
 
 [position]
-phase = "alpha — all SONNET-TASKS complete"   # design | implementation | testing | maintenance | archived
+phase = "alpha — all SONNET-TASKS complete; Echo integrated into the resource economy"
 maturity = "experimental"  # experimental | alpha | beta | production | lts
+
+[build-snapshot]
+crates = 25
+tests = "519 (lib + 32/32 valid + 19/19 invalid conformance, + echo_landauer.ecl)"
+clippy = "zero warnings"
+unsafe-blocks = "28 (all FFI)"
+production-unwraps = 20
+formal-verification = "Coq: Typing.v (0 admitted), Echo.v (soundness), EchoThermo.v (axiom-free, Print Assumptions clean), ShadowPrices.v (0 admitted, 5 documented LP axioms); Agda: ResourceTracking.agda"
 
 [route-to-mvp]
 milestones = [
-  # No milestones recorded
+  "LANDED 2026-06-05: Echo[A,B] structured-loss type former + echo/echo_witness/echo_base builtins (#32)",
+  "LANDED 2026-06-05: Coq soundness A ≃ Σ(y:B). Echo f y (formal/coq/src/Echo.v)",
+  "LANDED 2026-06-05: Landauer resource bridge — landauer_cost(states,T) : Resource[Energy]; EchoThermo.v (bennett_reversible_is_free, free_iff_reversible, irreversible_costs_at_least_one_bit, erasure_monotone); THEORY.md §5.5 graded comonad of structured loss",
+  "LANDED 2026-06-13: governance + .machine_readable standardized to the 06-12 estate standard (flat contractiles, self-validating/, bot_directives trio)",
 ]
 
 [blockers-and-issues]
 issues = [
-  # No blockers recorded
+  # Honest 'Known Gaps' (CLAUDE.md) — tracked as GitHub issues at this checkpoint:
+  "WASM: bump allocator defined but not wired (no GC in linear memory)",
+  "LLVM: rt-native static library exists, automatic linking not wired",
+  "Runtime metrics not wired to real OS metrics (except RSS on Linux)",
+  "Package registry server stub not deployed",
+  "No measured benchmarks (performance claims are projections)",
 ]
 
 [critical-next-actions]
 actions = [
+  "Echo follow-ons: functorial echo_map + (graded co)functor laws as conformance tests",
+  "Echo follow-ons: lift EchoThermo.v discrete shadow toward real-valued k·T·ln2; connect to ShadowPrices.v",
   "Wire WASM bump allocator for GC",
   "Automate LLVM linking to rt-native static library",
   "Wire runtime metrics to real OS metrics",
-  "Deploy package registry server",
-  "Complete ShadowPrices.v Admitted proofs",
   "Add measured benchmarks",
   "Wire reactive crates (salsa DB, modules) into incremental builds",
 ]
 
+[standing-decisions]
+sd-echo = "Echo is core, not a plugin: it sits in the type system (Echo[A,B]) and the resource economy (landauer_cost). The echo-types ↔ eclexia link is downstream-only application evidence (echo-types docs/bridge-status.md §8); eclexia makes no upstream-correctness claim and vice versa."
+
 [maintenance-status]
-last-run-utc = "2026-02-12T00:00:00Z"
-last-result = "unknown"  # unknown | pass | warn | fail
+last-run-utc = "2026-06-13T00:00:00Z"
+last-result = "pass"  # unknown | pass | warn | fail

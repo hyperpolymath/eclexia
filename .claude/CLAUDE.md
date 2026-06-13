@@ -62,14 +62,22 @@
 
 ## Machine-Readable Artefacts
 
-The following files in `.machine_readable/` contain structured project metadata:
+The following files in `.machine_readable/6a2/` contain structured project
+metadata (migrated from root `*.scm` to `*.a2ml` on 2026-04-11):
 
-- `STATE.scm` - Current project state and progress
-- `META.scm` - Architecture decisions and development practices
-- `ECOSYSTEM.scm` - Position in the ecosystem and related projects
-- `AGENTIC.scm` - AI agent interaction patterns
-- `NEUROSYM.scm` - Neurosymbolic integration config
-- `PLAYBOOK.scm` - Operational runbook
+- `6a2/STATE.a2ml` - Current project state and progress
+- `6a2/META.a2ml` - Architecture decisions and development practices
+- `6a2/ECOSYSTEM.a2ml` - Position in the ecosystem and related projects
+- `6a2/AGENTIC.a2ml` - AI agent interaction patterns
+- `6a2/NEUROSYM.a2ml` - Neurosymbolic integration config
+- `6a2/PLAYBOOK.a2ml` - Operational runbook
+- `6a2/0-AI-MANIFEST.a2ml` - Read-first AI manifest (estate standard)
+
+Governance & contractiles: `.machine_readable/contractiles/` (flat:
+Adjust/Bust/Dust/Intent/Must/Trust `.a2ml` + `Justfile`),
+`.machine_readable/bot_directives/` (hypatia / gitbot-fleet /
+git-private-farm trio + per-bot files), `.machine_readable/self-validating/`
+(k9 validators). Root `ANCHOR.scm` is the upstream-canonical anchor.
 
 ---
 
@@ -90,7 +98,7 @@ The following files in `.machine_readable/` contain structured project metadata:
 | **Bash/POSIX Shell** | Scripts, automation | Keep minimal |
 | **JavaScript** | Only where AffineScript cannot | MCP protocol glue, Deno APIs |
 | **Nickel** | Configuration language | For complex configs |
-| **Guile Scheme** | State/meta files | STATE.scm, META.scm, ECOSYSTEM.scm |
+| **Guile Scheme** | State/meta & anchor files | ANCHOR.scm, formal/coq/manifest.scm; 6a2 metadata lives in .machine_readable/6a2/*.a2ml |
 | **Julia** | Batch scripts, data processing | Per RSR |
 | **OCaml** | AffineScript compiler | Language-specific |
 | **Ada** | Safety-critical systems | Where required |

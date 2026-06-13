@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: MPL-2.0
+# gitbot-fleet.a2ml — gitbot fleet directives for eclexia.
+# Net-new at the 2026-06-13 governance checkpoint per the estate
+# bot_directives standard. Fleet roster taken from the repo's existing
+# per-bot directive files (.machine_readable/bot_directives/*.a2ml).
+
+[metadata]
+repo = "eclexia"
+last-updated = "2026-06-13"
+owner = "hyperpolymath"
+
+[fleet]
+bots = ["rhodibot", "echidnabot", "sustainabot", "glambot", "seambot", "finishbot", "robot-repo-automaton"]
+
+[fleet.roles]
+rhodibot = "git operations"
+echidnabot = "code quality"
+sustainabot = "dependency updates"
+glambot = "documentation"
+seambot = "integration"
+finishbot = "task completion"
+robot-repo-automaton = "repo automation / scaffolding"
+
+[branch-policy]
+working-branch-pattern = "<bot>/<topic>"     # human sessions use claude/<slug> or session/<topic>; bots use their own prefix
+draft-PRs-only = true
+ci-green-before-merge = true
+never-touch = [
+  ".claude/CLAUDE.md",
+  "ANCHOR.scm",
+  "formal/coq/src/",          # Coq metatheory: Typing.v, Echo.v, EchoThermo.v are axiom-free — do not edit mechanically
+  "formal/agda/",             # ResourceTracking.agda
+  "THEORY.md",                # semantic authority (ANCHOR.scm semantic-authority.type-theory)
+  "SPECIFICATION.md",         # semantic authority (language spec)
+  "PROOFS.md",
+  ".github/workflows/",       # CI hardening is review-gated, not bot-edited
+]
+
+# ============================================================
+# Per-bot constraints where eclexia gives a specific reason;
+# defaults apply otherwise.
+# ============================================================
+
+[per-bot.rhodibot]
+deny = ["force-push to main", "branch deletion", "history rewrites on main"]
+note = "main is protected; superseded work is git-revert'd, not rewritten. A bot may force-with-lease ONLY its own session branch."
+
+[per-bot.echidnabot]
+deny = ["editing formal/coq proofs", "introducing Coq axioms outside ShadowPrices.v", "adding production unwraps on fallible paths", "weakening clippy to silence warnings"]
+note = "Quality gate = cargo build --workspace + cargo test --workspace (519 tests) + cargo clippy (zero warnings) + verify-coq-proofs.yml. The Coq trusted base (Typing.v/Echo.v/EchoThermo.v) is axiom-free; ShadowPrices.v's 5 axioms are documented LP-theory axioms (see hypatia.a2ml)."
+
+[per-bot.sustainabot]
+allow = ["cargo group bumps via dependabot (precedent: PRs #29, #33)", "GitHub Actions group bumps"]
+deny = ["bumping the coqc / Rust toolchain pins without a green verify-coq-proofs + full cargo test run"]
+note = "dependabot-automerge.yml exists; the workspace test suite + coq verification are the compatibility gate."
+
+[per-bot.glambot]
+deny = ["redefining language semantics in docs", "contradicting THEORY.md / SPECIFICATION.md"]
+note = "Docs are Markdown/AsciiDoc. Echo is now core (Echo[A,B] type former + landauer_cost resource bridge, THEORY.md §5.5); keep STATE/META/ECOSYSTEM currency honest (Landed/Partial/Open). README.md is canonical; EXPLAINME is the plain-language pointer."
+
+[per-bot.seambot]
+note = "eclexia is the upstream-canonical anchor (ANCHOR.scm authority = upstream-canonical); satellite repos (eclexia-playground/-vscode/-docs) consume, they do not redefine. The echo-types ↔ eclexia thermodynamic bridge is recorded downstream-only (echo-types docs/bridge-status.md §8); do not widen it into a cross-repo correctness claim."
+
+[per-bot.finishbot]
+note = "Task completion respects honest scoping: 'Known Gaps' in CLAUDE.md (WASM GC, automatic LLVM linking, OS metrics, registry deploy, measured benchmarks) are tracked as issues, never silently marked done."
+
+[per-bot.robot-repo-automaton]
+note = "Scaffolding/standardisation follows the rsr-template-repo standard AS OBSERVED in the estate (flat contractiles, self-validating/, bot_directives/), NOT the template's stale Mustfile (which still checks the old nested layout — see Mustfile.a2ml header). Report template drift via issue."
