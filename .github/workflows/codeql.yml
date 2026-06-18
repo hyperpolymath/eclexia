@@ -29,7 +29,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - language: javascript-typescript
+          # Repo source is not JS/TS; scan workflow files via the actions
+          # extractor (present in every repo). Closes the Hypatia
+          # codeql_language_matrix_mismatch finding.
+          - language: actions
             build-mode: none
 
     steps:
