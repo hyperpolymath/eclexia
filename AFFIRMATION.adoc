@@ -1,0 +1,96 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= Affirmation — eclexia
+Jonathan D.A. Jewell
+:revdate: 2026-06-19T21:38:41Z
+:repo: hyperpolymath/eclexia
+:source: .machine_readable/6a2/STATE.a2ml (2026-06-13) + contractiles + main@afc1a9a
+
+[NOTE]
+.Provenance / standards caveat
+====
+This affirmation follows the estate's *observed* conventions (SPDX header,
+AsciiDoc, the Must/Intent/Wish contractile vocabulary). The canonical
+`AFFIRMATION` specification lives in `hyperpolymath/standards`, which was
+outside this session's repository scope — so *reconcile the section/field
+names against that spec where they differ.* The status content below is drawn
+from in-repo authoritative sources and is accurate as of the revdate.
+====
+
+== Where we are (affirmed 2026-06-19T21:38:41Z)
+
+eclexia — *Economics-as-Code*: a resource-typed language that prices what you
+give up (energy / time / carbon, and now structured information loss via the
+`Echo[A,B]` type former, erasure priced by Landauer's principle).
+
+* *Phase*: alpha — *77%* (`STATE.a2ml`); maturity: experimental.
+* *Build*: 25 crates, *519 tests* green (lib + 32/32 valid + 19/19 invalid
+  conformance + `echo_landauer.ecl`), zero clippy warnings, 28 unsafe (all FFI),
+  20 production unwraps.
+* *Formal metatheory* (compiles): Coq `Typing.v` (0 admitted), `Echo.v`
+  (soundness `A ≃ Σ(y:B). Echo f y`), `EchoThermo.v` (axiom-free,
+  `Print Assumptions` clean), `ShadowPrices.v` (0 admitted, 5 documented LP
+  axioms); Agda `ResourceTracking.agda`.
+* *Standing decision (sd-echo)*: Echo is core, not a plugin — it lives in the
+  type system (`Echo[A,B]`) and the resource economy (`landauer_cost`).
+
+== Standing — MUST (normative hard gates)
+
+Source: `.machine_readable/contractiles/Mustfile.a2ml`. Last `must check`: *pass* (2026-06-13).
+
+[cols="2,1",options="header"]
+|===
+| Must | Status
+| Governance presence (LICENSE, README, SECURITY, GOVERNANCE/MAINTAINERS/CODEOWNERS, `ANCHOR.scm`) | ✅ pass
+| Flat contractile layout + 6a2 files + bot-directives trio (06-12 standard) | ✅ pass
+| `cargo build --workspace` compiles | ✅ pass
+| `make -C formal/coq` — Coq metatheory incl. axiom-free `EchoThermo.v` | ✅ pass
+| Template integrity — no `{{placeholders}}`, no `rsr-template-repo` identity leak | ✅ pass
+|===
+
+== Committed — INTEND (next-actions)
+
+Source: `.machine_readable/contractiles/Intentfile.a2ml`. All `declared` (committed, not yet started).
+
+[cols="1,3,1",options="header"]
+|===
+| Intent | Description | Status
+| `echo-functor` | functorial `echo_map` + (graded co)functor laws as conformance tests | declared
+| `landauer-real-valued` | lift `EchoThermo.v` discrete shadow → real-valued k·T·ln2; connect to `ShadowPrices.v` | declared
+| `wasm-gc` | wire the WASM bump allocator (defined-not-wired) | declared
+| `llvm-linking` | automate linking to the `rt-native` static library | declared
+|===
+
+== Aspirations — WISH (by horizon)
+
+Source: `.machine_readable/contractiles/Intentfile.a2ml`.
+
+[cols="1,3",options="header"]
+|===
+| Horizon | Wish
+| near | `measured-benchmarks` — replace projected perf claims with measured
+| mid | `os-metrics` — wire runtime metrics to real OS metrics beyond RSS-on-Linux
+| mid | `registry-deploy` — deploy the package-registry server (stub exists)
+| far | `shadow-price ↔ Echo unification` — one LP-duality model pricing energy/time/carbon AND Echo erasure jointly
+|===
+
+== Affirmation
+
+As of *2026-06-19T21:38:41Z* we affirm that:
+
+. the *substance is built and green* — the language, three backends
+  (WASM / LLVM / Cranelift), the reactive compiler crates, the Coq+Agda
+  metatheory, and Echo-as-currency;
+. the *MUST hard gates pass* (last `must check`: 2026-06-13);
+. the four *INTEND* next-actions are *committed but unstarted* (`declared`);
+. the *WISH* horizon items are acknowledged, not yet committed;
+. the honest *known gaps* remain tracked: WASM GC not wired, LLVM auto-linking
+  not wired, runtime metrics not on real OS metrics, package-registry stub
+  undeployed, no measured benchmarks.
+
+The route from 77% → done is the four INTENDs (closing the WASM/LLVM gaps and
+extending Echo with functor laws + real-valued Landauer), then the WISH
+productization track.
+
+_Affirmed by an AI session (Claude) on branch `claude/gallant-faraday-LSAGJ`;
+to be countersigned by the maintainer on merge._
