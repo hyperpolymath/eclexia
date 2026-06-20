@@ -22,6 +22,10 @@ permissions:
   contents: read
   security-events: write
   pull-requests: write
+  # The standards reusable declares actions:read; a caller permissions
+  # block that omits it pins actions to `none`, so the reusable's request
+  # exceeds the grant and the run dies as `startup_failure` (no jobs).
+  actions: read
 
 jobs:
   hypatia:
