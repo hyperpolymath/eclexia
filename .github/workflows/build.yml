@@ -38,11 +38,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v4
 
-      - name: Install Rust toolchain (stable + clippy)
+      - name: Install Rust toolchain (stable, enforced >= floor)
+        env:
+          # Floor only — "this version or later". The gate tracks the stable
+          # channel (always >= this); it is NOT pinned to an exact release, so
+          # genuinely-new lints from a newer stable are still caught.
+          MIN_RUST: '1.96.0'
         run: |
           rustup toolchain install stable --profile minimal --component clippy
           rustup default stable
           rustc --version && cargo --version
+          have="$(rustc --version | awk '{print $2}')"
+          if [ "$(printf '%s\n%s\n' "$MIN_RUST" "$have" | sort -V | head -1)" != "$MIN_RUST" ]; then
+            echo "::error::rustc $have is below the required floor $MIN_RUST"; exit 1
+          fi
+          echo "rustc $have satisfies the >= $MIN_RUST floor"
 
       - name: Build workspace (Mustfile workspace-builds gate)
         run: cargo build --workspace --locked
