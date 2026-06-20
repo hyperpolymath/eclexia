@@ -1200,7 +1200,7 @@ mod tests {
         let mut constants: Arena<Constant> = Arena::new();
         let c1 = constants.alloc(Constant {
             ty: Ty::Primitive(PrimitiveTy::F64),
-            kind: ConstantKind::Float(3.14),
+            kind: ConstantKind::Float(3.5),
         });
         let c2 = constants.alloc(Constant {
             ty: Ty::Primitive(PrimitiveTy::F64),

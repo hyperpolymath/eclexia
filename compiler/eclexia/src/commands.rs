@@ -3640,7 +3640,7 @@ pub fn parse_ast(input: &Path, format: &str) -> miette::Result<()> {
                     .map_err(|e| miette::miette!("JSON serialization failed: {}", e))?
             );
         }
-        "debug" | _ => {
+        _ => {
             println!("{:#?}", file);
         }
     }
@@ -3697,7 +3697,7 @@ mod sexpr {
                     out.push(')');
                 }
                 // Parameters
-                out.push_str("\n");
+                out.push('\n');
                 out.push_str(&indent_str(indent + 2));
                 out.push_str("(params");
                 for p in &f.params {
@@ -3711,14 +3711,14 @@ mod sexpr {
                 out.push(')');
                 // Return type
                 if let Some(ret) = f.return_type {
-                    out.push_str("\n");
+                    out.push('\n');
                     out.push_str(&indent_str(indent + 2));
                     out.push_str("(returns ");
                     type_to_sexpr(ret, file, out);
                     out.push(')');
                 }
                 // Body
-                out.push_str("\n");
+                out.push('\n');
                 out.push_str(&indent_str(indent + 2));
                 block_to_sexpr(&f.body, file, out, indent + 2);
                 out.push(')');
@@ -3778,12 +3778,12 @@ mod sexpr {
     fn block_to_sexpr(block: &Block, file: &SourceFile, out: &mut String, indent: usize) {
         out.push_str("(block");
         for stmt_id in &block.stmts {
-            out.push_str("\n");
+            out.push('\n');
             out.push_str(&indent_str(indent + 2));
             stmt_to_sexpr(*stmt_id, file, out, indent + 2);
         }
         if let Some(expr_id) = block.expr {
-            out.push_str("\n");
+            out.push('\n');
             out.push_str(&indent_str(indent + 2));
             out.push_str("(tail ");
             expr_to_sexpr(expr_id, file, out, indent + 4);
@@ -3804,7 +3804,7 @@ mod sexpr {
                     type_to_sexpr(*ty_id, file, out);
                     out.push(')');
                 }
-                out.push_str("\n");
+                out.push('\n');
                 out.push_str(&indent_str(indent + 2));
                 expr_to_sexpr(*value, file, out, indent + 2);
                 out.push(')');
@@ -3830,7 +3830,7 @@ mod sexpr {
             StmtKind::While { condition, body } => {
                 out.push_str("(while ");
                 expr_to_sexpr(*condition, file, out, indent + 2);
-                out.push_str("\n");
+                out.push('\n');
                 out.push_str(&indent_str(indent + 2));
                 block_to_sexpr(body, file, out, indent + 2);
                 out.push(')');
@@ -3840,7 +3840,7 @@ mod sexpr {
                 pattern_to_sexpr(pattern, out);
                 out.push(' ');
                 expr_to_sexpr(*iter, file, out, indent + 2);
-                out.push_str("\n");
+                out.push('\n');
                 out.push_str(&indent_str(indent + 2));
                 block_to_sexpr(body, file, out, indent + 2);
                 out.push(')');
@@ -3850,7 +3850,7 @@ mod sexpr {
                 if let Some(l) = label {
                     out.push_str(&format!(" @{}", l));
                 }
-                out.push_str("\n");
+                out.push('\n');
                 out.push_str(&indent_str(indent + 2));
                 block_to_sexpr(body, file, out, indent + 2);
                 out.push(')');
@@ -3957,11 +3957,11 @@ mod sexpr {
             ExprKind::If { condition, then_branch, else_branch } => {
                 out.push_str("(if ");
                 expr_to_sexpr(*condition, file, out, indent + 2);
-                out.push_str("\n");
+                out.push('\n');
                 out.push_str(&indent_str(indent + 2));
                 block_to_sexpr(then_branch, file, out, indent + 2);
                 if let Some(eb) = else_branch {
-                    out.push_str("\n");
+                    out.push('\n');
                     out.push_str(&indent_str(indent + 2));
                     block_to_sexpr(eb, file, out, indent + 2);
                 }
@@ -3971,7 +3971,7 @@ mod sexpr {
                 out.push_str("(match ");
                 expr_to_sexpr(*scrutinee, file, out, indent + 2);
                 for arm in arms {
-                    out.push_str("\n");
+                    out.push('\n');
                     out.push_str(&indent_str(indent + 2));
                     out.push_str("(arm ");
                     pattern_to_sexpr(&arm.pattern, out);
@@ -4098,7 +4098,7 @@ mod sexpr {
             ExprKind::Select { arms } => {
                 out.push_str("(select");
                 for arm in arms {
-                    out.push_str("\n");
+                    out.push('\n');
                     out.push_str(&indent_str(indent + 2));
                     out.push_str("(arm ");
                     expr_to_sexpr(arm.channel, file, out, indent + 4);
@@ -4123,7 +4123,7 @@ mod sexpr {
                 out.push_str("(handle ");
                 expr_to_sexpr(*e, file, out, indent + 2);
                 for h in handlers {
-                    out.push_str("\n");
+                    out.push('\n');
                     out.push_str(&indent_str(indent + 2));
                     out.push_str(&format!("(handler \"{}::{}\" ", h.effect_name, h.op_name));
                     block_to_sexpr(&h.body, file, out, indent + 4);

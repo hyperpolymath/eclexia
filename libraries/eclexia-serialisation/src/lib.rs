@@ -523,7 +523,7 @@ mod tests {
             "ok": true,
             "n": 42,
             "neg": -5,
-            "f": 3.14,
+            "f": 3.5,
             "arr": [1, "x", false],
             "obj": {"k": "v"},
             "nil": null

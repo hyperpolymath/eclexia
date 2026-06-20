@@ -1912,7 +1912,7 @@ impl VirtualMachine {
                         let mut filtered_results = Vec::new();
                         for element in elements {
                             // Call the predicate function with one argument
-                            self.call_function(func_idx, &[element.clone()])?;
+                            self.call_function(func_idx, std::slice::from_ref(&element))?;
                             let result = self.execute()?;
                             if result.as_bool()? {
                                 filtered_results.push(element);
@@ -3964,8 +3964,8 @@ impl VirtualMachine {
                 if filtered_a.len() != filtered_b.len() {
                     return false;
                 }
-                filtered_a.sort_by(|(ka, _), (kb, _)| ka.cmp(kb));
-                filtered_b.sort_by(|(ka, _), (kb, _)| ka.cmp(kb));
+                filtered_a.sort_by_key(|(ka, _)| *ka);
+                filtered_b.sort_by_key(|(ka, _)| *ka);
                 filtered_a
                     .iter()
                     .zip(filtered_b.iter())
@@ -4214,7 +4214,7 @@ mod tests {
     #[test]
     fn test_vm_float_arithmetic() {
         let module = make_module(vec![
-            Instruction::PushFloat(3.14),
+            Instruction::PushFloat(3.5),
             Instruction::PushFloat(2.0),
             Instruction::MulFloat,
             Instruction::ReturnValue,
@@ -4222,7 +4222,7 @@ mod tests {
         let mut vm = VirtualMachine::new(module);
         let result = run_vm(&mut vm);
         match result {
-            Value::Float(f) => assert!((f - 6.28).abs() < 1e-10),
+            Value::Float(f) => assert!((f - 7.0).abs() < 1e-10),
             other => panic!("Expected Float, got {:?}", other),
         }
     }

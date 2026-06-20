@@ -149,7 +149,7 @@ impl ProfileData {
             .iter()
             .map(|(name, profile)| (name.as_str(), profile.call_count))
             .collect();
-        funcs.sort_by(|a, b| b.1.cmp(&a.1));
+        funcs.sort_by_key(|b| std::cmp::Reverse(b.1));
         funcs.truncate(limit);
         funcs
     }

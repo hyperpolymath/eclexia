@@ -2757,7 +2757,7 @@ mod tests {
         assert_eq!(val, Value::Float(21.0));
 
         // Len should be 1
-        let len = builtin_hashmap_len(&[map.clone()]).unwrap_ok();
+        let len = builtin_hashmap_len(std::slice::from_ref(&map)).unwrap_ok();
         assert_eq!(len, Value::Int(1));
 
         // Contains
@@ -2825,14 +2825,14 @@ mod tests {
         builtin_hashmap_insert(&[map.clone(), Value::String(SmolStr::new("b")), Value::Int(2)])
             .unwrap_ok();
 
-        let keys = builtin_hashmap_keys(&[map.clone()]).unwrap_ok();
+        let keys = builtin_hashmap_keys(std::slice::from_ref(&map)).unwrap_ok();
         if let Value::Array(arr) = &keys {
             assert_eq!(arr.borrow().len(), 2);
         } else {
             panic!("Expected array of keys, got {keys:?}");
         }
 
-        let values = builtin_hashmap_values(&[map.clone()]).unwrap_ok();
+        let values = builtin_hashmap_values(std::slice::from_ref(&map)).unwrap_ok();
         if let Value::Array(arr) = &values {
             assert_eq!(arr.borrow().len(), 2);
         } else {
@@ -2941,7 +2941,7 @@ mod tests {
         ])
         .unwrap_ok();
 
-        let min = builtin_sortedmap_min_key(&[map.clone()]).unwrap_ok();
+        let min = builtin_sortedmap_min_key(std::slice::from_ref(&map)).unwrap_ok();
         if let Value::Tuple(elems) = &min {
             assert_eq!(elems[0], Value::String(SmolStr::new("2023")));
             assert_eq!(elems[1], Value::Float(1.5));
@@ -3015,17 +3015,17 @@ mod tests {
         builtin_queue_enqueue(&[queue.clone(), Value::Int(2)]).unwrap_ok();
         builtin_queue_enqueue(&[queue.clone(), Value::Int(3)]).unwrap_ok();
 
-        let len = builtin_queue_len(&[queue.clone()]).unwrap_ok();
+        let len = builtin_queue_len(std::slice::from_ref(&queue)).unwrap_ok();
         assert_eq!(len, Value::Int(3));
 
         // FIFO: first in, first out
-        let first = builtin_queue_dequeue(&[queue.clone()]).unwrap_ok();
+        let first = builtin_queue_dequeue(std::slice::from_ref(&queue)).unwrap_ok();
         assert_eq!(first, Value::Int(1));
 
-        let second = builtin_queue_dequeue(&[queue.clone()]).unwrap_ok();
+        let second = builtin_queue_dequeue(std::slice::from_ref(&queue)).unwrap_ok();
         assert_eq!(second, Value::Int(2));
 
-        let third = builtin_queue_dequeue(&[queue.clone()]).unwrap_ok();
+        let third = builtin_queue_dequeue(std::slice::from_ref(&queue)).unwrap_ok();
         assert_eq!(third, Value::Int(3));
 
         let is_empty = builtin_queue_is_empty(&[queue]).unwrap_ok();
@@ -3038,7 +3038,7 @@ mod tests {
 
         builtin_queue_enqueue(&[queue.clone(), Value::String(SmolStr::new("event_a"))]).unwrap_ok();
 
-        let peeked = builtin_queue_peek(&[queue.clone()]).unwrap_ok();
+        let peeked = builtin_queue_peek(std::slice::from_ref(&queue)).unwrap_ok();
         assert_eq!(peeked, Value::String(SmolStr::new("event_a")));
 
         // Peek should not remove
@@ -3079,14 +3079,14 @@ mod tests {
         ])
         .unwrap_ok();
 
-        let len = builtin_priority_queue_len(&[pq.clone()]).unwrap_ok();
+        let len = builtin_priority_queue_len(std::slice::from_ref(&pq)).unwrap_ok();
         assert_eq!(len, Value::Int(3));
 
         // Should pop in priority order: high(1), medium(3), low(5)
-        let first = builtin_priority_queue_pop(&[pq.clone()]).unwrap_ok();
+        let first = builtin_priority_queue_pop(std::slice::from_ref(&pq)).unwrap_ok();
         assert_eq!(first, Value::String(SmolStr::new("high")));
 
-        let second = builtin_priority_queue_pop(&[pq.clone()]).unwrap_ok();
+        let second = builtin_priority_queue_pop(std::slice::from_ref(&pq)).unwrap_ok();
         assert_eq!(second, Value::String(SmolStr::new("medium")));
 
         let third = builtin_priority_queue_pop(&[pq]).unwrap_ok();
@@ -3099,7 +3099,7 @@ mod tests {
 
         builtin_priority_queue_push(&[pq.clone(), Value::Int(10), Value::Int(42)]).unwrap_ok();
 
-        let peeked = builtin_priority_queue_peek(&[pq.clone()]).unwrap_ok();
+        let peeked = builtin_priority_queue_peek(std::slice::from_ref(&pq)).unwrap_ok();
         assert_eq!(peeked, Value::Int(42));
 
         // Peek should not remove
