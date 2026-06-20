@@ -47,6 +47,17 @@ jobs:
       - name: Build workspace (Mustfile workspace-builds gate)
         run: cargo build --workspace --locked
 
+      - name: Install LLVM toolchain (provides llc for the LLVM-backend test)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm
+          # Ubuntu ships versioned binaries (llc-18); expose an unversioned `llc`.
+          if ! command -v llc >/dev/null 2>&1; then
+            LLC_BIN="$(ls /usr/bin/llc-* /usr/lib/llvm-*/bin/llc 2>/dev/null | sort -V | tail -1)"
+            [ -n "$LLC_BIN" ] && sudo ln -sf "$LLC_BIN" /usr/local/bin/llc
+          fi
+          llc --version
+
       - name: Test workspace
         run: cargo test --workspace
 
