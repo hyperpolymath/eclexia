@@ -6,7 +6,7 @@
 
 [metadata]
 repo = "eclexia"
-last-updated = "2026-06-13"
+last-updated = "2026-06-20"
 owner = "hyperpolymath"
 
 [fleet]
@@ -52,7 +52,8 @@ note = "Quality gate = cargo build --workspace + cargo test --workspace (519 tes
 [per-bot.sustainabot]
 allow = ["cargo group bumps via dependabot (precedent: PRs #29, #33)", "GitHub Actions group bumps"]
 deny = ["bumping the coqc / Rust toolchain pins without a green verify-coq-proofs + full cargo test run"]
-note = "dependabot-automerge.yml exists; the workspace test suite + coq verification are the compatibility gate."
+distinct-from = "oikosbot — the externally-published git App (github.com/settings/apps/oikosbot); NOT a gitbot-fleet member."
+note = "dependabot-automerge.yml exists; the workspace test suite + coq verification are the compatibility gate. Roster identity (clarified 2026-06-20): 'sustainabot' here is the LOCAL gitbot-fleet dependency-update bot and the maintainer's dogfooded in-estate continuous application (good ideas flow sustainabot -> ideas-to-alpha -> git-logistics-office). It is distinct from oikosbot, the productised git App taken to the wider world; do not conflate or rename the two."
 
 [per-bot.glambot]
 deny = ["redefining language semantics in docs", "contradicting THEORY.md / SPECIFICATION.md"]
