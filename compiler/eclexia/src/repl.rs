@@ -847,7 +847,7 @@ mod tests {
     #[test]
     fn completion_finds_keywords() {
         let syms = Arc::new(Mutex::new(Vec::new()));
-        let helper = ReplHelper::new(syms);
+        let _helper = ReplHelper::new(syms);
         // We cannot easily construct a RustylineContext, so test the
         // internal matching logic directly.
         let prefix = "sha";

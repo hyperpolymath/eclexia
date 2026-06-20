@@ -6,10 +6,7 @@
 //! Tests: Source → Lexer → Parser → AST → TypeChecker → HIR → MIR → Bytecode → VM
 
 use eclexia_codegen::{Backend, BytecodeGenerator, VirtualMachine};
-use eclexia_hir;
-use eclexia_mir;
 use eclexia_parser::Parser;
-use eclexia_typeck;
 
 /// Helper to run the full pipeline
 fn compile_and_run(source: &str) -> Result<eclexia_codegen::VmValue, String> {

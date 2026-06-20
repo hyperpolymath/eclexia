@@ -240,10 +240,7 @@ impl FileWatcher {
 
             tracing::info!("Watching {} for changes", path.display());
 
-            loop {
-                let Ok(first_event) = notify_rx.recv() else {
-                    break;
-                };
+            while let Ok(first_event) = notify_rx.recv() {
 
                 let mut events = vec![first_event];
 

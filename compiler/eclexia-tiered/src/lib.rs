@@ -38,6 +38,5 @@ mod tests {
     #[test]
     fn test_crate_compiles() {
         // Smoke test: crate loaded successfully
-        assert!(true);
     }
 }
