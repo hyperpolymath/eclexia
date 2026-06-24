@@ -1318,7 +1318,7 @@ pub fn init(name: Option<&str>) -> miette::Result<()> {
 
     // Create eclexia.toml
     let config = format!(
-        r#"# SPDX-License-Identifier: MIT
+        r#"# SPDX-License-Identifier: MPL-2.0
 # Eclexia project configuration
 
 [package]
@@ -1339,7 +1339,7 @@ default-carbon-budget = "100gCO2e"
     std::fs::write(format!("{}/eclexia.toml", project_name), config).into_diagnostic()?;
 
     // Create main.ecl
-    let main = r#"// SPDX-License-Identifier: MIT
+    let main = r#"// SPDX-License-Identifier: MPL-2.0
 // Main entry point
 
 def main() -> Unit

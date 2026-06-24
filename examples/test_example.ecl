@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MPL-2.0
 // Example test file demonstrating the testing framework
 
 def add(x: Int, y: Int) -> Int {
