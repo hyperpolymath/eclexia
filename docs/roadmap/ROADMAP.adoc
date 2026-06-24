@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: CC-BY-SA-4.0
 = Eclexia Roadmap
 
 This document outlines the development roadmap for Eclexia, tracking progress and planned milestones.
