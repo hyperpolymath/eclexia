@@ -29,5 +29,5 @@ permissions:
 
 jobs:
   hypatia:
-    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@d135b05bfc647d0c0fbfedc7e80f37ea50f49236  # standards #380 (2026-06-11); repins a stale ref that resolved to 0 jobs
+    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@d7c22711e830e1f383846472f6e9b99debdb201e  # standards #380 (2026-06-11); repins a stale ref that resolved to 0 jobs
     secrets: inherit
