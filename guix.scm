@@ -55,6 +55,6 @@ in the type system and uses shadow prices from linear programming to guide
 adaptive execution.  Eclexia enables carbon-aware scheduling, battery-conscious
 mobile apps, and cost-optimized cloud services through built-in resource
 tracking and economic optimization.")
-    (license (list license:pmpl-1.0-or-later))))
+    (license (list license:mpl2.0))))
 
 eclexia
