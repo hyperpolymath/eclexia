@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: CC-BY-SA-4.0
 = Conformance Example: Compiler ↔ Runtime Seam
 
 1. `cargo run -p eclexia -- profile examples/hello_world.ecl --format json --observe-shadow --carbon-report`

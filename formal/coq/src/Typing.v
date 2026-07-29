@@ -4,6 +4,11 @@
 
 Require Import Coq.Strings.String.
 Require Import Coq.Lists.List.
+(* PeanoNat provides the boolean nat comparisons [=?], [<?], [<=?]
+   (Nat.eqb / Nat.ltb / Nat.leb) and their [nat_scope] notations used
+   by the small-step comparison rules below. Without it the comparison
+   notations are unbound on Coq 8.18. *)
+Require Import Coq.Arith.PeanoNat.
 Import ListNotations.
 
 (** * Type System Soundness for Eclexia
@@ -233,7 +238,8 @@ Inductive step : expr -> expr -> Prop :=
   | STBinOpInt : forall op n1 n2 n3,
       (op = OpAdd /\ n3 = n1 + n2) \/
       (op = OpSub /\ n3 = n1 - n2) \/
-      (op = OpMul /\ n3 = n1 * n2) ->
+      (op = OpMul /\ n3 = n1 * n2) \/
+      (op = OpDiv /\ n3 = Nat.div n1 n2) ->
       EBinOp op (EInt n1) (EInt n2) → EInt n3
 
   (* Boolean operations *)
@@ -246,7 +252,7 @@ Inductive step : expr -> expr -> Prop :=
   | STBinOpCmp : forall op n1 n2 b,
       (op = OpEq /\ b = (n1 =? n2)) \/
       (op = OpLt /\ b = (n1 <? n2)) \/
-      (op = OpGt /\ b = (n1 >? n2)) ->
+      (op = OpGt /\ b = (n2 <? n1)) ->
       EBinOp op (EInt n1) (EInt n2) → EBool b
 
   | STBinOpLeft : forall op e1 e1' e2,
@@ -270,25 +276,94 @@ Inductive multi_step : expr -> expr -> Prop :=
 
 Notation "e '→*' e'" := (multi_step e e') (at level 40).
 
-(** ** Weakening Lemma *)
+(** ** Lookup monotonicity under context extension *)
 
+(** If [ctx] is included in [ctx'] as a partial map (every successful
+    lookup in [ctx] agrees in [ctx']), the inclusion is preserved when
+    both contexts are extended with the same binding. This is the one
+    structural fact the weakening induction needs at the binder cases
+    ([TLet_typed], [TFun_typed]). *)
+Lemma lookup_incl_cons : forall x T1 ctx ctx',
+  (forall y S, lookup y ctx = Some S -> lookup y ctx' = Some S) ->
+  (forall y S, lookup y ((x, T1) :: ctx) = Some S ->
+               lookup y ((x, T1) :: ctx') = Some S).
+Proof.
+  intros x T1 ctx ctx' Hincl y S.
+  simpl. destruct (String.eqb y x).
+  - intro H; exact H.
+  - intro H; apply Hincl; exact H.
+Qed.
+
+(** ** General weakening (lookup-monotone)
+
+    Typing is preserved along any partial-map inclusion of contexts,
+    proved by induction on the typing derivation. The original
+    [weakening] lemma below is the special case [ctx = []]. *)
+Lemma weakening_gen : forall ctx e T,
+  ctx ⊢ e ∈ T ->
+  forall ctx',
+    (forall y S, lookup y ctx = Some S -> lookup y ctx' = Some S) ->
+    ctx' ⊢ e ∈ T.
+Proof.
+  intros ctx e T Htyped.
+  induction Htyped; intros ctx' Hincl;
+    eauto 10 using TInt_typed, TFloat_typed, TBool_typed, TVar_typed,
+                   TLet_typed, TFun_typed, TApp_typed, TIf_typed,
+                   TBinOp_Int_typed, TBinOp_Bool_typed, TBinOp_Cmp_typed,
+                   TDimLit_typed, lookup_incl_cons.
+Qed.
+
+(** ** Weakening Lemma
+
+    A term typeable in the empty context is typeable in any context.
+    The [value e] hypothesis is retained for backward compatibility
+    with existing callers; the result in fact holds for every term
+    typeable in [[]], because the empty context is vacuously included
+    in every context. The previous proof discharged the function-value
+    case with a bare [assumption], which cannot succeed: a closed
+    function's body is typed under [(x,T1)::[]] but weakening demands
+    it under [(x,T1)::ctx]. [weakening_gen] supplies exactly that. *)
 Lemma weakening : forall ctx e T,
   [] ⊢ e ∈ T ->
   value e ->
   ctx ⊢ e ∈ T.
 Proof.
-  intros ctx e T Htyped Hval.
-  inversion Hval; subst; inversion Htyped; subst.
-  - (* VInt *)
-    apply TInt_typed.
-  - (* VFloat *)
-    apply TFloat_typed.
-  - (* VBool *)
-    apply TBool_typed.
-  - (* VFun *)
-    apply TFun_typed. assumption.
-  - (* VDimLit *)
-    apply TDimLit_typed.
+  intros ctx e T Htyped _.
+  apply (weakening_gen [] e T Htyped).
+  intros y S Hlook. simpl in Hlook. discriminate.
+Qed.
+
+(** ** Context exchange and shadowing (corollaries of [weakening_gen])
+
+    These are the structural facts the substitution lemma needs at the
+    binder cases. Both are instances of [weakening_gen]: two contexts
+    that agree as partial maps type the same terms. *)
+
+(** Two adjacent bindings with distinct keys may be swapped. *)
+Lemma context_exchange : forall x1 T1' x2 T2' ctx e T,
+  x1 <> x2 ->
+  ((x1, T1') :: (x2, T2') :: ctx) ⊢ e ∈ T ->
+  ((x2, T2') :: (x1, T1') :: ctx) ⊢ e ∈ T.
+Proof.
+  intros x1 T1' x2 T2' ctx e T Hne H.
+  apply (weakening_gen _ _ _ H).
+  intros y S. simpl.
+  destruct (String.eqb y x1) eqn:E1; destruct (String.eqb y x2) eqn:E2;
+    intro HL; try exact HL.
+  exfalso. apply Hne.
+  apply String.eqb_eq in E1. apply String.eqb_eq in E2. congruence.
+Qed.
+
+(** An inner binding shadowed by a later one with the same key is
+    redundant and may be dropped. *)
+Lemma context_shadow : forall x T1' T2' ctx e T,
+  ((x, T1') :: (x, T2') :: ctx) ⊢ e ∈ T ->
+  ((x, T1') :: ctx) ⊢ e ∈ T.
+Proof.
+  intros x T1' T2' ctx e T H.
+  apply (weakening_gen _ _ _ H).
+  intros y S. simpl.
+  destruct (String.eqb y x) eqn:E; intro HL; exact HL.
 Qed.
 
 (** ** Substitution Lemma *)
@@ -310,28 +385,41 @@ Proof.
   - (* EBool *)
     apply TBool_typed.
   - (* EVar *)
-    unfold lookup in H1. simpl in H1.
+    (* [lookup] compares [String.eqb s x] but [subst] compares
+       [String.eqb x s]; reconcile the two orders with [eqb_sym] so a
+       single case split decides both the goal and the hypothesis. *)
+    simpl in H1. rewrite String.eqb_sym in H1.
     destruct (String.eqb x s) eqn:Heq.
-    + (* x = s: substitute *)
-      injection H1 as H1. subst.
-      (* Apply weakening lemma: value well-typed in [] is well-typed in any context *)
+    + (* x = s: the variable is the one being substituted *)
+      injection H1 as H1. subst T2.
       apply (weakening ctx v T1 Hv Hval).
-    + (* x <> s: keep variable *)
-      apply TVar_typed. assumption.
+    + (* x <> s: the variable is preserved *)
+      apply TVar_typed. exact H1.
   - (* ELet *)
-    apply TLet_typed.
-    + apply IHe1. assumption.
-    + destruct (String.eqb x s) eqn:Heq.
-      * (* x = s: shadowed, e2 keeps original typing *)
-        assumption.
-      * (* x <> s: substitute in e2 *)
-        apply IHe2. assumption.
+    (* [TLet_typed]'s intermediate type is not in its conclusion, so we
+       use [eapply ...; [ .. | .. ]] to share the resulting existential
+       between the two premises rather than shelving it. *)
+    destruct (String.eqb x s) eqn:Heq.
+    + (* x = s: the let-binder shadows x, so e2 is not substituted *)
+      apply String.eqb_eq in Heq. subst s.
+      eapply TLet_typed;
+        [ apply IHe1; eassumption
+        | eapply context_shadow; eassumption ].
+    + (* x <> s: substitute into e2 under the swapped binder *)
+      eapply TLet_typed;
+        [ apply IHe1; eassumption
+        | apply IHe2; apply context_exchange;
+            [ apply String.eqb_neq in Heq; intro Hc; apply Heq; symmetry; exact Hc
+            | eassumption ] ].
   - (* EFun *)
     destruct (String.eqb x s) eqn:Heq.
-    + (* x = s: parameter shadows, no substitution *)
-      apply TFun_typed. assumption.
-    + (* x <> s: substitute in body *)
-      apply TFun_typed. apply IHe. assumption.
+    + (* x = s: parameter shadows x, no substitution in the body *)
+      apply String.eqb_eq in Heq. subst s.
+      apply TFun_typed. eapply context_shadow. eassumption.
+    + (* x <> s: substitute into the body under the swapped binder *)
+      apply TFun_typed. apply IHe. apply context_exchange.
+      * apply String.eqb_neq in Heq. intro Hc. apply Heq. symmetry. exact Hc.
+      * eassumption.
   - (* EApp *)
     eapply TApp_typed.
     + apply IHe1. eassumption.
@@ -349,6 +437,31 @@ Proof.
     eapply TBinOp_Cmp_typed; eauto.
   - (* EDimLit *)
     apply TDimLit_typed.
+Qed.
+
+(** ** Canonical forms
+
+    A value of a given type has the expected head shape. These three
+    lemmas drive the value cases of [progress]: each inverts the value
+    and then the typing derivation, so the constructors that disagree
+    with the type are discharged automatically. *)
+Lemma canonical_forms_bool : forall ctx e,
+  ctx ⊢ e ∈ TBool -> value e -> exists b, e = EBool b.
+Proof.
+  intros ctx e HT Hv. inversion Hv; subst; inversion HT; subst; eexists; reflexivity.
+Qed.
+
+Lemma canonical_forms_int : forall ctx e,
+  ctx ⊢ e ∈ TInt -> value e -> exists n, e = EInt n.
+Proof.
+  intros ctx e HT Hv. inversion Hv; subst; inversion HT; subst; eexists; reflexivity.
+Qed.
+
+Lemma canonical_forms_fun : forall ctx e T1 T2,
+  ctx ⊢ e ∈ TFun T1 T2 -> value e -> exists x body, e = EFun x T1 body.
+Proof.
+  intros ctx e T1 T2 HT Hv.
+  inversion Hv; subst; inversion HT; subst; eexists; eexists; reflexivity.
 Qed.
 
 (** ** Type Soundness *)
@@ -376,10 +489,12 @@ Proof.
     destruct IHHtyped1 as [Hval1 | [e1' Hstep1]]; auto.
     + (* e1 is value *)
       destruct IHHtyped2 as [Hval2 | [e2' Hstep2]]; auto.
-      * (* e2 is value *)
-        (* e1 must be function *)
-        inversion Hval1; subst.
-        exists (subst x e2 e). apply STApp. assumption.
+      * (* e2 is value: e1 is a function by canonical forms *)
+        match goal with
+        | [ HT : _ ⊢ e1 ∈ TFun _ _ |- _ ] =>
+            destruct (canonical_forms_fun _ _ _ _ HT Hval1) as [y [body Hb]]
+        end. subst e1.
+        eexists. apply STApp. assumption.
       * (* e2 steps *)
         exists (EApp e1 e2'). apply STAppArg; assumption.
     + (* e1 steps *)
@@ -387,8 +502,11 @@ Proof.
   - (* TIf *)
     right.
     destruct IHHtyped1 as [Hval1 | [e1' Hstep1]]; auto.
-    + (* e1 is value *)
-      inversion Hval1; subst.
+    + (* e1 is value: it is a boolean by canonical forms *)
+      match goal with
+      | [ HT : _ ⊢ e1 ∈ TBool |- _ ] =>
+          destruct (canonical_forms_bool _ _ HT Hval1) as [b Hb]
+      end. subst e1.
       destruct b.
       * exists e2. apply STIfTrue.
       * exists e3. apply STIfFalse.
@@ -398,14 +516,20 @@ Proof.
     right.
     destruct IHHtyped1 as [Hval1 | [e1' Hstep1]]; auto.
     + destruct IHHtyped2 as [Hval2 | [e2' Hstep2]]; auto.
-      * (* Both values *)
-        inversion Hval1; subst.
-        inversion Hval2; subst.
+      * (* Both values: both integers by canonical forms *)
+        match goal with
+        | [ HT : _ ⊢ e1 ∈ TInt |- _ ] =>
+            destruct (canonical_forms_int _ _ HT Hval1) as [n Hn1]
+        end. subst e1.
+        match goal with
+        | [ HT : _ ⊢ e2 ∈ TInt |- _ ] =>
+            destruct (canonical_forms_int _ _ HT Hval2) as [n0 Hn2]
+        end. subst e2.
         destruct H as [HAdd | [HSub | [HMul | HDiv]]]; subst.
         { exists (EInt (n + n0)). apply STBinOpInt. left. split; reflexivity. }
         { exists (EInt (n - n0)). apply STBinOpInt. right. left. split; reflexivity. }
         { exists (EInt (n * n0)). apply STBinOpInt. right. right. left. split; reflexivity. }
-        { contradiction. }
+        { exists (EInt (Nat.div n n0)). apply STBinOpInt. right. right. right. split; reflexivity. }
       * (* e2 steps *)
         exists (EBinOp op e1 e2'). apply STBinOpRight; assumption.
     + (* e1 steps *)
@@ -414,9 +538,15 @@ Proof.
     right.
     destruct IHHtyped1 as [Hval1 | [e1' Hstep1]]; auto.
     + destruct IHHtyped2 as [Hval2 | [e2' Hstep2]]; auto.
-      * (* Both values *)
-        inversion Hval1; subst.
-        inversion Hval2; subst.
+      * (* Both values: both booleans by canonical forms *)
+        match goal with
+        | [ HT : _ ⊢ e1 ∈ TBool |- _ ] =>
+            destruct (canonical_forms_bool _ _ HT Hval1) as [b Hb1]
+        end. subst e1.
+        match goal with
+        | [ HT : _ ⊢ e2 ∈ TBool |- _ ] =>
+            destruct (canonical_forms_bool _ _ HT Hval2) as [b0 Hb2]
+        end. subst e2.
         destruct H as [HAnd | HOr]; subst.
         { exists (EBool (andb b b0)). apply STBinOpBool. left. split; reflexivity. }
         { exists (EBool (orb b b0)). apply STBinOpBool. right. split; reflexivity. }
@@ -426,13 +556,19 @@ Proof.
     right.
     destruct IHHtyped1 as [Hval1 | [e1' Hstep1]]; auto.
     + destruct IHHtyped2 as [Hval2 | [e2' Hstep2]]; auto.
-      * (* Both values *)
-        inversion Hval1; subst.
-        inversion Hval2; subst.
+      * (* Both values: both integers by canonical forms *)
+        match goal with
+        | [ HT : _ ⊢ e1 ∈ TInt |- _ ] =>
+            destruct (canonical_forms_int _ _ HT Hval1) as [n Hn1]
+        end. subst e1.
+        match goal with
+        | [ HT : _ ⊢ e2 ∈ TInt |- _ ] =>
+            destruct (canonical_forms_int _ _ HT Hval2) as [n0 Hn2]
+        end. subst e2.
         destruct H as [HEq | [HLt | HGt]]; subst.
         { exists (EBool (n =? n0)). apply STBinOpCmp. left. split; reflexivity. }
         { exists (EBool (n <? n0)). apply STBinOpCmp. right. left. split; reflexivity. }
-        { exists (EBool (n >? n0)). apply STBinOpCmp. right. right. split; reflexivity. }
+        { exists (EBool (n0 <? n)). apply STBinOpCmp. right. right. split; reflexivity. }
       * exists (EBinOp op e1 e2'). apply STBinOpRight; assumption.
     + exists (EBinOp op e1' e2). apply STBinOpLeft. assumption.
   - (* TDimLit *)
@@ -445,63 +581,58 @@ Theorem preservation : forall e e' T,
   e → e' ->
   [] ⊢ e' ∈ T.
 Proof.
-  intros e e' T Htyped Hstep.
-  generalize dependent e'.
-  remember [] as ctx.
-  induction Htyped; intros e' Hstep; subst; inversion Hstep; subst.
-  - (* Impossible: values don't step *)
-    inversion H1.
-  - (* Impossible *)
-    inversion H1.
-  - (* Impossible *)
-    inversion H1.
-  - (* TLet STLet *)
-    eapply subst_preserves_typing; eauto.
-  - (* TLet STLetStep *)
-    apply TLet_typed.
-    + apply IHHtyped1. assumption. reflexivity.
-    + assumption.
-  - (* Impossible *)
-    inversion H1.
-  - (* TApp STApp *)
-    eapply subst_preserves_typing; eauto.
-  - (* TApp STAppFun *)
-    apply TApp_typed with (T1 := T1).
-    + apply IHHtyped1. assumption. reflexivity.
-    + assumption.
-  - (* TApp STAppArg *)
-    apply TApp_typed with (T1 := T1).
-    + assumption.
-    + apply IHHtyped2. assumption. reflexivity.
-  - (* TIf STIfTrue *)
-    assumption.
-  - (* TIf STIfFalse *)
-    assumption.
-  - (* TIf STIfStep *)
-    apply TIf_typed.
-    + apply IHHtyped1. assumption. reflexivity.
-    + assumption.
-    + assumption.
-  - (* TBinOp Int — STBinOpInt: result is EInt n3 *)
-    apply TBinOp_Int_typed with (op := op); auto.
-  - (* TBinOp Int — STBinOpLeft: e1 steps *)
-    eapply TBinOp_Int_typed; eauto.
-  - (* TBinOp Int — STBinOpRight: e2 steps *)
-    eapply TBinOp_Int_typed; eauto.
-  - (* Impossible: TBinOp Bool values don't reduce via STBinOpInt *)
-    destruct H as [HA | [HB | HC]]; subst; discriminate.
-  - (* TBinOp Bool — STBinOpLeft *)
-    eapply TBinOp_Bool_typed; eauto.
-  - (* TBinOp Bool — STBinOpRight *)
-    eapply TBinOp_Bool_typed; eauto.
-  - (* Impossible: TBinOp Cmp (OpEq/OpLt/OpGt) doesn't reduce via STBinOpInt (OpAdd/OpSub/OpMul) *)
-    destruct H as [HEq | [HLt | HGt]]; destruct H0 as [[HA _] | [[HB _] | [HC _]]]; subst; discriminate.
-  - (* TBinOp Cmp — STBinOpLeft *)
-    eapply TBinOp_Cmp_typed; eauto.
-  - (* TBinOp Cmp — STBinOpRight *)
-    eapply TBinOp_Cmp_typed; eauto.
-  - (* Impossible *)
-    inversion H3.
+  (* Induction on the step relation. The step's shape pins the redex,
+     [inversion Htyped] recovers the typing premises, and the residual
+     goals are discharged uniformly:
+       - if-true/false: the taken branch's typing hypothesis;
+       - beta (application): invert the function's typing, then the
+         substitution lemma;
+       - let: the substitution lemma directly;
+       - congruence: the matching typing constructor + the IH (found by
+         [eauto] over all constructors, which also re-types literal
+         results such as [EInt n3 : TInt]);
+       - spurious binop typing subcases ([inversion Htyped] offers an
+         Int/Bool/Cmp reading for every [EBinOp]): a literal cannot have
+         the wrong base type, and the operator tag sets are disjoint. *)
+  intros e e' T Htyped Hstep. generalize dependent T.
+  (* [Tres] avoids a name clash with the [T] bound by step constructors
+     such as [STApp] (the function's domain annotation). *)
+  induction Hstep; intros Tres Htyped; inversion Htyped; subst;
+    try (solve [assumption]);
+    try (solve [ match goal with
+                 | [ Hf : _ ⊢ EFun _ _ _ ∈ _ |- _ ] => inversion Hf; subst
+                 end;
+                 eapply subst_preserves_typing; eauto ]);
+    try (solve [eapply subst_preserves_typing; eauto]);
+    try (solve [eauto 8 using TInt_typed, TFloat_typed, TBool_typed,
+                  TVar_typed, TLet_typed, TFun_typed, TApp_typed, TIf_typed,
+                  TBinOp_Int_typed, TBinOp_Bool_typed, TBinOp_Cmp_typed,
+                  TDimLit_typed]);
+    try (solve [ exfalso;
+                 repeat match goal with
+                        | [ H : _ ⊢ EInt _ ∈ TBool |- _ ] => inversion H
+                        | [ H : _ ⊢ EBool _ ∈ TInt |- _ ] => inversion H
+                        | [ H : _ ⊢ EInt _ ∈ TFun _ _ |- _ ] => inversion H
+                        | [ H : _ ⊢ EBool _ ∈ TFun _ _ |- _ ] => inversion H
+                        | [ H : _ \/ _ |- _ ] => destruct H
+                        | [ H : _ /\ _ |- _ ] => destruct H
+                        end;
+                 subst; discriminate ]).
+Qed.
+
+(** Preservation lifts to the reflexive-transitive closure. Stated as
+    its own lemma so the typing hypothesis is generalised correctly
+    across the [multi_step] induction (inducting on [Hmulti] with the
+    typing left in the context would silently fix the start term). *)
+Lemma multi_preservation : forall e e' T,
+  [] ⊢ e ∈ T ->
+  e →* e' ->
+  [] ⊢ e' ∈ T.
+Proof.
+  intros e e' T Htyped Hmulti. revert T Htyped.
+  induction Hmulti as [e | e1 e2 e3 Hstep Hmulti IH]; intros T Htyped.
+  - assumption.
+  - apply IH. eapply preservation; eauto.
 Qed.
 
 (** ** Type Soundness (Combined) *)
@@ -513,34 +644,26 @@ Theorem soundness : forall e e' T,
   value e' \/ exists e'', e' → e''.
 Proof.
   intros e e' T Htyped Hmulti.
-  induction Hmulti.
-  - (* Base case: e → e *)
-    apply progress. assumption.
-  - (* Inductive case *)
-    assert ([] ⊢ e2 ∈ T).
-    { eapply preservation; eauto. }
-    apply IHHmulti. assumption.
+  apply (progress e' T).
+  eapply multi_preservation; eauto.
 Qed.
 
 (** ** Dimensional Type Safety *)
 
 (** Dimension errors cannot occur at runtime *)
-Theorem dimensional_safety : forall e T d,
+Theorem dimensional_safety : forall e d,
   [] ⊢ e ∈ TDimensional d ->
   forall e', e →* e' -> value e' ->
   exists n, e' = EDimLit n d.
 Proof.
-  intros e T d Htyped e' Hmulti Hval.
-  (* By soundness, e' is well-typed with type TDimensional d *)
-  assert (Htyped' : [] ⊢ e' ∈ TDimensional d).
-  { clear Hval.
-    induction Hmulti.
-    - assumption.
-    - apply IHHmulti. eapply preservation; eauto.
-  }
-  (* A value of type TDimensional d must be EDimLit n d *)
+  intros e d Htyped e' Hmulti Hval.
+  (* Typing is preserved along the reduction, so e' still has type
+     TDimensional d; a value of that type must be a dimensioned
+     literal with the same dimension. *)
+  assert (Htyped' : [] ⊢ e' ∈ TDimensional d)
+    by (eapply multi_preservation; eauto).
   inversion Hval; subst; inversion Htyped'; subst.
-  exists n. reflexivity.
+  eexists. reflexivity.
 Qed.
 
 (** ** Summary *)

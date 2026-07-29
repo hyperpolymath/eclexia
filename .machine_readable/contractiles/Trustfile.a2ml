@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: MPL-2.0
+# Trustfile — Trust boundaries and integrity invariants for eclexia
+# Author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+#
+# Defines what LLM/SLM agents are trusted to do without asking, and
+# integrity invariants that verify the repo has not been tampered with.
+#
+# NOTE (2026-06-13): identity + trust-deny-areas localized for eclexia.
+# The estate-carried file named rsr-template-repo and scoped to "template
+# files"; the integrity invariants below are kept and apply to eclexia.
+
+@abstract:
+Trust boundaries and integrity checks for eclexia. Defines what AI agents
+may do autonomously and what requires human approval, plus checks that
+verify repository integrity.
+@end
+
+## Trust Levels
+
+Eclexia operates at trust level: standard
+
+Trust levels:
+- maximal:    Agent may read, build, test, lint, format, heal freely. Only destructive/external actions require approval.
+- standard:   Agent may read, build, test, lint, format. Edits to semantic-authority surfaces and workflows need approval.
+- restricted: Agent may read and build. All modifications need approval.
+- minimal:    Agent may read specific files only.
+
+Current trust level: standard
+Rationale: eclexia is the upstream-canonical anchor; language semantics and
+the Coq/Agda metatheory are protected surfaces, so full autonomy is scoped
+below "maximal".
+
+## Integrity Invariants
+
+### Secrets
+
+#### no-secrets-committed
+- description: No credential files in repo
+- run: test ! -f .env && test ! -f credentials.json && test ! -f .env.local && test ! -f .env.production
+- severity: critical
+
+#### no-private-keys
+- description: No private key files committed
+- run: "! find . -name '*.pem' -o -name '*.key' -o -name 'id_rsa' -o -name 'id_ed25519' 2>/dev/null | grep -v target | head -1 | grep -q ."
+- severity: critical
+
+#### no-tokens-in-source
+- description: No hardcoded API tokens in source
+- run: "! grep -rE '(api[_-]?key|secret|token|password)\\s*[:=]\\s*[\"'\\''][A-Za-z0-9]{16,}' --include='*.rs' --include='*.ecl' --include='*.v' . 2>/dev/null | grep -v target | head -1 | grep -q ."
+- severity: critical
+- notes: FARM_DISPATCH_TOKEN etc. are referenced by NAME only (see bot_directives/git-private-farm.a2ml), never by value
+
+## Provenance
+
+#### author-correct
+- description: Git author matches expected identity
+- run: "git log -1 --format='%ae' | grep -qE '(hyperpolymath|j\\.d\\.a\\.jewell)'"
+- severity: warning
+
+#### license-content
+- description: LICENSE is MPL-2.0 (Palimpsest)
+- run: grep -q 'Mozilla Public License\\|MPL-2.0' LICENSE
+- severity: warning
+
+## Eclexia-Specific Trust
+
+### semantic-authority-protected
+- description: Semantic-authority surfaces require explicit approval to change
+- run: echo "Protected: THEORY.md, SPECIFICATION.md, PROOFS.md, formal/, ANCHOR.scm, .claude/CLAUDE.md"
+- severity: advisory
+- areas:
+  - THEORY.md
+  - SPECIFICATION.md
+  - PROOFS.md
+  - formal/coq/src/
+  - formal/agda/
+  - ANCHOR.scm
+  - .claude/CLAUDE.md
+  - .github/workflows/
+
+## Container Security
+
+#### container-images-pinned
+- description: Containerfile uses pinned base images
+- run: test ! -f Containerfile || grep -q 'cgr.dev\\|@sha256:' Containerfile
+- severity: warning
+
+#### no-dockerfile
+- description: No Dockerfile (use Containerfile)
+- run: test ! -f Dockerfile
+- severity: warning

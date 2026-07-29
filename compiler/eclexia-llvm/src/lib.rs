@@ -87,9 +87,12 @@ fn ty_to_llvm(ty: &Ty, ctx: &mut ModuleContext) -> String {
             let struct_name = ctx.declare_struct(name);
             format!("ptr %struct.{}", struct_name)
         }
-        Ty::Function { .. } | Ty::ForAll { .. } | Ty::Var(_) | Ty::Error | Ty::Never => {
-            "ptr".to_string()
-        }
+        Ty::Echo { .. }
+        | Ty::Function { .. }
+        | Ty::ForAll { .. }
+        | Ty::Var(_)
+        | Ty::Error
+        | Ty::Never => "ptr".to_string(),
     }
 }
 
@@ -1707,7 +1710,7 @@ mod tests {
         let mut constants: Arena<Constant> = Arena::new();
         let c_a = constants.alloc(Constant {
             ty: Ty::Primitive(PrimitiveTy::Float),
-            kind: ConstantKind::Float(3.14),
+            kind: ConstantKind::Float(3.5),
         });
         let c_b = constants.alloc(Constant {
             ty: Ty::Primitive(PrimitiveTy::Float),
