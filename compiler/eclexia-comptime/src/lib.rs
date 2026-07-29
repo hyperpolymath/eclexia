@@ -102,7 +102,7 @@ mod tests {
     #[test]
     fn test_comptime_value_known() {
         assert!(ComptimeValue::Int(42).is_known());
-        assert!(ComptimeValue::Float(3.14).is_known());
+        assert!(ComptimeValue::Float(3.5).is_known());
         assert!(ComptimeValue::Bool(true).is_known());
         assert!(ComptimeValue::String("hello".to_string()).is_known());
         assert!(ComptimeValue::Unit.is_known());
@@ -119,7 +119,7 @@ mod tests {
 
     #[test]
     fn test_comptime_float_roundtrip() {
-        let val = ComptimeValue::Float(2.718);
+        let val = ComptimeValue::Float(2.5);
         let kind = expect_some(val.to_constant_kind(), "expected constant kind");
         let back = ComptimeValue::from_constant_kind(&kind);
         assert_eq!(val, back);

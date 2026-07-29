@@ -1,9 +1,21 @@
 # Eclexia - Quick Status Reference
 
-**Last Updated:** 2026-02-24
-**Completion:** Alpha — Core compiler functional, all SONNET completion tasks complete
-**Build:** Passing (25 crates, zero clippy warnings)
+**Last Updated:** 2026-07-29
+**Completion:** Alpha — core compiler functional; Echo structured-loss layer landed 2026-06
+**Build:** `cargo check --workspace` passing (53 workspace members)
 **Tests:** Local quality gate passing (docs, fmt, lint, unit, conformance, integration, p2p, e2e, benchmarks)
+
+> **CI on origin/main is not fully green.** Four workflows pass (CodeQL, Hypatia,
+> Governance, Secret Scanner); three are red. Cargo Audit and Scorecards have
+> fixes staged on the unpushed branch `fix/ci-punchlist-2026-07-27`.
+> ClusterFuzzLite is red on a **reproducible out-of-memory crash in `fuzz_main`**
+> — a genuine compiler defect, still unfixed. Current detail lives in
+> `dev-notes/eclexia-sitrep-2026-07-27.md`; machine-readable state in
+> `.machine_readable/6a2/STATE.a2ml`.
+>
+> Sections below dated 2026-02 describe the compiler accurately but predate the
+> Echo work and all CI/governance changes. Where they say "25 crates", the
+> measured figure is now 53 workspace members.
 
 ---
 

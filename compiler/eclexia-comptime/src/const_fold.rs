@@ -314,8 +314,8 @@ mod tests {
             Some(ComptimeValue::Bool(false))
         );
         assert_eq!(
-            fold_unary(UnaryOp::Neg, &ComptimeValue::Float(3.14)),
-            Some(ComptimeValue::Float(-3.14))
+            fold_unary(UnaryOp::Neg, &ComptimeValue::Float(3.5)),
+            Some(ComptimeValue::Float(-3.5))
         );
     }
 
