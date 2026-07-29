@@ -1,6 +1,27 @@
-## Current Session Status (Updated 2026-02-12)
+## Current Session Status (Updated 2026-07-29)
 
-**Build Status:** 25 crates compiling, 507 total tests (446 lib + 32/32 valid + 19/19 invalid conformance), zero clippy warnings, zero failures
+> **Read this first.** The detailed sections below were measured on 2026-02-12.
+> They describe the compiler pipeline accurately, but they predate the Echo
+> structured-loss work (landed 2026-06) and all July CI/governance changes, and
+> they undercount the workspace: the measured figure is **53 Cargo workspace
+> members**, not 25 crates.
+>
+> **Authoritative current state:** `.machine_readable/6a2/STATE.a2ml`
+> (machine-readable) and `dev-notes/eclexia-sitrep-2026-07-27.md` (narrative).
+>
+> **CI on origin/main is not fully green.** Green: CodeQL, Hypatia, Governance,
+> Secret Scanner. Red: Cargo Audit and Scorecards (fixes staged on the unpushed
+> branch `fix/ci-punchlist-2026-07-27`), and ClusterFuzzLite on a **reproducible
+> out-of-memory crash in `fuzz_main`** — a real compiler defect, still open.
+>
+> **Checkout path:** `developer/hyper-repos/_LANGUAGES _SET/_NEXTGEN_LANGUAGES _SET/eclexia`.
+> The path contains spaces; quote it in shell commands.
+>
+> **Diagnostic trap:** a workflow rejected at parse time produces *no check run*,
+> so `gh pr checks` shows nothing rather than a failure. Use
+> `gh run list --json conclusion` to see `startup_failure`.
+
+**Build Status (2026-02-12 snapshot):** 25 crates compiling, 507 total tests (446 lib + 32/32 valid + 19/19 invalid conformance), zero clippy warnings, zero failures
 **Security:** 20 production unwraps (down from 100+), 28 unsafe blocks (all FFI), 0 clippy warnings
 **Conformance:** 32/32 valid + 19/19 invalid passing (0 skips)
 **License:** All files MPL-2.0
@@ -139,8 +160,8 @@ Both are FOSS with independent governance (no Big Tech).
 
 ### Package Management
 
-- **Primary**: Guix (guix.scm)
-- **Fallback**: Nix (flake.nix)
+- **Primary**: Guix (guix.scm) — the *only* supported route
+- **Nix**: RETIRED 2026-05-18. Do not add or restore `flake.nix`.
 - **JS deps**: Deno (deno.json imports)
 
 ### Security Requirements

@@ -4,10 +4,10 @@
 # STATE.a2ml — Eclexia project state
 [metadata]
 project = "eclexia"
-version = "1.1"
-last-updated = "2026-06-13"
+version = "1.2"
+last-updated = "2026-07-29"
 status = "active"
-session = "2026-06-13 estate-standardization + Echo currency checkpoint"
+session = "2026-07-29 CI/documentation reconciliation — see dev-notes/eclexia-sitrep-2026-07-27.md"
 
 [project-context]
 name = "Eclexia"
@@ -36,6 +36,10 @@ milestones = [
   "LANDED 2026-06-05: Coq soundness A ≃ Σ(y:B). Echo f y (formal/coq/src/Echo.v)",
   "LANDED 2026-06-05: Landauer resource bridge — landauer_cost(states,T) : Resource[Energy]; EchoThermo.v (bennett_reversible_is_free, free_iff_reversible, irreversible_costs_at_least_one_bit, erasure_monotone); THEORY.md §5.5 graded comonad of structured loss",
   "LANDED 2026-06-13: governance + .machine_readable standardized to the 06-12 estate standard (flat contractiles, self-validating/, bot_directives trio)",
+  "LANDED 2026-07-25: docs deploy via Ddraig SSG (#54)",
+  "LANDED 2026-07-25: governance gate closed — SPDX, workflow permissions, SHA pins, reusable bump (#55)",
+  "LANDED 2026-07-26: estate sweeps 2-4 reconciled to main — mise.toml, LICENSES/, ARCHITECTURE/GOVERNANCE/MAINTAINERS (#56)",
+  "PENDING 2026-07-29: branch fix/ci-punchlist-2026-07-27 — Scorecards permissions, RUSTSEC bumps, CodeQL pin label, guix licence, documentation refresh (local, unpushed)",
 ]
 
 [blockers-and-issues]
@@ -46,6 +50,10 @@ issues = [
   "Runtime metrics not wired to real OS metrics (except RSS on Linux)",
   "Package registry server stub not deployed",
   "No measured benchmarks (performance claims are projections)",
+  "OPEN #43: ShadowPrices.v carries 5 cited LP axioms — documented, not discharged",
+  "OPEN #35: 'Known Gaps (honest)' tracking issue",
+  "OPEN #20: 10 Critical/High panic-attack findings await triage (Track C)",
+  "CI 2026-07-26: ClusterFuzzLite found a REPRODUCIBLE out-of-memory crash in fuzz_main (artifact oom-abc6a184…) — a real compiler defect, not a workflow fault",
 ]
 
 [critical-next-actions]
@@ -62,6 +70,28 @@ actions = [
 [standing-decisions]
 sd-echo = "Echo is core, not a plugin: it sits in the type system (Echo[A,B]) and the resource economy (landauer_cost). The echo-types ↔ eclexia link is downstream-only application evidence (echo-types docs/bridge-status.md §8); eclexia makes no upstream-correctness claim and vice versa."
 
+[repo-facts]
+# Verified 2026-07-29 by direct inspection; supersedes the "25 crates" figure
+# still repeated in QUICK_STATUS.md / TOOLCHAIN_STATUS.md / .claude/CLAUDE.md.
+cargo-workspace-members = 53
+stdlib-modules = 9
+examples = 39
+coq-files = 5      # Typing, Syntax, Echo, EchoThermo, ShadowPrices
+agda-files = 1     # ResourceTracking
+checkout-path = "developer/hyper-repos/_LANGUAGES _SET/_NEXTGEN_LANGUAGES _SET/eclexia"
+packaging = "Guix only — Nix retired 2026-05-18"
+
+[ci-status]
+# Measured on origin/main 2026-07-29 via gh run list.
+green = ["CodeQL", "Hypatia Security Scan", "Governance", "Secret Scanner"]
+red = [
+  "Cargo Audit — RUSTSEC-2026-0204 crossbeam-epoch (fix staged on branch)",
+  "Scorecards — startup_failure, caller job dropped contents:read (fix staged on branch)",
+  "ClusterFuzzLite — reproducible OOM in fuzz_main (REAL defect, unfixed)",
+]
+note = "startup_failure produces NO check run; gh pr checks hides it. Use gh run list --json conclusion."
+
 [maintenance-status]
-last-run-utc = "2026-06-13T00:00:00Z"
-last-result = "pass"  # unknown | pass | warn | fail
+last-run-utc = "2026-07-29T00:00:00Z"
+last-result = "warn"  # unknown | pass | warn | fail
+last-result-reason = "main has 3 red workflows; 2 have fixes staged on an unpushed branch, 1 (fuzz OOM) is an open compiler defect"

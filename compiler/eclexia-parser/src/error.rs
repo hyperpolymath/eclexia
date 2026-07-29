@@ -76,6 +76,17 @@ pub enum ParseError {
         /// Optional hint for fixing the error.
         hint: Option<String>,
     },
+
+    /// Nesting exceeded the parser's recursion limit.
+    #[error("expression nesting too deep (limit {limit})")]
+    RecursionLimitExceeded {
+        /// Source location at which the limit was hit.
+        span: Span,
+        /// The configured limit.
+        limit: u32,
+        /// Optional hint for fixing the error.
+        hint: Option<String>,
+    },
 }
 
 impl ParseError {
@@ -150,6 +161,7 @@ impl ParseError {
             Self::UnexpectedEof { span, .. } => *span,
             Self::InvalidResourceLiteral { span, .. } => *span,
             Self::Custom { span, .. } => *span,
+            Self::RecursionLimitExceeded { span, .. } => *span,
         }
     }
 
@@ -162,6 +174,7 @@ impl ParseError {
             Self::UnexpectedEof { hint, .. } => hint.as_deref(),
             Self::InvalidResourceLiteral { hint, .. } => hint.as_deref(),
             Self::Custom { hint, .. } => hint.as_deref(),
+            Self::RecursionLimitExceeded { hint, .. } => hint.as_deref(),
         }
     }
 

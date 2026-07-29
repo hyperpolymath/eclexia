@@ -4,7 +4,7 @@ SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 -->
 
 [![OpenSSF Best Practices](https://img.shields.io/badge/OpenSSF-Best_Practices-green?logo=opensourcesecurity)](https://www.bestpractices.dev/en/projects/new?repo_url=https://github.com/hyperpolymath/eclexia)
-[![License: PMPL-1.0](https://img.shields.io/badge/License-MPL--2.0-blue.svg)](https://github.com/hyperpolymath/palimpsest-license) <embed
+[![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-blue.svg)](https://github.com/hyperpolymath/palimpsest-license) <embed
 src="https://api.thegreenwebfoundation.org/greencheckimage/github.com"
 data-link="https://www.thegreenwebfoundation.org/green-web-check/?url=github.com" />
 
@@ -17,6 +17,8 @@ optimize for performance and sustainability together.
 - [Getting Started](GETTING_STARTED.md)
 
 - [Current Implementation Status](QUICK_STATUS.md)
+
+- [Architecture](ARCHITECTURE.md)
 
 - [Documentation Index](docs/README.md)
 
