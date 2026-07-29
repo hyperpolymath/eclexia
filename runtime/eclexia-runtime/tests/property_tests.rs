@@ -153,11 +153,9 @@ mod adaptive_selection_properties {
             time_price in 0.1f64..10.0,
             carbon_price in 0.1f64..10.0,
         ) {
-            let solutions = vec![
-                Solution { energy: 100.0, time: 1.0, carbon: 50.0 },
+            let solutions = [Solution { energy: 100.0, time: 1.0, carbon: 50.0 },
                 Solution { energy: 50.0, time: 5.0, carbon: 10.0 },
-                Solution { energy: 10.0, time: 20.0, carbon: 1.0 },
-            ];
+                Solution { energy: 10.0, time: 20.0, carbon: 1.0 }];
 
             // Select twice with same prices
             let selected1 = match solutions.iter().min_by(|a, b| {

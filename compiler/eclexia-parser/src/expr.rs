@@ -82,6 +82,14 @@ impl<'src> Parser<'src> {
         file: &mut SourceFile,
         min_prec: Precedence,
     ) -> ParseResult<ExprId> {
+        self.with_recursion_guard(|p| p.parse_expr_prec_inner(file, min_prec))
+    }
+
+    fn parse_expr_prec_inner(
+        &mut self,
+        file: &mut SourceFile,
+        min_prec: Precedence,
+    ) -> ParseResult<ExprId> {
         let mut lhs = self.parse_prefix(file)?;
 
         loop {
@@ -594,6 +602,14 @@ impl<'src> Parser<'src> {
     ///
     /// This method is an internal helper used by `parse_primary` when encountering a block.
     fn parse_block_inner(
+        &mut self,
+        file: &mut SourceFile,
+        start: eclexia_ast::span::Span,
+    ) -> ParseResult<Block> {
+        self.with_recursion_guard(|p| p.parse_block_inner_guarded(file, start))
+    }
+
+    fn parse_block_inner_guarded(
         &mut self,
         file: &mut SourceFile,
         start: eclexia_ast::span::Span,
