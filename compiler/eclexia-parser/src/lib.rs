@@ -25,6 +25,22 @@ use smol_str::SmolStr;
 
 pub use error::{ParseError, ParseResult};
 
+/// Maximum nesting depth accepted by the recursive-descent parser.
+///
+/// The parser descends the native stack, so deeply nested input such as
+/// `((((...1...))))` would otherwise abort the *process* with a stack overflow
+/// rather than returning an error — roughly 2 KB of adversarial input was
+/// enough to kill the fuzzer before this limit existed.
+///
+/// The value must hold on the smallest stack the parser runs on. Rust spawns
+/// threads with 2 MiB by default, and the LSP and test harness both parse off
+/// the main thread; a debug-build level costs on the order of 8 KiB across the
+/// `parse_expr_prec` -> `parse_prefix` -> `parse_primary` -> `parse_expr` chain,
+/// so 256 overflowed a 2 MiB thread even though it was fine on the main
+/// thread's 8 MiB. 64 leaves roughly a 4x margin there while remaining far
+/// deeper than any hand-written source.
+pub const MAX_RECURSION_DEPTH: u32 = 64;
+
 /// Parser for Eclexia source code.
 pub struct Parser<'src> {
     lexer: Lexer<'src>,
@@ -33,6 +49,8 @@ pub struct Parser<'src> {
     errors: Vec<ParseError>,
     /// Disable struct literal parsing in postfix position (for contexts where { starts a block)
     no_struct_literals: bool,
+    /// Current recursive-descent nesting depth; bounded by [`MAX_RECURSION_DEPTH`].
+    depth: u32,
 }
 
 impl<'src> Parser<'src> {
@@ -43,7 +61,40 @@ impl<'src> Parser<'src> {
             source,
             errors: Vec::new(),
             no_struct_literals: false,
+            depth: 0,
         }
+    }
+
+    /// Enter one level of recursive descent, failing if the limit is reached.
+    ///
+    /// Callers must pair this with [`Parser::exit_recursion`]; use
+    /// [`Parser::with_recursion_guard`] where the control flow allows it.
+    fn enter_recursion(&mut self) -> ParseResult<()> {
+        if self.depth >= MAX_RECURSION_DEPTH {
+            return Err(ParseError::RecursionLimitExceeded {
+                span: self.peek().span,
+                limit: MAX_RECURSION_DEPTH,
+                hint: Some("simplify deeply nested expressions or types".to_string()),
+            });
+        }
+        self.depth += 1;
+        Ok(())
+    }
+
+    /// Leave one level of recursive descent.
+    fn exit_recursion(&mut self) {
+        self.depth = self.depth.saturating_sub(1);
+    }
+
+    /// Run `f` one level deeper, restoring the depth on every exit path.
+    fn with_recursion_guard<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> ParseResult<T>,
+    ) -> ParseResult<T> {
+        self.enter_recursion()?;
+        let result = f(self);
+        self.exit_recursion();
+        result
     }
 
     /// Parse a complete source file.
@@ -54,6 +105,9 @@ impl<'src> Parser<'src> {
         let mut file = SourceFile::new();
 
         while !self.is_eof() {
+            // Token offset before this iteration, used to guarantee forward
+            // progress below.
+            let before = self.peek().span.start;
             match self.parse_item(&mut file) {
                 Ok(item) => file.items.push(item),
                 Err(e) => {
@@ -64,6 +118,18 @@ impl<'src> Parser<'src> {
                     // a node for every span in the source
                     file.items.push(eclexia_ast::Item::Error(error_span));
                 }
+            }
+            // Guarantee forward progress. `recover_to_item` stops on
+            // item-start tokens, but `parse_item` rejects some of them
+            // (e.g. a top-level `enum`, which is not a supported item
+            // shorthand). Without this guard the loop would re-error on the
+            // same token forever, accumulating errors + placeholders until
+            // it runs out of memory (found by fuzzing — OOM in
+            // `parse_file` -> `parse_item` -> `unexpected_token`). If a whole
+            // iteration consumed no input, force one token so we always
+            // advance.
+            if !self.is_eof() && self.peek().span.start == before {
+                self.advance();
             }
         }
 
@@ -712,6 +778,10 @@ impl<'src> Parser<'src> {
     ///
     /// A block can optionally end with an expression, which becomes the value of the block.
     fn parse_block(&mut self, file: &mut SourceFile) -> ParseResult<Block> {
+        self.with_recursion_guard(|p| p.parse_block_guarded(file))
+    }
+
+    fn parse_block_guarded(&mut self, file: &mut SourceFile) -> ParseResult<Block> {
         let start = self.expect_token(TokenKind::LBrace)?;
         let mut stmts = Vec::new();
         let mut expr = None;
@@ -1250,6 +1320,10 @@ impl<'src> Parser<'src> {
     /// This handles primitive types, named types (with generics), function types,
     /// tuple types, array types, reference types, optional types, and the inference placeholder.
     fn parse_type(&mut self, file: &mut SourceFile) -> ParseResult<TypeId> {
+        self.with_recursion_guard(|p| p.parse_type_inner(file))
+    }
+
+    fn parse_type_inner(&mut self, file: &mut SourceFile) -> ParseResult<TypeId> {
         let start = self.peek().span;
 
         let kind = if self.check(TokenKind::Amp) {
@@ -2490,5 +2564,57 @@ mod tests {
         let has_function = file.items.iter().any(|i| matches!(i, Item::Function(_)));
         assert!(has_error, "Expected an error item node");
         assert!(has_function, "Expected the good function to be parsed");
+    }
+
+    #[test]
+    fn parse_file_terminates_on_unhandled_item_token() {
+        // Regression (found by fuzzing — OOM): `enum` is a recovery
+        // stop-token in `recover_to_item`, but `parse_item` rejects it, so
+        // before the forward-progress guard in `parse_file` the loop spun
+        // forever, accumulating errors + Item::Error placeholders until it
+        // ran out of memory. Parsing must now terminate with a parse error.
+        let (file, errors) = parse("enum Foo {}");
+        assert!(!errors.is_empty(), "expected a parse error for top-level enum");
+        // It also makes progress past the offending token rather than
+        // emitting a single error in an unbounded loop.
+        assert!(
+            file.items.len() < 100,
+            "parser emitted an unbounded number of items: {}",
+            file.items.len()
+        );
+
+        // A run of unhandled stop-tokens must also terminate.
+        let (_f, errs) = parse("enum enum enum");
+        assert!(!errs.is_empty());
+    }
+
+    #[test]
+    fn deep_nesting_errors_instead_of_overflowing_the_stack() {
+        // Regression (found by ClusterFuzzLite, artifact oom-abc6a184…):
+        // the recursive-descent parser descends the native stack, so nesting
+        // deeper than the stack could hold aborted the *process* with
+        // "fatal runtime error: stack overflow" — reported by libFuzzer as an
+        // OOM. About 1000 parens (~2 KB) was enough. Parsing must now return a
+        // RecursionLimitExceeded error instead of dying.
+        for depth in [1_000usize, 50_000] {
+            let src = format!("fn f() {{ {}1{} }}", "(".repeat(depth), ")".repeat(depth));
+            let (_file, errors) = parse(&src);
+            assert!(
+                errors
+                    .iter()
+                    .any(|e| matches!(e, ParseError::RecursionLimitExceeded { .. })),
+                "depth {depth} should report RecursionLimitExceeded, got {errors:?}"
+            );
+        }
+
+        // Deeply nested types must be bounded on the same principle.
+        let ty = format!("fn f(x: {}i32{}) {{ }}", "[".repeat(5_000), "]".repeat(5_000));
+        let (_file, errors) = parse(&ty);
+        assert!(!errors.is_empty(), "deep type nesting should error, not crash");
+
+        // Nesting that stays within the limit must still parse cleanly.
+        let ok = format!("fn f() {{ {}1{} }}", "(".repeat(32), ")".repeat(32));
+        let (_file, errors) = parse(&ok);
+        assert!(errors.is_empty(), "shallow nesting must still parse: {errors:?}");
     }
 }

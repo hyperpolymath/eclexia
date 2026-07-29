@@ -1,6 +1,6 @@
 # Eclexia: Code That Cares About the Planet
 
-[![License: PMPL-1.0](https://img.shields.io/badge/License-PMPL--1.0-blue.svg)](https://github.com/hyperpolymath/palimpsest-license)
+[![License: PMPL-1.0](https://img.shields.io/badge/License-MPL--2.0-blue.svg)](https://github.com/hyperpolymath/palimpsest-license)
 [![Build Status](https://github.com/hyperpolymath/eclexia/workflows/CI/badge.svg)](https://github.com/hyperpolymath/eclexia/actions)
 [![Carbon Aware](https://img.shields.io/badge/carbon-aware-green.svg)](docs/CARBON_APIS.md)
 

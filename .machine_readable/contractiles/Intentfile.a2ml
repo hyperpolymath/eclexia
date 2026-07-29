@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: MPL-2.0
+# Intentfile (A2ML Canonical) — north-star contractile for eclexia
+# Author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+#
+# Paired runner: intend.ncl
+# Verb:          intend
+#
+# Semantics: North-star contractile. Declares BOTH concrete committed
+#            next-actions AND horizon aspirations. Non-gating — a report,
+#            not a gate (see Mustfile for hard gates).
+#              [[intents]] — "we WILL do this; track progress"
+#                            status: declared → in_progress → done | deferred | retired
+#              [[wishes]]  — "we WISH this were true; revisit later"
+#                            grouped by horizon: near / mid / far.
+#
+# NOTE (2026-06-13): rewritten for eclexia. The file the estate branch
+# carried was the un-substituted rsr-template-repo Intentfile (its intents
+# were "repo-initialization / contractile-completeness for the template").
+
+@abstract:
+North-star for eclexia: Economics-as-Code — a resource-typed language that
+prices what you give up. The invariant goal is that every cost a program
+incurs (energy, time, carbon, and now structured information loss via Echo)
+is first-class in the type system and the shadow-price economy.
+@end
+
+## Purpose
+
+Eclexia makes resource cost a typed, optimizable property of programs.
+Shadow prices value tradeoffs; dimensional types prevent unit errors; and
+the Echo[A,B] type former retains the witness of a collapsed fibre so that
+erasing information is priced (Landauer) rather than silently free.
+
+## Anti-Purpose
+
+Eclexia is NOT:
+- a general-purpose systems language competing on raw throughput
+- a carbon-accounting bolt-on (cost is in the type system, not a linter)
+- a proof assistant (the Coq/Agda metatheory backs the language; it is not the product)
+
+## If In Doubt
+
+Sensitive areas — ask before changing: language semantics (`THEORY.md`,
+`SPECIFICATION.md`), the Coq/Agda metatheory (`formal/`), `ANCHOR.scm`,
+`.claude/CLAUDE.md`.
+
+## Committed Next-Actions
+
+### echo-functor
+- description: functorial echo_map + (graded co)functor laws as conformance tests
+- probe: test -f tests/conformance/valid/echo_map.ecl
+- status: declared
+- notes: builds on the Echo[A,B] type former + landauer_cost bridge (#32)
+
+### landauer-real-valued
+- description: lift EchoThermo.v discrete shadow toward real-valued k·T·ln2; connect to ShadowPrices.v
+- probe: grep -q "ln2\|k_B" formal/coq/src/EchoThermo.v
+- status: declared
+
+### wasm-gc
+- description: wire the WASM bump allocator (currently defined-not-wired)
+- status: declared
+
+### llvm-linking
+- description: automate linking to the rt-native static library
+- status: declared
+
+## Wishes
+
+### Near Horizon
+#### measured-benchmarks
+- description: replace projected performance claims with measured benchmarks
+- horizon: near
+- status: declared
+
+### Mid Horizon
+#### os-metrics
+- description: wire runtime metrics to real OS metrics beyond RSS-on-Linux
+- horizon: mid
+- status: declared
+
+#### registry-deploy
+- description: deploy the package-registry server (stub exists)
+- horizon: mid
+- status: declared
+
+### Far Horizon
+#### shadow-price-echo-unification
+- description: a single optimization model pricing energy/time/carbon AND Echo erasure jointly via LP duality
+- horizon: far
+- status: declared

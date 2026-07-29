@@ -172,6 +172,7 @@ pub fn size_of_type(ty: &Ty) -> usize {
             size.map(|s| elem_size * s).unwrap_or(8) // Unknown size = pointer
         }
         Ty::Named { .. } => 8, // Placeholder for named types
+        Ty::Echo { .. } => 8,  // (witness, base) pair, heap-allocated: pointer
         Ty::ForAll { body, .. } => size_of_type(body),
         Ty::Var(_) | Ty::Error | Ty::Never => 8, // Fallback
     }
@@ -198,6 +199,7 @@ pub fn align_of_type(ty: &Ty) -> usize {
         Ty::Tuple(types) => types.iter().map(align_of_type).max().unwrap_or(1),
         Ty::Array { elem, .. } => align_of_type(elem),
         Ty::Named { .. } => 8,
+        Ty::Echo { .. } => 8,
         Ty::ForAll { body, .. } => align_of_type(body),
         Ty::Var(_) | Ty::Error | Ty::Never => 8,
     }
