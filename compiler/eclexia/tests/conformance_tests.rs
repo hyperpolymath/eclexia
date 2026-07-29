@@ -24,7 +24,7 @@ const KNOWN_RUNTIME_GAPS: &[(&str, &str)] = &[(
 fn run_valid_test(path: &Path) -> Result<(), String> {
     let path_str = path.to_string_lossy();
     let output = Command::new("cargo")
-        .args(&["run", "--bin", "eclexia", "--", "run", path_str.as_ref()])
+        .args(["run", "--bin", "eclexia", "--", "run", path_str.as_ref()])
         .output()
         .map_err(|e| format!("Failed to execute: {}", e))?;
 
@@ -42,7 +42,7 @@ fn run_valid_test(path: &Path) -> Result<(), String> {
 fn run_invalid_test(path: &Path) -> Result<(), String> {
     let path_str = path.to_string_lossy();
     let output = Command::new("cargo")
-        .args(&["run", "--bin", "eclexia", "--", "run", path_str.as_ref()])
+        .args(["run", "--bin", "eclexia", "--", "run", path_str.as_ref()])
         .output()
         .map_err(|e| format!("Failed to execute: {}", e))?;
 
@@ -109,10 +109,7 @@ fn conformance_valid_tests() {
 
     let mut failed = Vec::new();
     for test_path in &tests {
-        let name = match test_path.file_name().and_then(|s| s.to_str()) {
-            Some(name) => name,
-            None => "<unknown>",
-        };
+        let name = test_path.file_name().and_then(|s| s.to_str()).unwrap_or("<unknown>");
         print!("Testing {}... ", name);
 
         match run_valid_test(test_path) {
@@ -146,10 +143,7 @@ fn conformance_invalid_tests() {
     let mut skipped = Vec::new();
 
     for test_path in &tests {
-        let name = match test_path.file_name().and_then(|s| s.to_str()) {
-            Some(name) => name,
-            None => "<unknown>",
-        };
+        let name = test_path.file_name().and_then(|s| s.to_str()).unwrap_or("<unknown>");
         print!("Testing {}... ", name);
 
         match run_invalid_test(test_path) {

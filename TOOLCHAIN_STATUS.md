@@ -1,8 +1,15 @@
 # Eclexia Toolchain Status
 
-**Last Updated:** 2026-02-12
-**Overall Completion:** Alpha — Core pipeline functional, all SONNET-TASKS complete
-**Tests:** 507 total (446 library + 32/32 valid + 19/19 invalid conformance + integration), 0 failures, 0 clippy warnings
+**Last Updated:** 2026-07-29
+**Overall Completion:** Alpha — core pipeline functional; Echo structured-loss layer landed 2026-06
+**Tests:** 519 total per `.machine_readable/6a2/STATE.a2ml` (the 507 figure below predates the Echo tests), 0 failures, 0 clippy warnings
+
+> **Currency note (2026-07-29):** the component tables below were measured on
+> 2026-02-12 and remain accurate as descriptions of the pipeline, but they
+> predate the Echo work and the July CI/governance changes, and they undercount
+> the workspace (53 members, not 25 crates). For current CI state and open
+> defects — including a reproducible fuzzer OOM in `fuzz_main` — see
+> `dev-notes/eclexia-sitrep-2026-07-27.md` and `.machine_readable/6a2/STATE.a2ml`.
 
 ## Core Compiler Pipeline
 

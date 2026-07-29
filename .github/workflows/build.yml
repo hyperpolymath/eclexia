@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: MPL-2.0
+# Build & test gate — compiles the cargo workspace and runs the test suite +
+# clippy. Fills the gap where the Mustfile's critical `cargo build --workspace`
+# gate (.machine_readable/contractiles/Mustfile.a2ml -> workspace-builds) was
+# enforced locally by `must check` but had no CI counterpart. The Coq metatheory
+# is gated separately by verify-coq-proofs.yml (path-filtered to formal/coq/**).
+
+name: Build & Test
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - '**/*.rs'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '.github/workflows/build.yml'
+  pull_request:
+    paths:
+      - '**/*.rs'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+
+permissions: read-all
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: cargo build + test + clippy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+
+      - name: Install Rust toolchain (stable, enforced >= floor)
+        env:
+          # Floor only — "this version or later". The gate tracks the stable
+          # channel (always >= this); it is NOT pinned to an exact release, so
+          # genuinely-new lints from a newer stable are still caught.
+          MIN_RUST: '1.96.0'
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup default stable
+          rustc --version && cargo --version
+          have="$(rustc --version | awk '{print $2}')"
+          if [ "$(printf '%s\n%s\n' "$MIN_RUST" "$have" | sort -V | head -1)" != "$MIN_RUST" ]; then
+            echo "::error::rustc $have is below the required floor $MIN_RUST"; exit 1
+          fi
+          echo "rustc $have satisfies the >= $MIN_RUST floor"
+
+      - name: Build workspace (Mustfile workspace-builds gate)
+        run: cargo build --workspace --locked
+
+      - name: Install LLVM toolchain (provides llc for the LLVM-backend test)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm
+          # Ubuntu ships versioned binaries (llc-18); expose an unversioned `llc`.
+          if ! command -v llc >/dev/null 2>&1; then
+            LLC_BIN="$(ls /usr/bin/llc-* /usr/lib/llvm-*/bin/llc 2>/dev/null | sort -V | tail -1)"
+            [ -n "$LLC_BIN" ] && sudo ln -sf "$LLC_BIN" /usr/local/bin/llc
+          fi
+          llc --version
+
+      - name: Test workspace
+        run: cargo test --workspace
+
+      - name: Clippy (zero warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings

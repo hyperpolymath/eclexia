@@ -342,10 +342,8 @@ impl WasmBackend {
                         InstructionKind::ShadowPriceHook { .. } => {
                             needs_shadow_price = true;
                         }
-                        InstructionKind::Assign { value, .. } => {
-                            if Self::value_has_pow(value) {
-                                needs_pow = true;
-                            }
+                        InstructionKind::Assign { value, .. } if Self::value_has_pow(value) => {
+                            needs_pow = true;
                         }
                         _ => {}
                     }

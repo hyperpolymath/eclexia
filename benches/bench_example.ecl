@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MPL-2.0
 // Example benchmark file demonstrating the benchmarking framework
 
 def fibonacci(n: Int) -> Int {
