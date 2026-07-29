@@ -1726,11 +1726,8 @@ impl Interpreter {
                     let mut bindings = vec![];
                     for (i, p) in fields.iter().enumerate() {
                         let field_name = SmolStr::new(format!("_{}", i));
-                        if let Some(v) = struct_fields.get(&field_name) {
-                            bindings.extend(self.match_pattern(p, v)?);
-                        } else {
-                            return None;
-                        }
+                        let v = struct_fields.get(&field_name)?;
+                        bindings.extend(self.match_pattern(p, v)?);
                     }
                     Some(bindings)
                 } else {

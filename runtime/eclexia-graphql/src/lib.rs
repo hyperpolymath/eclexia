@@ -116,7 +116,7 @@ fn parse_fields(body: &str) -> Result<Vec<Field>, String> {
             i += 1;
         }
         if i == name_start {
-            return Err(format!("unexpected token near '{}'", &body[i..].trim()));
+            return Err(format!("unexpected token near '{}'", body[i..].trim()));
         }
         let name = body[name_start..i].to_string();
 

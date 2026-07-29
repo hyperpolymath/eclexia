@@ -459,11 +459,7 @@ impl SymbolTable {
                 return Some(symbol);
             }
 
-            if let Some(parent) = self.scopes[scope_id].parent {
-                scope_id = parent;
-            } else {
-                return None;
-            }
+            scope_id = self.scopes[scope_id].parent?;
         }
     }
 
