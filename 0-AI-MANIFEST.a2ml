@@ -4,13 +4,24 @@
 # Owner: hyperpolymath
 
 (ai-manifest
-  (version "1.0")
+  (version "1.1")
   (repository "eclexia")
   (owner "hyperpolymath")
+  (last-updated "2026-07-29")
   (entry-points
-    (primary "README.adoc")
-    (machine-readable ".machine_readable/"))
+    (primary "README.md")            ; converted from README.adoc in PR #47
+    (human-status "QUICK_STATUS.md")
+    (architecture "ARCHITECTURE.md")
+    (machine-readable ".machine_readable/")
+    (state ".machine_readable/6a2/STATE.a2ml"))
   (invariants
     (scm-files-location ".machine_readable/ ONLY — never root")
     (license "MPL-2.0")
-    (github-is-source-of-truth #t)))
+    (packaging "Guix only — Nix retired 2026-05-18, do not add flake.nix")
+    (github-is-source-of-truth #t))
+  (read-order
+    "1. this file"
+    "2. README.md — what Eclexia is"
+    "3. .machine_readable/6a2/STATE.a2ml — current state, next actions"
+    "4. ARCHITECTURE.md — where code lives"
+    "5. .claude/CLAUDE.md — language policy and constraints"))

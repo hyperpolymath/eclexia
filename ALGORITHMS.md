@@ -1,6 +1,6 @@
 # Algorithms and Complexity Analysis for Eclexia
 
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
 <!-- SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell -->
 
 **Version:** 1.0

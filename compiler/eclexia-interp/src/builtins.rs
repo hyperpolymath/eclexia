@@ -737,6 +737,128 @@ pub fn register(env: &Environment) {
             func: builtin_unwrap,
         }),
     );
+
+    // Echo (structured-loss) intrinsics. `echo` itself is intercepted in
+    // the evaluator (call_value_inner) because it must apply the function
+    // argument to compute the base; the stub below only fires if it is
+    // somehow called outside that path. `echo_witness` / `echo_base` are
+    // pure projections over the runtime echo value (a tagged "Echo" struct
+    // with `witness` and `base` fields).
+    env.define(
+        SmolStr::new("echo"),
+        Value::Builtin(BuiltinFn {
+            name: "echo",
+            func: builtin_echo_stub,
+        }),
+    );
+    env.define(
+        SmolStr::new("echo_witness"),
+        Value::Builtin(BuiltinFn {
+            name: "echo_witness",
+            func: builtin_echo_witness,
+        }),
+    );
+    env.define(
+        SmolStr::new("echo_base"),
+        Value::Builtin(BuiltinFn {
+            name: "echo_base",
+            func: builtin_echo_base,
+        }),
+    );
+
+    // Landauer cost of erasing structured loss — wires Echo into the
+    // energy resource economy (see formal/coq/src/EchoThermo.v).
+    env.define(
+        SmolStr::new("landauer_cost"),
+        Value::Builtin(BuiltinFn {
+            name: "landauer_cost",
+            func: builtin_landauer_cost,
+        }),
+    );
+}
+
+/// `landauer_cost(states, temperature_K) : Resource[Energy]`.
+///
+/// The minimum energy to irreversibly erase a fibre of `states`
+/// distinguishable witnesses down to its single base: `E = k_B * T *
+/// ln(states)` joules. A reversible collapse (`states <= 1`, i.e. the echo
+/// retains its witness) erases nothing and costs zero — Bennett's result,
+/// the runtime image of `EchoThermo.bennett_reversible_is_free`.
+fn builtin_landauer_cost(args: &[Value]) -> RuntimeResult<Value> {
+    if args.len() != 2 {
+        return Err(RuntimeError::ArityMismatch {
+            expected: 2,
+            got: args.len(),
+            hint: Some("landauer_cost(states, temperature_K)".to_string()),
+        });
+    }
+    let states = args[0]
+        .as_int()
+        .ok_or_else(|| RuntimeError::type_error("Int (number of states)", args[0].type_name()))?;
+    let temp_k = args[1]
+        .as_float()
+        .ok_or_else(|| RuntimeError::type_error("Float (temperature in K)", args[1].type_name()))?;
+
+    // Boltzmann constant (J/K). Reversible collapses (<= 1 state) are free.
+    const K_B: f64 = 1.380_649e-23;
+    let nats = if states <= 1 { 0.0 } else { (states as f64).ln() };
+    let energy = K_B * temp_k * nats;
+
+    Ok(Value::Resource {
+        value: energy,
+        dimension: eclexia_ast::dimension::Dimension::energy(),
+        unit: Some(SmolStr::new("J")),
+    })
+}
+
+/// Construct a runtime echo value: a tagged struct carrying the retained
+/// witness and the observed base. Shared by the evaluator's `echo`
+/// interception and any other producer.
+pub fn make_echo(witness: Value, base: Value) -> Value {
+    let mut fields = HashMap::new();
+    fields.insert(SmolStr::new("witness"), witness);
+    fields.insert(SmolStr::new("base"), base);
+    Value::Struct {
+        name: SmolStr::new("Echo"),
+        fields,
+    }
+}
+
+/// Read a field of a runtime echo value, checking the tag.
+fn echo_field(args: &[Value], field: &str, who: &str) -> RuntimeResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::ArityMismatch {
+            expected: 1,
+            got: args.len(),
+            hint: None,
+        });
+    }
+    match &args[0] {
+        Value::Struct { name, fields } if name.as_str() == "Echo" => fields
+            .get(field)
+            .cloned()
+            .ok_or_else(|| RuntimeError::custom(format!("malformed echo value passed to {}", who))),
+        other => Err(RuntimeError::type_error("Echo", other.type_name())),
+    }
+}
+
+/// `echo_witness(e)` — the retained witness (proj1 of the fibre).
+fn builtin_echo_witness(args: &[Value]) -> RuntimeResult<Value> {
+    echo_field(args, "witness", "echo_witness")
+}
+
+/// `echo_base(e)` — the observed base value `f x` (the collapsed output).
+fn builtin_echo_base(args: &[Value]) -> RuntimeResult<Value> {
+    echo_field(args, "base", "echo_base")
+}
+
+/// Defensive stub: `echo` is handled in the evaluator so it can apply the
+/// function argument. Reaching here means it was used as a bare value in a
+/// position the evaluator does not intercept.
+fn builtin_echo_stub(_args: &[Value]) -> RuntimeResult<Value> {
+    Err(RuntimeError::custom(
+        "echo must be applied directly, e.g. echo(f, x)".to_string(),
+    ))
 }
 
 fn builtin_println(args: &[Value]) -> RuntimeResult<Value> {
@@ -2635,7 +2757,7 @@ mod tests {
         assert_eq!(val, Value::Float(21.0));
 
         // Len should be 1
-        let len = builtin_hashmap_len(&[map.clone()]).unwrap_ok();
+        let len = builtin_hashmap_len(std::slice::from_ref(&map)).unwrap_ok();
         assert_eq!(len, Value::Int(1));
 
         // Contains
@@ -2703,14 +2825,14 @@ mod tests {
         builtin_hashmap_insert(&[map.clone(), Value::String(SmolStr::new("b")), Value::Int(2)])
             .unwrap_ok();
 
-        let keys = builtin_hashmap_keys(&[map.clone()]).unwrap_ok();
+        let keys = builtin_hashmap_keys(std::slice::from_ref(&map)).unwrap_ok();
         if let Value::Array(arr) = &keys {
             assert_eq!(arr.borrow().len(), 2);
         } else {
             panic!("Expected array of keys, got {keys:?}");
         }
 
-        let values = builtin_hashmap_values(&[map.clone()]).unwrap_ok();
+        let values = builtin_hashmap_values(std::slice::from_ref(&map)).unwrap_ok();
         if let Value::Array(arr) = &values {
             assert_eq!(arr.borrow().len(), 2);
         } else {
@@ -2819,7 +2941,7 @@ mod tests {
         ])
         .unwrap_ok();
 
-        let min = builtin_sortedmap_min_key(&[map.clone()]).unwrap_ok();
+        let min = builtin_sortedmap_min_key(std::slice::from_ref(&map)).unwrap_ok();
         if let Value::Tuple(elems) = &min {
             assert_eq!(elems[0], Value::String(SmolStr::new("2023")));
             assert_eq!(elems[1], Value::Float(1.5));
@@ -2893,17 +3015,17 @@ mod tests {
         builtin_queue_enqueue(&[queue.clone(), Value::Int(2)]).unwrap_ok();
         builtin_queue_enqueue(&[queue.clone(), Value::Int(3)]).unwrap_ok();
 
-        let len = builtin_queue_len(&[queue.clone()]).unwrap_ok();
+        let len = builtin_queue_len(std::slice::from_ref(&queue)).unwrap_ok();
         assert_eq!(len, Value::Int(3));
 
         // FIFO: first in, first out
-        let first = builtin_queue_dequeue(&[queue.clone()]).unwrap_ok();
+        let first = builtin_queue_dequeue(std::slice::from_ref(&queue)).unwrap_ok();
         assert_eq!(first, Value::Int(1));
 
-        let second = builtin_queue_dequeue(&[queue.clone()]).unwrap_ok();
+        let second = builtin_queue_dequeue(std::slice::from_ref(&queue)).unwrap_ok();
         assert_eq!(second, Value::Int(2));
 
-        let third = builtin_queue_dequeue(&[queue.clone()]).unwrap_ok();
+        let third = builtin_queue_dequeue(std::slice::from_ref(&queue)).unwrap_ok();
         assert_eq!(third, Value::Int(3));
 
         let is_empty = builtin_queue_is_empty(&[queue]).unwrap_ok();
@@ -2916,7 +3038,7 @@ mod tests {
 
         builtin_queue_enqueue(&[queue.clone(), Value::String(SmolStr::new("event_a"))]).unwrap_ok();
 
-        let peeked = builtin_queue_peek(&[queue.clone()]).unwrap_ok();
+        let peeked = builtin_queue_peek(std::slice::from_ref(&queue)).unwrap_ok();
         assert_eq!(peeked, Value::String(SmolStr::new("event_a")));
 
         // Peek should not remove
@@ -2957,14 +3079,14 @@ mod tests {
         ])
         .unwrap_ok();
 
-        let len = builtin_priority_queue_len(&[pq.clone()]).unwrap_ok();
+        let len = builtin_priority_queue_len(std::slice::from_ref(&pq)).unwrap_ok();
         assert_eq!(len, Value::Int(3));
 
         // Should pop in priority order: high(1), medium(3), low(5)
-        let first = builtin_priority_queue_pop(&[pq.clone()]).unwrap_ok();
+        let first = builtin_priority_queue_pop(std::slice::from_ref(&pq)).unwrap_ok();
         assert_eq!(first, Value::String(SmolStr::new("high")));
 
-        let second = builtin_priority_queue_pop(&[pq.clone()]).unwrap_ok();
+        let second = builtin_priority_queue_pop(std::slice::from_ref(&pq)).unwrap_ok();
         assert_eq!(second, Value::String(SmolStr::new("medium")));
 
         let third = builtin_priority_queue_pop(&[pq]).unwrap_ok();
@@ -2977,7 +3099,7 @@ mod tests {
 
         builtin_priority_queue_push(&[pq.clone(), Value::Int(10), Value::Int(42)]).unwrap_ok();
 
-        let peeked = builtin_priority_queue_peek(&[pq.clone()]).unwrap_ok();
+        let peeked = builtin_priority_queue_peek(std::slice::from_ref(&pq)).unwrap_ok();
         assert_eq!(peeked, Value::Int(42));
 
         // Peek should not remove

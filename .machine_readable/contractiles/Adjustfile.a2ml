@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: MPL-2.0
+# Adjustfile — Drift-tolerance contract for eclexia
+# Author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+#
+# Cumulative-drift catchment: tolerance bands + corrective actions.
+# Authority: advisory (Yard) — continue-with-warnings; auto_fix where deterministic.
+# Run with: adjust check    Fix with: adjust fix
+#
+# NOTE (2026-06-13): rewritten for eclexia. The estate-carried file was the
+# rsr-template-repo Adjustfile (drift checks about "template placeholders").
+
+@abstract:
+Drift tolerances and corrective actions for eclexia. Unlike MUST (hard
+gate), ADJUST tracks cumulative drift against tolerance bands and proposes
+corrective actions. Advisory — it warns and trends, it does not block.
+@end
+
+## Metadata Drift
+
+### state-currency
+- description: 6a2/STATE.a2ml last-updated should track real activity
+- tolerance: last-updated within ~30 days of the most recent feature commit
+- corrective: refresh .machine_readable/6a2/STATE.a2ml (build snapshot + milestones)
+- severity: advisory
+
+### claude-md-path-accuracy
+- description: CLAUDE.md must reference real artefact paths (no stale *.scm)
+- tolerance: 0 references to non-existent .machine_readable paths
+- corrective: reconcile CLAUDE.md "Machine-Readable Artefacts" with the actual 6a2/*.a2ml layout
+- severity: advisory
+- notes: fixed 2026-06-13 (STATE.scm → 6a2/STATE.a2ml et al.)
+
+## Governance Drift
+
+### no-template-identity-leak
+- description: contractiles must describe eclexia, not rsr-template-repo
+- tolerance: 0 contractiles claiming to be the canonical template
+- corrective: substitute repo identity; rewrite template-role prose for eclexia
+- severity: advisory
+- notes: the estate flat-contractile set shipped un-substituted (see Mustfile/Intentfile/Trustfile headers); upstream template fix is tracked separately
+
+### contractile-completeness
+- description: all six flat contractiles + Justfile present
+- tolerance: Adjust/Bust/Dust/Intent/Must/Trust .a2ml + Justfile all exist
+- corrective: add the missing contractile
+- severity: advisory
+
+## Code & Proof Drift
+
+### test-baseline
+- description: workspace test count should not silently regress
+- tolerance: >= 519 tests passing
+- corrective: investigate dropped/ignored tests before merge
+- severity: advisory
+
+### clippy-clean
+- description: zero clippy warnings
+- tolerance: 0 warnings under -D warnings
+- corrective: fix at source, do not blanket-allow
+- severity: advisory
+
+### axiom-free-trusted-base
+- description: Typing.v / Echo.v / EchoThermo.v stay axiom-free
+- tolerance: 0 Axiom declarations outside ShadowPrices.v
+- corrective: discharge or relocate the axiom; document if genuinely necessary
+- severity: advisory
+
+## Hygiene Drift
+
+### spdx-header-consistency
+- description: all source files carry an SPDX-License-Identifier
+- tolerance: 0 files missing SPDX headers
+- corrective: add MPL-2.0 SPDX headers (the estate REUSE sweep covers the bulk)
+- severity: advisory

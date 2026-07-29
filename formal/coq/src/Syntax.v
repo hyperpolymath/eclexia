@@ -2,11 +2,17 @@
 (** SPDX-License-Identifier: MPL-2.0 *)
 (** SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell *)
 
-From Stdlib Require Import ZArith.ZArith.
-From Stdlib Require Import QArith.QArith.
-From Stdlib Require Import Strings.String.
-From Stdlib Require Import Lists.List.
-From Stdlib Require Import Lia.
+(* NOTE: use the portable bare [Require Import] spelling rather than
+   [From Stdlib Require Import ...]. The [Stdlib] namespace root only
+   exists on newer Coq (the post-8.20 stdlib rename); the CI toolchain
+   pins Coq 8.18.0, where these libraries resolve under the bare /
+   [Coq] root. Bare [Require Import] resolves on 8.18 and remains
+   forward-compatible via the stdlib compatibility aliases. *)
+Require Import ZArith.ZArith.
+Require Import QArith.QArith.
+Require Import Strings.String.
+Require Import Lists.List.
+Require Import Lia.
 Import ListNotations.
 
 Open Scope Z_scope.

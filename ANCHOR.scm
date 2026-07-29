@@ -10,6 +10,12 @@
     (repo . "hyperpolymath/eclexia")
     (date . "2026-01-01")
     (authority . "upstream-canonical")
+    (realignments
+      . (((date . "2026-06-13")
+          (what . "Echo (structured information loss) became core")
+          (detail
+            . "Echo[A,B] type former + echo/echo_witness/echo_base builtins joined the type system; landauer_cost(states,T):Resource[Energy] priced fibre erasure into the shadow-price economy (reversible retention = zero cost, Bennett; irreversible erasure = k_B*T*ln N, Landauer); Coq Echo.v soundness (A ≃ Σ(y:B). Echo f y) + axiom-free EchoThermo.v; THEORY.md §5.5 (graded comonad of structured loss). Echo is no longer peripheral — it is part of the language's identity.")
+          (refs . ("eclexia#32" "THEORY.md §5.5" "formal/coq/src/Echo.v" "formal/coq/src/EchoThermo.v")))))
     (purpose
       . ("Define authoritative Eclexia language semantics and specification."
          "Maintain canonical compiler implementation."
@@ -18,7 +24,7 @@
     (identity
       . ((project . "Eclexia")
          (kind . "language")
-         (one-sentence . "Energy-aware programming language with dimensional types and shadow price optimization.")
+         (one-sentence . "Energy-aware programming language with dimensional types, shadow-price optimization, and first-class structured information loss (Echo).")
          (domain . "sustainable-computing")))
 
     (semantic-authority
@@ -26,6 +32,7 @@
          (owns
            . ("Language semantics and formal specification"
               "Type system and dimensional analysis rules"
+              "Structured-loss semantics: the Echo[A,B] type former and its Landauer resource pricing (landauer_cost)"
               "Shadow price model and optimization algorithms"
               "Compiler implementation (lexer, parser, AST, type-checker, codegen)"
               "Runtime semantics and energy accounting"))
@@ -75,12 +82,16 @@
               (semantic-policy . "document-not-define")
               (anchor-ref . "hyperpolymath/eclexia-docs")))))
 
+    ;; mandatory-files updated 2026-06-13: the 6a2 metadata migrated from
+    ;; root .scm to .machine_readable/6a2/*.a2ml (STATE.a2ml header: "converted
+    ;; from scheme — 2026-04-11"). The old ./*.scm paths and ./.machine_read/
+    ;; (sic) no longer exist.
     (mandatory-files
       . ("./ANCHOR.scm"
-         "./META.scm"
-         "./STATE.scm"
-         "./ECOSYSTEM.scm"
-         "./.machine_read/LLM_SUPERINTENDENT.scm"))
+         "./.machine_readable/6a2/STATE.a2ml"
+         "./.machine_readable/6a2/META.a2ml"
+         "./.machine_readable/6a2/ECOSYSTEM.a2ml"
+         "./.machine_readable/6a2/0-AI-MANIFEST.a2ml"))
 
     (rsr . ((target-tier . "gold")
             (current-tier . "silver")

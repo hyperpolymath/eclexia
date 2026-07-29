@@ -74,6 +74,11 @@ impl TypeChecker<'_> {
             }
             Ty::Tuple(elems) => elems.iter().flat_map(|e| self.free_vars(e)).collect(),
             Ty::Array { elem, .. } => self.free_vars(&elem),
+            Ty::Echo { domain, codomain } => {
+                let mut vars = self.free_vars(&domain);
+                vars.extend(self.free_vars(&codomain));
+                vars
+            }
             Ty::ForAll { vars, body } => {
                 // Variables bound by ForAll are not free
                 let mut free = self.free_vars(&body);
@@ -118,6 +123,10 @@ impl TypeChecker<'_> {
             Ty::Array { elem, size } => Ty::Array {
                 elem: Box::new(self.substitute_vars(elem, subst)),
                 size: *size,
+            },
+            Ty::Echo { domain, codomain } => Ty::Echo {
+                domain: Box::new(self.substitute_vars(domain, subst)),
+                codomain: Box::new(self.substitute_vars(codomain, subst)),
             },
             Ty::ForAll { vars, body } => Ty::ForAll {
                 vars: vars.clone(),

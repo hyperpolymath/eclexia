@@ -1,6 +1,27 @@
-## Current Session Status (Updated 2026-02-12)
+## Current Session Status (Updated 2026-07-29)
 
-**Build Status:** 25 crates compiling, 507 total tests (446 lib + 32/32 valid + 19/19 invalid conformance), zero clippy warnings, zero failures
+> **Read this first.** The detailed sections below were measured on 2026-02-12.
+> They describe the compiler pipeline accurately, but they predate the Echo
+> structured-loss work (landed 2026-06) and all July CI/governance changes, and
+> they undercount the workspace: the measured figure is **53 Cargo workspace
+> members**, not 25 crates.
+>
+> **Authoritative current state:** `.machine_readable/6a2/STATE.a2ml`
+> (machine-readable) and `dev-notes/eclexia-sitrep-2026-07-27.md` (narrative).
+>
+> **CI on origin/main is not fully green.** Green: CodeQL, Hypatia, Governance,
+> Secret Scanner. Red: Cargo Audit and Scorecards (fixes staged on the unpushed
+> branch `fix/ci-punchlist-2026-07-27`), and ClusterFuzzLite on a **reproducible
+> out-of-memory crash in `fuzz_main`** — a real compiler defect, still open.
+>
+> **Checkout path:** `developer/hyper-repos/_LANGUAGES _SET/_NEXTGEN_LANGUAGES _SET/eclexia`.
+> The path contains spaces; quote it in shell commands.
+>
+> **Diagnostic trap:** a workflow rejected at parse time produces *no check run*,
+> so `gh pr checks` shows nothing rather than a failure. Use
+> `gh run list --json conclusion` to see `startup_failure`.
+
+**Build Status (2026-02-12 snapshot):** 25 crates compiling, 507 total tests (446 lib + 32/32 valid + 19/19 invalid conformance), zero clippy warnings, zero failures
 **Security:** 20 production unwraps (down from 100+), 28 unsafe blocks (all FFI), 0 clippy warnings
 **Conformance:** 32/32 valid + 19/19 invalid passing (0 skips)
 **License:** All files MPL-2.0
@@ -62,14 +83,22 @@
 
 ## Machine-Readable Artefacts
 
-The following files in `.machine_readable/` contain structured project metadata:
+The following files in `.machine_readable/6a2/` contain structured project
+metadata (migrated from root `*.scm` to `*.a2ml` on 2026-04-11):
 
-- `STATE.scm` - Current project state and progress
-- `META.scm` - Architecture decisions and development practices
-- `ECOSYSTEM.scm` - Position in the ecosystem and related projects
-- `AGENTIC.scm` - AI agent interaction patterns
-- `NEUROSYM.scm` - Neurosymbolic integration config
-- `PLAYBOOK.scm` - Operational runbook
+- `6a2/STATE.a2ml` - Current project state and progress
+- `6a2/META.a2ml` - Architecture decisions and development practices
+- `6a2/ECOSYSTEM.a2ml` - Position in the ecosystem and related projects
+- `6a2/AGENTIC.a2ml` - AI agent interaction patterns
+- `6a2/NEUROSYM.a2ml` - Neurosymbolic integration config
+- `6a2/PLAYBOOK.a2ml` - Operational runbook
+- `6a2/0-AI-MANIFEST.a2ml` - Read-first AI manifest (estate standard)
+
+Governance & contractiles: `.machine_readable/contractiles/` (flat:
+Adjust/Bust/Dust/Intent/Must/Trust `.a2ml` + `Justfile`),
+`.machine_readable/bot_directives/` (hypatia / gitbot-fleet /
+git-private-farm trio + per-bot files), `.machine_readable/self-validating/`
+(k9 validators). Root `ANCHOR.scm` is the upstream-canonical anchor.
 
 ---
 
@@ -81,16 +110,16 @@ The following files in `.machine_readable/` contain structured project metadata:
 
 | Language/Tool | Use Case | Notes |
 |---------------|----------|-------|
-| **ReScript** | Primary application code | Compiles to JS, type-safe |
+| **AffineScript** | Primary application code | Affine-typed, compiles to typed-wasm or Deno-ESM |
 | **Deno** | Runtime & package management | Replaces Node/npm/bun |
 | **Rust** | Performance-critical, systems, WASM | Preferred for CLI tools |
 | **Tauri 2.0+** | Mobile apps (iOS/Android) | Rust backend + web UI |
 | **Dioxus** | Mobile apps (native UI) | Pure Rust, React-like |
 | **Gleam** | Backend services | Runs on BEAM or compiles to JS |
 | **Bash/POSIX Shell** | Scripts, automation | Keep minimal |
-| **JavaScript** | Only where ReScript cannot | MCP protocol glue, Deno APIs |
+| **JavaScript** | Only where AffineScript cannot | MCP protocol glue, Deno APIs |
 | **Nickel** | Configuration language | For complex configs |
-| **Guile Scheme** | State/meta files | STATE.scm, META.scm, ECOSYSTEM.scm |
+| **Guile Scheme** | State/meta & anchor files | ANCHOR.scm, formal/coq/manifest.scm; 6a2 metadata lives in .machine_readable/6a2/*.a2ml |
 | **Julia** | Batch scripts, data processing | Per RSR |
 | **OCaml** | AffineScript compiler | Language-specific |
 | **Ada** | Safety-critical systems | Where required |
@@ -99,7 +128,7 @@ The following files in `.machine_readable/` contain structured project metadata:
 
 | Banned | Replacement |
 |--------|-------------|
-| TypeScript | ReScript |
+| TypeScript | AffineScript |
 | Node.js | Deno |
 | npm | Deno |
 | Bun | Deno |
@@ -115,24 +144,24 @@ The following files in `.machine_readable/` contain structured project metadata:
 
 **No exceptions for Kotlin/Swift** - use Rust-first approach:
 
-1. **Tauri 2.0+** - Web UI (ReScript) + Rust backend, MIT/Apache-2.0
+1. **Tauri 2.0+** - Web UI (AffineScript) + Rust backend, MIT/Apache-2.0
 2. **Dioxus** - Pure Rust native UI, MIT/Apache-2.0
 
 Both are FOSS with independent governance (no Big Tech).
 
 ### Enforcement Rules
 
-1. **No new TypeScript files** - Convert existing TS to ReScript
+1. **No new TypeScript files** - Convert existing TS to AffineScript
 2. **No package.json for runtime deps** - Use deno.json imports
 3. **No node_modules in production** - Deno caches deps automatically
 4. **No Go code** - Use Rust instead
-5. **No Python anywhere** - Use Julia for data/batch, Rust for systems, ReScript for apps
+5. **No Python anywhere** - Use Julia for data/batch, Rust for systems, AffineScript for apps
 6. **No Kotlin/Swift for mobile** - Use Tauri 2.0+ or Dioxus
 
 ### Package Management
 
-- **Primary**: Guix (guix.scm)
-- **Fallback**: Nix (flake.nix)
+- **Primary**: Guix (guix.scm) — the *only* supported route
+- **Nix**: RETIRED 2026-05-18. Do not add or restore `flake.nix`.
 - **JS deps**: Deno (deno.json imports)
 
 ### Security Requirements
