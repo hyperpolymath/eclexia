@@ -1255,12 +1255,7 @@ impl<'a> TypeChecker<'a> {
 
             // Inject resource names from @requires constraints into scope
             for constraint in &func.constraints {
-                if let ConstraintKind::Resource {
-                    resource,
-                    amount: _,
-                    ..
-                } = &constraint.kind
-                {
+                if let ConstraintKind::Resource { resource, .. } = &constraint.kind {
                     if let Some(dim) = Self::resource_name_to_dimension(resource.as_str()) {
                         body_env.insert_mono(
                             resource.clone(),
