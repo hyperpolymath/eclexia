@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: MPL-2.0
+# This workflow is managed by gh actions-lock.
 # Build & test gate — compiles the cargo workspace and runs the test suite +
 # clippy. Fills the gap where the Mustfile's critical `cargo build --workspace`
 # gate (.machine_readable/contractiles/Mustfile.a2ml -> workspace-builds) was
@@ -36,7 +37,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        uses: actions/checkout@v7.0.1
 
       - name: Install Rust toolchain (stable, enforced >= floor)
         env:
