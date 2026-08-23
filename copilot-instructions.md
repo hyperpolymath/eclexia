@@ -9,7 +9,7 @@ When reviewing code in this repository, apply these standards strictly.
 3. Ada/SPARK — safety-critical, formal verification
 4. Haskell — pure functional, type-heavy domains
 5. Elixir — concurrent, distributed, fault-tolerant systems
-6. ReScript — frontend when JS interop needed
+6. AffineScript — frontend when JS interop needed
 7. Chapel — parallel computing, HPC workloads
 8. Julia — numerical computing, scientific applications
 
@@ -17,7 +17,7 @@ When reviewing code in this repository, apply these standards strictly.
 - C — use Zig instead
 - C++ — use Zig or Rust instead
 - Python — reject unless interfacing with Python-only libraries
-- JavaScript — use ReScript or TypeScript instead
+- JavaScript — use AffineScript or TypeScript instead
 - Shell scripts over 50 lines — rewrite in a proper language
 
 **Flag for justification:**

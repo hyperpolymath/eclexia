@@ -134,7 +134,7 @@ git-private-farm trio + per-bot files), `.machine_readable/self-validating/`
 | Bun | Deno |
 | pnpm/yarn | Deno |
 | Go | Rust |
-| Python | Julia/Rust/ReScript |
+| Python | Julia/Rust/AffineScript |
 | Java/Kotlin | Rust/Tauri/Dioxus |
 | Swift | Tauri/Dioxus |
 | React Native | Tauri/Dioxus |
@@ -161,7 +161,7 @@ Both are FOSS with independent governance (no Big Tech).
 ### Package Management
 
 - **Primary**: Guix (guix.scm) — the *only* supported route
-- **Nix**: RETIRED 2026-05-18. Do not add or restore `flake.nix`.
+- **Guix**: RETIRED 2026-05-18. Do not add or restore `flake.guix`.
 - **JS deps**: Deno (deno.json imports)
 
 ### Security Requirements

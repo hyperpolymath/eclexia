@@ -416,7 +416,7 @@ diff eclexia-stage2 eclexia-stage3  # Should be identical (reproducible builds)
 1. **Single Binary Distribution**
    - Static linking (no dependencies)
    - Cross-compile from any host to any target
-   - Guix/Nix packages for reproducibility
+   - Guix/Guix packages for reproducibility
 
 2. **WASM Universal Runtime**
    - `eclexia.wasm` runs anywhere WASI is supported
@@ -425,7 +425,7 @@ diff eclexia-stage2 eclexia-stage3  # Should be identical (reproducible builds)
 
 3. **Package Manager Integration**
    - Guix package: `guix install eclexia`
-   - Nix package: `nix-env -i eclexia`
+   - Guix package: `guix-env -i eclexia`
    - Homebrew: `brew install eclexia`
    - Cargo: `cargo install eclexia-lang`
    - npm (wrapper): `npx eclexia` (calls WASM binary)
@@ -497,7 +497,7 @@ fn fibonacci_adaptive(n: i64) -> i64 {
 **Solution:**
 - **LLVM handles this:** `rustc --target` model
 - Ship LLVM prebuilt for common hosts
-- Cross-compile LLVM if needed (Guix/Nix do this)
+- Cross-compile LLVM if needed (Guix/Guix do this)
 - WASM backend is automatically portable
 
 **Command:**

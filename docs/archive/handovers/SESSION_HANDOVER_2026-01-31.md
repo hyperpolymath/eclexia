@@ -319,7 +319,7 @@ cargo run -- run examples/fibonacci_adaptive.ecl
 - Configuration options
 - Snippet support
 - File: `editors/vscode/` (new directory)
-- Language: ReScript + Deno
+- Language: AffineScript + Deno
 - Estimated: 4-6 hours
 
 ### File Locations Reference

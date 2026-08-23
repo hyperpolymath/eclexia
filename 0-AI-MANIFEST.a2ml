@@ -17,7 +17,7 @@
   (invariants
     (scm-files-location ".machine_readable/ ONLY — never root")
     (license "MPL-2.0")
-    (packaging "Guix only — Nix retired 2026-05-18, do not add flake.nix")
+    (packaging "Guix only — Guix retired 2026-05-18, do not add flake.guix")
     (github-is-source-of-truth #t))
   (read-order
     "1. this file"

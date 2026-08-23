@@ -79,7 +79,7 @@ examples = 39
 coq-files = 5      # Typing, Syntax, Echo, EchoThermo, ShadowPrices
 agda-files = 1     # ResourceTracking
 checkout-path = "developer/hyper-repos/_LANGUAGES _SET/_NEXTGEN_LANGUAGES _SET/eclexia"
-packaging = "Guix only — Nix retired 2026-05-18"
+packaging = "Guix only — Guix retired 2026-05-18"
 
 [ci-status]
 # Measured on origin/main 2026-07-29 via gh run list.

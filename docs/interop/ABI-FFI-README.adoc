@@ -129,7 +129,7 @@ The following additive APIs are now part of the RC boundary:
 | Via Erlang NIF bridge
 | Functional backend services
 
-| ReScript
+| AffineScript
 | Via Deno FFI (`Deno.dlopen`)
 | Web applications with resource awareness
 

@@ -263,7 +263,7 @@ These exist with their own tests. Four are now wired into CLI via `build --analy
 
 ### 6.9 PanLL (Next-Gen IDE) — NO ECLEXIA SUPPORT
 - Path: `/var$REPOS_DIR/panll`
-- Status: v0.1.0-alpha (95% complete), ReScript + Tauri 2.0
+- Status: v0.1.0-alpha (95% complete), AffineScript + Tauri 2.0
 - Three-pane layout: Symbolic (Pane-L) / Neural (Pane-N) / World (Pane-W)
 - **Action:** Add eclexia as native language in PanLL, integrate into Pane-L constraints
 
@@ -515,11 +515,11 @@ Language blocks into eclexia for provably-secure data handling.
 | 15.4 | Ephapax interop (Rust+Idris2+Coq — shared ABI layer) | 6h | TODO |
 | 15.5 | My-Lang interop (Rust, 11 crates — direct Rust FFI) | 6h | TODO |
 | 15.6 | Julia-the-Viper interop (already eclexia-jtv, Priority 14) | 0h | See Priority 14 |
-| 15.7 | Error-Lang interop (ReScript+Deno — Deno.dlopen FFI) | 4h | TODO |
+| 15.7 | Error-Lang interop (AffineScript+Deno — Deno.dlopen FFI) | 4h | TODO |
 | 15.8 | Oblibeny interop (spec only — design phase) | 2h | TODO |
 | 15.9 | Betlang interop (Racket+Rust DSL — Rust FFI) | 4h | TODO |
 | 15.10 | Anvomidav interop (Rust DSL — direct Rust FFI) | 4h | TODO |
-| 15.11 | VCL standard interop (ReScript, VeriSimDB query language) | 6h | TODO |
+| 15.11 | VCL standard interop (AffineScript, VeriSimDB query language) | 6h | TODO |
 | 15.12 | GQL-DT / FBQL-DT interop (Lean 4 + Zig, dependent-typed queries) | 8h | TODO |
 | 15.13 | VCL dependent-types variant (if distinct from standard VCL) | 4h | TODO |
 
@@ -529,7 +529,7 @@ call into every sibling language AND every sibling language must be able to call
 eclexia's resource runtime via the C ABI header (`eclexia_ffi.h`).
 
 **Query languages (GQL + VCL):** Both standard AND dependent-type variants are included.
-VCL (VeriSimDB's query language, ReScript) enables resource-tracked database queries.
+VCL (VeriSimDB's query language, AffineScript) enables resource-tracked database queries.
 GQL-DT/FBQL-DT (Lean 4 + Zig) provides compile-time DB constraint verification with
 dependent types. Both can leverage eclexia's resource budget system for query cost tracking.
 
@@ -614,7 +614,7 @@ dependent types. Both can leverage eclexia's resource budget system for query co
 | 20.2 | Single binary distribution (static linking) | 4h | TODO |
 | 20.3 | WASM universal runtime (eclexia.wasm) | 8h | TODO |
 | 20.4 | Guix package (guix.scm exists, verify works) | 2h | TODO |
-| 20.5 | Nix flake (flake.nix) | 4h | TODO |
+| 20.5 | Guix flake (flake.guix) | 4h | TODO |
 | 20.6 | Homebrew formula | 2h | TODO |
 | 20.7 | Cross-compilation: Linux x86-64, ARM64, RISC-V | 4h | TODO |
 | 20.8 | Cross-compilation: macOS ARM64, x86-64 | 4h | TODO |
@@ -641,7 +641,7 @@ dependent types. Both can leverage eclexia's resource budget system for query co
 
 ### THREAD C: Playground & Website
 **Scope:** Priority 6
-**Why separate:** Different tech (ReScript, SSG/WordPress)
+**Why separate:** Different tech (AffineScript, SSG/WordPress)
 
 ### THREAD D: Libraries & Ecosystem
 **Scope:** Priorities 7, 13, 15
@@ -882,7 +882,7 @@ Various conformance tests in `tests/conformance/invalid/` (19 files)
 
 ### PanLL (Next-Gen IDE)
 - **Path:** `/var$REPOS_DIR/panll`
-- **Status:** v0.1.0-alpha, ReScript + Tauri 2.0, 33 tests passing
+- **Status:** v0.1.0-alpha, AffineScript + Tauri 2.0, 33 tests passing
 - **Architecture:** Three-pane (Symbolic/Neural/World), anti-crash library, vexometer
 - **Eclexia integration:** NOT STARTED
 - **Plan:** Pane-L enforces eclexia constraints, Pane-N shows reasoning, Pane-W displays results
@@ -1135,7 +1135,7 @@ Include date and any notes.
 | 1 | **C** | Foundation for all other FFI | `extern "C"` blocks, link to .so/.dylib/.dll |
 | 2 | **Rust** | Compiler is in Rust, natural integration | C ABI bridge or direct Rust crate integration |
 | 3 | **JavaScript** | WASM target, browser interop | WASM exports/imports, JS glue code |
-| 4 | **ReScript** | Hyperpolymath primary app language | Via JS interop (ReScript compiles to JS) |
+| 4 | **AffineScript** | Hyperpolymath primary app language | Via JS interop (AffineScript compiles to JS) |
 | 5 | **Python** | Massive ecosystem, data science | C FFI → Python ctypes/cffi, or PyO3-style |
 | 6 | **PHP** | Web ecosystem | C FFI → PHP extension, or WASM |
 | 7 | **Elixir/Erlang** | BEAM ecosystem, if BEAM backend added | NIFs via C FFI, or BEAM bytecode |

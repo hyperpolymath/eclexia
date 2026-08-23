@@ -81,8 +81,8 @@ the repository root.
 
 ## Packaging
 
-Guix (`guix.scm`) is the sole supported packaging route. Nix was retired on
-2026-05-18 — do not add a `flake.nix`.
+Guix (`guix.scm`) is the sole supported packaging route. Guix was retired on
+2026-05-18 — do not add a `flake.guix`.
 
 ## Known gaps
 

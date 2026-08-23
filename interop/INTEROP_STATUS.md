@@ -31,7 +31,7 @@ The `eclexia interop check` command validates all bridge configurations:
 | Language | Build System | FFI Mechanism | Status |
 |----------|-------------|---------------|--------|
 | AffineScript | Dune (OCaml) | `ctypes` | Bridge config created, pending OCaml binding |
-| 7-tentacles | ReScript | Deno `dlopen` | Educational -- low priority |
+| 7-tentacles | AffineScript | Deno `dlopen` | Educational -- low priority |
 
 ### Tier 3: Blocked on language implementation
 

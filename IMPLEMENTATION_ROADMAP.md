@@ -37,7 +37,7 @@ This document provides a comprehensive technical roadmap for implementing Eclexi
 | **Standard Library** | Rust + Eclexia | Bootstrap in Rust, self-host later |
 | **Tooling (CLI)** | Rust | Cross-platform, single binary distribution |
 | **LSP Server** | Rust | Performance for real-time feedback |
-| **Web Playground** | ReScript + Deno | Type-safe web UI, modern runtime |
+| **Web Playground** | AffineScript + Deno | Type-safe web UI, modern runtime |
 | **Configuration** | Nickel | Programmable configuration language |
 | **Build Scripts** | Bash/POSIX | Automation, CI/CD integration |
 | **Package Registry** | Gleam | BEAM reliability for backend services |
@@ -46,10 +46,10 @@ This document provides a comprehensive technical roadmap for implementing Eclexi
 
 | Excluded | Replacement | Reason |
 |----------|-------------|--------|
-| TypeScript | ReScript | Type safety, functional paradigm |
+| TypeScript | AffineScript | Type safety, functional paradigm |
 | Node.js | Deno | Security, modern runtime |
 | Go | Rust | Memory safety, generics |
-| Python | Rust/ReScript | Performance, type safety |
+| Python | Rust/AffineScript | Performance, type safety |
 | Java/Kotlin | Rust | Memory efficiency |
 
 ### 1.3 Development Environment
@@ -58,7 +58,7 @@ This document provides a comprehensive technical roadmap for implementing Eclexi
 ┌─────────────────────────────────────────────────────────────┐
 │                    Development Stack                        │
 ├─────────────────────────────────────────────────────────────┤
-│  Package Manager    │ Guix (primary), Nix (fallback)       │
+│  Package Manager    │ Guix (primary), Guix (fallback)       │
 │  Build System       │ Cargo (Rust), Deno (JS), Just        │
 │  CI/CD              │ GitHub Actions, GitLab CI            │
 │  Container Runtime  │ Podman (not Docker)                  │
@@ -454,7 +454,7 @@ ropey = "1.6"             // Rope data structure for text
 
 #### 5.2.1 VSCode Extension
 
-**Technology**: ReScript for extension, Deno for build
+**Technology**: AffineScript for extension, Deno for build
 
 ```json
 // package.json (for VSCode extension manifest only)
@@ -669,7 +669,7 @@ import gleam/pgo  // PostgreSQL
 
 ### 6.3 Reproducible Builds
 
-**Technology**: Guix/Nix
+**Technology**: Guix/Guix
 
 ```scheme
 ;; guix.scm

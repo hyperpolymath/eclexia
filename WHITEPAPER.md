@@ -963,7 +963,7 @@ adaptive def compute(data: Data) -> Result
 **Build System:**
 - Cargo for Rust components
 - Deno for auxiliary tooling
-- Guix/Nix for reproducible builds
+- Guix/Guix for reproducible builds
 
 ---
 
