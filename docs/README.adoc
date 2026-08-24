@@ -1,0 +1,53 @@
+== Eclexia Documentation Index
+
+This directory is the canonical home for long-form documentation, status
+snapshots, reports, and wiki content.
+
+=== Start Here
+
+* link:../README.adoc[`+../README.adoc+`]: Repository landing page
+* link:../GETTING_STARTED.md[`+../GETTING_STARTED.md+`]: Fast start for
+first-time users
+* link:../QUICK_STATUS.md[`+../QUICK_STATUS.md+`]: Current
+implementation snapshot
+* link:wiki/Home.md[`+wiki/Home.md+`]: Wiki entry point
+
+=== Core References
+
+* link:../SPECIFICATION.md[`+../SPECIFICATION.md+`]
+* link:../WHITEPAPER.md[`+../WHITEPAPER.md+`]
+* link:../PROOFS.md[`+../PROOFS.md+`]
+* link:../FORMAL_VERIFICATION.md[`+../FORMAL_VERIFICATION.md+`]
+* link:../ALGORITHMS.md[`+../ALGORITHMS.md+`]
+* link:../BIBLIOGRAPHY.md[`+../BIBLIOGRAPHY.md+`]
+
+=== Architecture and Roadmaps
+
+* link:architecture/[`+architecture/+`]
+* link:roadmap/[`+roadmap/+`]
+* link:analysis/[`+analysis/+`]
+
+=== Reports and Status
+
+* link:reports/[`+reports/+`]
+* link:archive/status/[`+archive/status/+`]
+* link:archive/completed-work/[`+archive/completed-work/+`]
+* link:archive/progress/[`+archive/progress/+`]
+
+=== Security, Community, Interop
+
+* link:security/[`+security/+`]
+* link:community/[`+community/+`]
+* link:interop/[`+interop/+`]
+
+=== Tutorials and Reference
+
+* link:tutorials/[`+tutorials/+`]
+* link:reference/[`+reference/+`]
+
+=== Notes
+
+* Archive folders preserve historical planning and session artifacts
+that are no longer primary entry points.
+* New long-form documents should default to `+docs/+` instead of
+repository root unless they are canonical top-level policies.
