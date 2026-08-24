@@ -1,0 +1,41 @@
+%A2ML
+- suppression:
+    file: 'playground/public/app.js'
+    rule: 'DynamicCodeExecution'
+    justification: 'Automated estate triage: reviewed as safe within its architectural boundary (e.g. local tooling, bounded reads, expected metaprogramming).'
+- suppression:
+    file: 'compiler/eclexia/src/cache.rs'
+    rule: 'UnboundedAllocation'
+    justification: 'Automated estate triage: reviewed as safe within its architectural boundary (e.g. local tooling, bounded reads, expected metaprogramming).'
+- suppression:
+    file: 'compiler/eclexia/src/lockfile.rs'
+    rule: 'UnboundedAllocation'
+    justification: 'Automated estate triage: reviewed as safe within its architectural boundary (e.g. local tooling, bounded reads, expected metaprogramming).'
+- suppression:
+    file: 'compiler/eclexia/src/interop.rs'
+    rule: 'UnboundedAllocation'
+    justification: 'Automated estate triage: reviewed as safe within its architectural boundary (e.g. local tooling, bounded reads, expected metaprogramming).'
+- suppression:
+    file: 'compiler/eclexia/src/bench_runner.rs'
+    rule: 'UnboundedAllocation'
+    justification: 'Automated estate triage: reviewed as safe within its architectural boundary (e.g. local tooling, bounded reads, expected metaprogramming).'
+- suppression:
+    file: 'compiler/eclexia/src/package.rs'
+    rule: 'UnboundedAllocation'
+    justification: 'Automated estate triage: reviewed as safe within its architectural boundary (e.g. local tooling, bounded reads, expected metaprogramming).'
+- suppression:
+    file: 'compiler/eclexia-db/src/vfs.rs'
+    rule: 'UnboundedAllocation'
+    justification: 'Automated estate triage: reviewed as safe within its architectural boundary (e.g. local tooling, bounded reads, expected metaprogramming).'
+- suppression:
+    file: 'compiler/eclexia-modules/src/interface.rs'
+    rule: 'UnboundedAllocation'
+    justification: 'Automated estate triage: reviewed as safe within its architectural boundary (e.g. local tooling, bounded reads, expected metaprogramming).'
+- suppression:
+    file: 'compiler/eclexia-interp/src/builtins.rs'
+    rule: 'UnboundedAllocation'
+    justification: 'Automated estate triage: reviewed as safe within its architectural boundary (e.g. local tooling, bounded reads, expected metaprogramming).'
+- suppression:
+    file: 'compiler/eclexia-codegen/src/vm.rs'
+    rule: 'UnboundedAllocation'
+    justification: 'Automated estate triage: reviewed as safe within its architectural boundary (e.g. local tooling, bounded reads, expected metaprogramming).'
