@@ -1,0 +1,230 @@
+== Getting Started with Eclexia
+
+Eclexia is an "`Economics-as-Code`" programming language that brings
+resource-aware computing to software development. This guide will help
+you get up and running quickly.
+
+____
+*Status (2026-02-11):* Eclexia is under active development (~55%
+complete). The compiler pipeline (lexer, parser, type checker, HIR/MIR,
+bytecode VM) works for core language features. The LLVM native backend
+is now producing LLVM IR (`+.ll+`) and invoking `+llc+` to emit an
+object file (`+.o+`), while adaptive functions, domain-specific
+libraries, and the remaining native backends (Cranelift, WASM) are still
+in progress. The `+run+` command uses the tree-walking interpreter;
+`+build+` with no `+--target+` flag still emits bytecode (JSON or
+`+.eclb+`) for the stack-based VM.
+____
+
+=== Installation
+
+==== Prerequisites
+
+* Rust 1.75 or later
+* Cargo (comes with Rust)
+
+==== Building from Source
+
+[source,bash]
+----
+git clone https://github.com/hyperpolymath/eclexia.git
+cd eclexia
+cargo build --release
+----
+
+The binary will be available at `+target/release/eclexia+`.
+
+=== Quick Start
+
+==== 1. Create a New Project
+
+[source,bash]
+----
+eclexia init my-project
+cd my-project
+----
+
+This creates a new Eclexia project with: - `+eclexia.toml+` - Project
+configuration - `+src/main.ecl+` - Entry point
+
+==== 2. Write Your First Program
+
+Edit `+src/main.ecl+`:
+
+[source,eclexia]
+----
+// A simple hello world program
+fn main() {
+    println("Hello, Economics-as-Code!")
+}
+----
+
+==== 3. Run Your Program
+
+[source,bash]
+----
+eclexia run src/main.ecl
+----
+
+=== Core Concepts
+
+==== Core Language Features
+
+Eclexia supports functions, pattern matching, closures, generics,
+structs, enums, and a Hindley-Milner type system with dimensional
+analysis:
+
+[source,eclexia]
+----
+fn efficient_fib(n: Int) -> Int {
+    fib_helper(n, 0, 1)
+}
+
+fn fib_helper(n: Int, a: Int, b: Int) -> Int {
+    if n <= 0 { a } else { fib_helper(n - 1, b, a + b) }
+}
+
+fn main() -> Int {
+    efficient_fib(10)
+}
+----
+
+==== Adaptive Functions (Planned)
+
+____
+*Not yet implemented.* The syntax below shows the design goal for
+adaptive functions — functions with multiple implementations selected at
+runtime based on resource constraints and shadow prices. The parser
+recognises `+adaptive+` as a keyword but the full adaptive dispatch is
+not yet wired through the compiler pipeline.
+____
+
+[source,eclexia]
+----
+// Design goal — not yet functional
+adaptive fn fibonacci(n: Int) -> Int
+    @requires: energy < 100J
+    @optimize: minimize energy
+{
+    @solution "efficient":
+        @when: true
+        @provides: energy: 5J, latency: 10ms, carbon: 1gCO2e
+    {
+        efficient_fib(n)
+    }
+
+    @solution "naive":
+        @when: true
+        @provides: energy: 50J, latency: 50ms, carbon: 5gCO2e
+    {
+        simple_fib(n)
+    }
+}
+----
+
+==== Dimensional Types (Partial)
+
+The type system tracks physical dimensions (mass, length, time, etc.)
+and prevents unit mismatches at compile time. Dimensional annotations on
+literals (e.g., `+5.0J+`) are *not yet supported* — dimensions are
+currently expressed via the `+Resource+` type in the type checker.
+
+=== CLI Commands
+
+[width="100%",cols="41%,59%",options="header",]
+|===
+|Command |Description
+|`+eclexia run <file>+` |Execute via tree-walking interpreter
+
+|`+eclexia build <file> -o <out>+` |Compile to bytecode (JSON or
+`+.eclb+`)
+
+|`+eclexia build <file> --target llvm+` |Emit LLVM IR (`+.ll+`) and run
+`+llc+` to produce a native object (`+.o+`). Requires LLVM 17+ on the
+PATH; the CLI reports artifact paths and exits non-zero if `+llc+`
+fails.
+
+|`+eclexia check <file>+` |Type-check without running
+
+|`+eclexia init [name]+` |Create a new project
+
+|`+eclexia fmt <files>+` |Format source files
+
+|`+eclexia repl+` |Start interactive REPL
+
+|`+eclexia run <file.eclb>+` |Execute a compiled `+.eclb+` bytecode file
+via VM
+|===
+
+==== Run Options
+
+[source,bash]
+----
+# Run with shadow price observation
+eclexia run src/main.ecl --observe-shadow
+
+# Run with carbon report
+eclexia run src/main.ecl --carbon-report
+----
+
+=== Example: Simple Arithmetic
+
+See `+examples/math_showcase.ecl+` for a complete example:
+
+[source,bash]
+----
+eclexia run examples/math_showcase.ecl
+----
+
+Or compile to bytecode and run via the VM:
+
+[source,bash]
+----
+# Compile a pure-function program to .eclb
+eclexia build examples/minimal.ecl -o /tmp/out.eclb
+# Execute via the stack-based VM
+eclexia run /tmp/out.eclb
+----
+
+==== LLVM Target Workflow
+
+[arabic]
+. Install LLVM 17 (`+brew install llvm@17+`,
+`+sudo apt install llvm-17+`, or `+sudo dnf install llvm-17+`).
+. Run `+eclexia build examples/hello_world.ecl --target llvm+` to emit
+`+examples/hello_world.ll+`.
+. The CLI will automatically run `+llc+` and write
+`+examples/hello_world.o+`; if `+llc+` is missing or fails, the command
+exits non-zero but keeps the `+.ll+` file and prints how to run `+llc+`
+manually.
+. Link the `+.o+` file with `+runtime/eclexia-runtime+` (via `+clang+`
+or `+gcc+`) to produce a runnable binary, then execute it directly.
+
+____
+*Note:* The `+build+` command compiles through the full pipeline (parse
+→ typecheck → HIR → MIR → bytecode). Currently only pure-function
+programs compile to bytecode — builtins like `+println+` are not yet
+linked into the bytecode path.
+____
+
+=== Error Messages
+
+Eclexia provides helpful error messages with source locations:
+
+....
+Type errors:
+  3:16: type mismatch: expected Int, found String
+....
+
+=== Next Steps
+
+* Read the link:SPECIFICATION.md[Specification] for language details
+* Explore the link:THEORY.md[Theory] for the economics foundation
+* Check the link:IMPLEMENTATION_ROADMAP.md[Implementation Roadmap] for
+upcoming features
+* Browse `+examples/+` for more code samples
+
+=== Getting Help
+
+* https://github.com/hyperpolymath/eclexia/issues[GitHub Issues]
+* link:CONTRIBUTING.md[Contributing Guide]
