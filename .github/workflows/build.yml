@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
 # This workflow is managed by gh actions-lock.
+# This workflow is managed by gh actions-lock.
 # Build & test gate — compiles the cargo workspace and runs the test suite +
 # clippy. Fills the gap where the Mustfile's critical `cargo build --workspace`
 # gate (.machine_readable/contractiles/Mustfile.a2ml -> workspace-builds) was
