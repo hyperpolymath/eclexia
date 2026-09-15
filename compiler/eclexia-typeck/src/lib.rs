@@ -18,8 +18,9 @@ mod unify;
 use eclexia_ast::dimension::Dimension;
 use eclexia_ast::types::{PrimitiveTy, Ty, TypeVar};
 use eclexia_ast::{
-    AdaptiveFunction, BinaryOp, Block, Constraint, ConstraintKind, ExprId, ExprKind, Function,
-    Item, Literal, Pattern, SourceFile, StmtId, StmtKind, UnaryOp,
+    AdaptiveFunction, Attribute, BinaryOp, Block, Constraint, ConstraintKind, ExprId, ExprKind,
+    Function, Item, Literal, Objective, Param, Pattern, ResourceProvision, SourceFile, StmtId,
+    StmtKind, UnaryOp,
 };
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
@@ -1238,6 +1239,16 @@ impl<'a> TypeChecker<'a> {
 
     /// Check a function body.
     fn check_function(&mut self, func: &Function) {
+        // Resource names declared by this function's @requires (and, via
+        // the paren-form annotation syntax, @provides/@optimize)
+        // clauses occupy a namespace separate from term variables
+        // (ADR-001 G1). A parameter whose name collides with one of
+        // these must be rejected with a diagnostic — never silently
+        // resolved as either the parameter or the resource.
+        let declared_resources =
+            Self::declared_resource_names(&func.constraints, &func.attributes, &[], &[]);
+        self.check_resource_namespace_collisions(&func.params, &declared_resources);
+
         // Extract function type info before borrowing self mutably
         let func_info = self.env.lookup(&func.name).and_then(|scheme| {
             if let Ty::Function { params, ret } = &scheme.ty {
@@ -1253,41 +1264,9 @@ impl<'a> TypeChecker<'a> {
                 body_env.insert_mono(param.name.clone(), param_ty.clone());
             }
 
-            // Inject resource names from @requires constraints into scope
-            for constraint in &func.constraints {
-                if let ConstraintKind::Resource { resource, .. } = &constraint.kind {
-                    if let Some(dim) = Self::resource_name_to_dimension(resource.as_str()) {
-                        body_env.insert_mono(
-                            resource.clone(),
-                            Ty::Resource {
-                                base: PrimitiveTy::Float,
-                                dimension: dim,
-                            },
-                        );
-                    }
-                }
-            }
-
-            // Also inject resource names from @requires attributes (annotation syntax)
-            for attr in &func.attributes {
-                if attr.name.as_str() == "requires" {
-                    // Args come in pairs: [resource_name, amount, resource_name2, amount2, ...]
-                    let mut i = 0;
-                    while i < attr.args.len() {
-                        let resource = &attr.args[i];
-                        if let Some(dim) = Self::resource_name_to_dimension(resource.as_str()) {
-                            body_env.insert_mono(
-                                resource.clone(),
-                                Ty::Resource {
-                                    base: PrimitiveTy::Float,
-                                    dimension: dim,
-                                },
-                            );
-                        }
-                        i += 2; // Skip the amount arg
-                    }
-                }
-            }
+            // Resource names are NOT bound in the body scope: they are
+            // visible only inside constraint/@provides/@optimize
+            // expressions, never as ordinary term variables (ADR-001 G1).
 
             let old_env = std::mem::replace(&mut self.env, body_env);
             let body_ty = self.check_block(&func.body);
@@ -1317,14 +1296,30 @@ impl<'a> TypeChecker<'a> {
             return;
         };
 
+        // Namespace-collision check (ADR-001 G1), symmetric with
+        // check_function: function-level @requires/@provides/@optimize
+        // resource names must not collide with parameter names.
+        let declared_resources =
+            Self::declared_resource_names(&func.constraints, &func.attributes, &func.optimize, &[]);
+        self.check_resource_namespace_collisions(&func.params, &declared_resources);
+
         // Check function-level constraints
         self.check_constraints(&func.constraints);
 
         for solution in &func.solutions {
+            // Per-solution @provides resource names must also not
+            // collide with the (shared) function parameter names.
+            let solution_resources =
+                Self::declared_resource_names(&[], &[], &[], &solution.provides);
+            self.check_resource_namespace_collisions(&func.params, &solution_resources);
+
             let mut body_env = self.env.child();
             for (param, param_ty) in func.params.iter().zip(params.iter()) {
                 body_env.insert_mono(param.name.clone(), param_ty.clone());
             }
+
+            // As in check_function, resource names are never bound in
+            // the solution body scope.
 
             let old_env = std::mem::replace(&mut self.env, body_env);
             let body_ty = self.check_block(&solution.body);
@@ -2432,15 +2427,81 @@ impl<'a> TypeChecker<'a> {
         matches!(ty, Ty::Primitive(p) if p.is_integer())
     }
 
-    /// Map a resource name to its dimension.
-    fn resource_name_to_dimension(name: &str) -> Option<Dimension> {
-        match name {
-            "energy" => Some(Dimension::energy()),
-            "time" | "latency" => Some(Dimension::time()),
-            "memory" => Some(Dimension::memory()),
-            "carbon" => Some(Dimension::carbon()),
-            "power" => Some(Dimension::power()),
-            _ => None,
+    /// Collect the resource names a function declares via its
+    /// `@requires` constraints, its paren-form `@requires`/`@provides`/
+    /// `@optimize` attributes, its `@optimize` objectives, and (for
+    /// adaptive-function solutions) its `@provides` provisions.
+    ///
+    /// Each entry pairs the resource name with the span of the
+    /// declaring clause and a label identifying it, for use in
+    /// namespace-collision diagnostics. This is the read side of
+    /// ADR-001 Gate 1's namespace split: resource names live here,
+    /// separately from the term-variable environment (`TypeEnv`), and
+    /// are never inserted into it.
+    fn declared_resource_names(
+        constraints: &[Constraint],
+        attributes: &[Attribute],
+        objectives: &[Objective],
+        provisions: &[ResourceProvision],
+    ) -> Vec<(SmolStr, eclexia_ast::span::Span, &'static str)> {
+        let mut names = Vec::new();
+
+        for constraint in constraints {
+            if let ConstraintKind::Resource { resource, .. } = &constraint.kind {
+                names.push((resource.clone(), constraint.span, "@requires"));
+            }
+        }
+
+        for attr in attributes {
+            let clause: &'static str = match attr.name.as_str() {
+                "requires" => "@requires",
+                "provides" => "@provides",
+                "optimize" => "@optimize",
+                _ => continue,
+            };
+            // Args come in `resource[, amount]` pairs (paren-form
+            // annotation syntax): [resource_name, amount, resource_name2, amount2, ...]
+            let mut i = 0;
+            while i < attr.args.len() {
+                names.push((attr.args[i].clone(), attr.span, clause));
+                i += 2;
+            }
+        }
+
+        for objective in objectives {
+            names.push((objective.target.clone(), objective.span, "@optimize"));
+        }
+
+        for provision in provisions {
+            names.push((provision.resource.clone(), provision.span, "@provides"));
+        }
+
+        names
+    }
+
+    /// Reject any parameter whose name collides with a declared
+    /// resource name (ADR-001 G1): "a collision must produce a
+    /// diagnostic rather than a silent rebinding."
+    fn check_resource_namespace_collisions(
+        &mut self,
+        params: &[Param],
+        declared: &[(SmolStr, eclexia_ast::span::Span, &'static str)],
+    ) {
+        for param in params {
+            if let Some((name, _decl_span, clause)) = declared
+                .iter()
+                .find(|(name, _, _)| name.as_str() == param.name.as_str())
+            {
+                self.errors.push(TypeError::ResourceNamespaceCollision {
+                    span: param.span,
+                    name: name.to_string(),
+                    clause: clause.to_string(),
+                    hint: Some(format!(
+                        "'{name}' is declared as a resource name in {clause}; rename the parameter — \
+                         resource names and parameters occupy separate namespaces and may not collide"
+                    )),
+                });
+            }
         }
     }
 

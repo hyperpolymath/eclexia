@@ -1041,6 +1041,7 @@ name = "eclexia-typeck"
 version = "0.1.0"
 dependencies = [
  "eclexia-ast",
+ "eclexia-parser",
  "indexmap",
  "rustc-hash 1.1.0",
  "smol_str",
