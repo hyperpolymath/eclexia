@@ -562,7 +562,7 @@ fn compile_module_graph(input: &Path) -> miette::Result<()> {
         }
     };
 
-    println!(
+    eprintln!(
         "  Modules compiled: {} (interfaces in {})",
         results.len(),
         build_dir.display()
