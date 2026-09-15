@@ -118,20 +118,14 @@ pub fn verify_budgets(mir: &MirFile) -> Vec<(String, String, BudgetVerdict)> {
                         }
                     }
                 } else {
-                    // No usage of this resource — usage is zero
-                    match constraint.op {
-                        eclexia_mir::ConstraintOp::Le | eclexia_mir::ConstraintOp::Lt => {
-                            if bound_limit > 0.0 {
-                                BudgetVerdict::Proved
-                            } else {
-                                BudgetVerdict::Disproved {
-                                    min_usage: 0.0,
-                                    limit: bound_limit,
-                                }
-                            }
-                        }
-                        _ => BudgetVerdict::Unknown,
-                    }
+                    // No `ResourceTrack` evidence was recorded for this resource in this
+                    // function. This is NOT proof that usage is zero — `ResourceTrack`
+                    // emission from HIR (`@provides`/`@requires`) is a separate, currently
+                    // incomplete pipeline stage (ADR-001 Gate 0). Treating absent evidence
+                    // as zero usage is exactly the vacuity ADR-001 requires this verifier to
+                    // stop committing: it let every budget with a positive limit prove
+                    // itself without reading the program. Demand evidence instead.
+                    BudgetVerdict::Unknown
                 }
             } else {
                 BudgetVerdict::Unknown
@@ -262,12 +256,17 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_no_usage() {
+    fn test_verify_no_usage_is_unknown_not_proved() {
+        // Absence of `ResourceTrack` evidence must never be read as proof of
+        // zero usage (ADR-001 Gate 0 / G0a: "honest red"). Before this fix,
+        // this returned `Proved` unconditionally for any positive budget,
+        // which is exactly the vacuity that let every budget check pass
+        // without reading the program.
         let mir = make_resource_mir(100.0, &[]);
         let verdicts = verify_budgets(&mir);
 
         assert_eq!(verdicts.len(), 1);
-        assert_eq!(verdicts[0].2, BudgetVerdict::Proved);
+        assert_eq!(verdicts[0].2, BudgetVerdict::Unknown);
     }
 
     #[test]
