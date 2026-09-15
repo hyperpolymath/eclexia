@@ -1196,20 +1196,23 @@ pub fn verify(input: &Path, unknown: &str, format: &str) -> miette::Result<()> {
         "warn" => false,
         other => {
             eprintln!("error: --unknown must be 'fail' or 'warn', got '{other}'");
-            std::process::exit(2);
+            // Exit 3 for operational errors: the ADR reserves 0/1/2 for
+            // proved/disproved/unknown-under-fail verdicts (see below), so an
+            // error that never reached a verdict must not collide with 2.
+            std::process::exit(3);
         }
     };
 
     if format != "human" && format != "json" {
         eprintln!("error: --format must be 'human' or 'json', got '{format}'");
-        std::process::exit(2);
+        std::process::exit(3);
     }
 
     let source = match std::fs::read_to_string(input) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("error: failed to read {}: {}", input.display(), e);
-            std::process::exit(2);
+            std::process::exit(3);
         }
     };
 
@@ -1219,12 +1222,12 @@ pub fn verify(input: &Path, unknown: &str, format: &str) -> miette::Result<()> {
         for err in &parse_errors {
             eprintln!("  {}", err.format_with_source(&source));
         }
-        std::process::exit(2);
+        std::process::exit(3);
     }
 
     if let Err(e) = compile_module_graph(input) {
         eprintln!("error: {e:?}");
-        std::process::exit(2);
+        std::process::exit(3);
     }
 
     let hir_file = eclexia_hir::lower_source_file(&file);
@@ -1286,8 +1289,15 @@ pub fn verify(input: &Path, unknown: &str, format: &str) -> miette::Result<()> {
         }
     }
 
-    let exit_code = if disproved > 0 || (unknown_count > 0 && unknown_fails) {
+    // ADR-001 (ii) Enforcement: 0 = all proved, 1 = any Disproved (a wrong
+    // program), 2 = any Unknown under a failing policy (an unproven program,
+    // not proven wrong) — kept distinct from 1 so CI can tell "wrong" from
+    // "unproven". Disproved takes precedence: a function that is both
+    // disproved and unknown for other resources is still a wrong program.
+    let exit_code = if disproved > 0 {
         1
+    } else if unknown_count > 0 && unknown_fails {
+        2
     } else {
         0
     };
