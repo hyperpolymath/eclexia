@@ -776,6 +776,7 @@ dependencies = [
 name = "eclexia-effects"
 version = "0.1.0"
 dependencies = [
+ "eclexia-absinterp",
  "eclexia-ast",
  "eclexia-mir",
  "rustc-hash 1.1.0",
