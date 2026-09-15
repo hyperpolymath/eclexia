@@ -2323,23 +2323,59 @@ impl<'a> TypeChecker<'a> {
             | BinaryOp::Le
             | BinaryOp::Gt
             | BinaryOp::Ge => {
-                // Resource<D> comparisons: dimensions must match
-                if let (Ty::Resource { dimension: d1, .. }, Ty::Resource { dimension: d2, .. }) =
-                    (lhs, rhs)
-                {
-                    if d1 != d2 {
-                        self.errors.push(TypeError::Custom {
-                            span,
-                            message: format!(
-                                "cannot compare resources with different dimensions: {:?} vs {:?}",
-                                d1, d2
-                            ),
-                            hint: Some(
-                                "comparison requires matching resource dimensions".to_string(),
-                            ),
-                        });
+                // Resolve type variables before dimensional analysis: a
+                // Resource type can still be hiding behind an unresolved
+                // Ty::Var here (unlike the arithmetic arm above, this arm
+                // has no unify() fallback to apply substitution for us).
+                let lhs = self.apply(lhs);
+                let rhs = self.apply(rhs);
+
+                // ADR-001 section 2.2.2 ruling: relational operators must
+                // enforce dimensional agreement on the same footing as
+                // Add/Sub. A comparison between two differently-dimensioned
+                // resources, or between a dimensioned resource and a
+                // dimensionless operand, is a type error — not silently
+                // accepted as it was before this check existed.
+                match (&lhs, &rhs) {
+                    // Resource<D1> vs Resource<D2>: dimensions must match.
+                    (
+                        Ty::Resource { dimension: d1, .. },
+                        Ty::Resource { dimension: d2, .. },
+                    ) => {
+                        if d1 != d2 {
+                            self.errors.push(TypeError::DimensionMismatch {
+                                span,
+                                dim1: d1.to_string(),
+                                dim2: d2.to_string(),
+                                hint: Some(
+                                    "comparison requires matching resource dimensions"
+                                        .to_string(),
+                                ),
+                            });
+                            return Ty::Error;
+                        }
+                    }
+                    // Resource<D> vs a dimensionless numeric literal/value
+                    // (and the symmetric case): rejected unless D is
+                    // itself dimensionless (e.g. the result of Resource /
+                    // Resource with matching dimensions).
+                    (Ty::Resource { dimension, .. }, Ty::Primitive(p))
+                        if p.is_numeric() && !dimension.is_dimensionless() =>
+                    {
+                        self.errors.push(Self::dimensionless_comparison_error(
+                            span, dimension,
+                        ));
                         return Ty::Error;
                     }
+                    (Ty::Primitive(p), Ty::Resource { dimension, .. })
+                        if p.is_numeric() && !dimension.is_dimensionless() =>
+                    {
+                        self.errors.push(Self::dimensionless_comparison_error(
+                            span, dimension,
+                        ));
+                        return Ty::Error;
+                    }
+                    _ => {}
                 }
                 Ty::Primitive(PrimitiveTy::Bool)
             }
@@ -2430,6 +2466,51 @@ impl<'a> TypeChecker<'a> {
     /// Check if a type is an integer.
     fn is_integer(&self, ty: &Ty) -> bool {
         matches!(ty, Ty::Primitive(p) if p.is_integer())
+    }
+
+    /// Canonical short unit symbol for a dimension, used to suggest a fix
+    /// in the dimensionless-comparison diagnostic below. Covers the same
+    /// resource dimensions as `resource_name_to_dimension`.
+    fn base_unit_symbol(dim: &Dimension) -> Option<&'static str> {
+        if *dim == Dimension::energy() {
+            Some("J")
+        } else if *dim == Dimension::time() {
+            Some("s")
+        } else if *dim == Dimension::power() {
+            Some("W")
+        } else if *dim == Dimension::carbon() {
+            Some("gCO2e")
+        } else if *dim == Dimension::memory() {
+            Some("B")
+        } else {
+            None
+        }
+    }
+
+    /// Build the diagnostic for comparing a dimensioned Resource against a
+    /// dimensionless operand (ADR-001 section 2.2.2: comparison must
+    /// enforce dimensional agreement on the same footing as arithmetic).
+    /// Names the intended unit in the hint per the ADR's ruling.
+    fn dimensionless_comparison_error(
+        span: eclexia_ast::span::Span,
+        dimension: &Dimension,
+    ) -> TypeError {
+        let hint = match Self::base_unit_symbol(dimension) {
+            Some(unit) => format!(
+                "the dimensionless operand needs a unit of dimension {} — write it with a unit suffix such as {}",
+                dimension, unit
+            ),
+            None => format!(
+                "the dimensionless operand needs a unit of dimension {}",
+                dimension
+            ),
+        };
+        TypeError::DimensionMismatch {
+            span,
+            dim1: dimension.to_string(),
+            dim2: Dimension::dimensionless().to_string(),
+            hint: Some(hint),
+        }
     }
 
     /// Map a resource name to its dimension.
