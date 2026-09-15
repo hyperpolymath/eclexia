@@ -25,7 +25,13 @@ fn evaluate_policy(energy: Float, carbon: Float, memory: Int) -> Bool {
 }
 
 // Adaptive policy evaluation: fast path for obvious cases
-adaptive def should_warn(energy: Float, carbon: Float) -> Bool
+//
+// Parameters are named energy_val/carbon_val rather than energy/carbon:
+// resource names declared in @requires/@provides occupy a namespace
+// separate from term variables (ADR-001 G1), and a parameter name
+// colliding with a resource name it declares is rejected as a
+// diagnostic rather than silently resolved.
+adaptive def should_warn(energy_val: Float, carbon_val: Float) -> Bool
     @requires: energy < 1J
     @requires: carbon < 0.001gCO2e
     @optimize: minimize energy
@@ -35,14 +41,14 @@ adaptive def should_warn(energy: Float, carbon: Float) -> Bool
         @provides: energy: 0.01J, latency: 0.1ms, carbon: 0.00001gCO2e
     {
         // Fast path: check if both are zero
-        if energy == 0.0 {
-            if carbon == 0.0 {
+        if energy_val == 0.0 {
+            if carbon_val == 0.0 {
                 false
             } else {
-                carbon > 5.0
+                carbon_val > 5.0
             }
         } else {
-            energy > 50.0 || carbon > 5.0
+            energy_val > 50.0 || carbon_val > 5.0
         }
     }
 
@@ -51,7 +57,7 @@ adaptive def should_warn(energy: Float, carbon: Float) -> Bool
         @provides: energy: 0.5J, latency: 2ms, carbon: 0.0005gCO2e
     {
         // Full evaluation with both thresholds
-        check_energy(energy, 50.0) || check_carbon(carbon, 5.0)
+        check_energy(energy_val, 50.0) || check_carbon(carbon_val, 5.0)
     }
 }
 

@@ -46,6 +46,23 @@ pub enum TypeError {
     #[error("occurs check failed: infinite type")]
     OccursCheck { span: Span, hint: Option<String> },
 
+    /// A parameter name collides with a resource name declared by the
+    /// same function's `@requires`, `@provides`, or `@optimize` clause.
+    ///
+    /// Resource names and term variables (parameters, locals) occupy
+    /// separate namespaces (ADR-001 Gate 1): a resource name is visible
+    /// only inside constraint, `@provides`, and `@optimize` expressions,
+    /// never inside a function body. A collision between the two
+    /// namespaces must produce this diagnostic rather than a silent
+    /// rebinding of one by the other.
+    #[error("parameter '{name}' collides with a resource name declared in {clause}")]
+    ResourceNamespaceCollision {
+        span: Span,
+        name: String,
+        clause: String,
+        hint: Option<String>,
+    },
+
     #[error("infinite type: type variable {var:?} occurs in {ty}")]
     InfiniteType {
         span: Span,
@@ -91,6 +108,7 @@ impl TypeError {
             TypeError::OccursCheck { span, .. } => *span,
             TypeError::InfiniteType { span, .. } => *span,
             TypeError::Custom { span, .. } => *span,
+            TypeError::ResourceNamespaceCollision { span, .. } => *span,
         }
     }
 
@@ -104,6 +122,7 @@ impl TypeError {
             TypeError::OccursCheck { hint, .. } => hint.as_deref(),
             TypeError::InfiniteType { hint, .. } => hint.as_deref(),
             TypeError::Custom { hint, .. } => hint.as_deref(),
+            TypeError::ResourceNamespaceCollision { hint, .. } => hint.as_deref(),
         }
     }
 
