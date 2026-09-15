@@ -562,7 +562,7 @@ fn compile_module_graph(input: &Path) -> miette::Result<()> {
         }
     };
 
-    println!(
+    eprintln!(
         "  Modules compiled: {} (interfaces in {})",
         results.len(),
         build_dir.display()
@@ -1182,6 +1182,128 @@ fn run_bytecode(input: &Path, observe_shadow: bool, carbon_report: bool) -> miet
 }
 
 /// Type check a file.
+/// Statically verify resource budgets (ADR-001 Gate 0).
+///
+/// Exit code contract: `0` — every declared budget is `Proved`; `1` — at
+/// least one budget is `Disproved`, or (under `--unknown=fail`, the default)
+/// at least one is `Unknown`; `2` — an operational error (unreadable input,
+/// a parse failure, an invalid flag value) rather than a verification
+/// verdict. `Unknown` must never be silently treated as passing by default:
+/// that is exactly the vacuity ADR-001 exists to close.
+pub fn verify(input: &Path, unknown: &str, format: &str) -> miette::Result<()> {
+    let unknown_fails = match unknown {
+        "fail" => true,
+        "warn" => false,
+        other => {
+            eprintln!("error: --unknown must be 'fail' or 'warn', got '{other}'");
+            // Exit 3 for operational errors: the ADR reserves 0/1/2 for
+            // proved/disproved/unknown-under-fail verdicts (see below), so an
+            // error that never reached a verdict must not collide with 2.
+            std::process::exit(3);
+        }
+    };
+
+    if format != "human" && format != "json" {
+        eprintln!("error: --format must be 'human' or 'json', got '{format}'");
+        std::process::exit(3);
+    }
+
+    let source = match std::fs::read_to_string(input) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("error: failed to read {}: {}", input.display(), e);
+            std::process::exit(3);
+        }
+    };
+
+    let (file, parse_errors) = eclexia_parser::parse(&source);
+    if !parse_errors.is_empty() {
+        eprintln!("Parse errors:");
+        for err in &parse_errors {
+            eprintln!("  {}", err.format_with_source(&source));
+        }
+        std::process::exit(3);
+    }
+
+    if let Err(e) = compile_module_graph(input) {
+        eprintln!("error: {e:?}");
+        std::process::exit(3);
+    }
+
+    let hir_file = eclexia_hir::lower_source_file(&file);
+    let mir_file = eclexia_mir::lower_hir_file(&hir_file);
+    let verdicts = eclexia_absinterp::resource::verify_budgets(&mir_file);
+
+    let mut proved = 0usize;
+    let mut disproved = 0usize;
+    let mut unknown_count = 0usize;
+    for (_, _, verdict) in &verdicts {
+        match verdict {
+            eclexia_absinterp::BudgetVerdict::Proved => proved += 1,
+            eclexia_absinterp::BudgetVerdict::Disproved { .. } => disproved += 1,
+            eclexia_absinterp::BudgetVerdict::Unknown => unknown_count += 1,
+        }
+    }
+
+    if format == "json" {
+        let entries: Vec<serde_json::Value> = verdicts
+            .iter()
+            .map(|(func, resource, verdict)| match verdict {
+                eclexia_absinterp::BudgetVerdict::Proved => serde_json::json!({
+                    "function": func, "resource": resource, "verdict": "proved",
+                }),
+                eclexia_absinterp::BudgetVerdict::Disproved { min_usage, limit } => serde_json::json!({
+                    "function": func, "resource": resource, "verdict": "disproved",
+                    "min_usage": min_usage, "limit": limit,
+                }),
+                eclexia_absinterp::BudgetVerdict::Unknown => serde_json::json!({
+                    "function": func, "resource": resource, "verdict": "unknown",
+                }),
+            })
+            .collect();
+        let report = serde_json::json!({
+            "proved": proved, "disproved": disproved, "unknown": unknown_count,
+            "unknown_policy": unknown, "verdicts": entries,
+        });
+        println!("{}", serde_json::to_string_pretty(&report).into_diagnostic()?);
+    } else {
+        for (func, resource, verdict) in &verdicts {
+            match verdict {
+                eclexia_absinterp::BudgetVerdict::Proved => {
+                    println!("✓ {func}.{resource} provably within budget");
+                }
+                eclexia_absinterp::BudgetVerdict::Disproved { min_usage, limit } => {
+                    println!("✗ {func}.{resource} EXCEEDED: min {min_usage:.2} > limit {limit:.2}");
+                }
+                eclexia_absinterp::BudgetVerdict::Unknown => {
+                    println!("? {func}.{resource} inconclusive (no evidence)");
+                }
+            }
+        }
+        if verdicts.is_empty() {
+            println!("No resource budgets declared.");
+        } else {
+            println!(
+                "{proved} proved, {disproved} disproved, {unknown_count} unknown (--unknown={unknown})"
+            );
+        }
+    }
+
+    // ADR-001 (ii) Enforcement: 0 = all proved, 1 = any Disproved (a wrong
+    // program), 2 = any Unknown under a failing policy (an unproven program,
+    // not proven wrong) — kept distinct from 1 so CI can tell "wrong" from
+    // "unproven". Disproved takes precedence: a function that is both
+    // disproved and unknown for other resources is still a wrong program.
+    let exit_code = if disproved > 0 {
+        1
+    } else if unknown_count > 0 && unknown_fails {
+        2
+    } else {
+        0
+    };
+    std::process::exit(exit_code);
+}
+
 pub fn check(input: &Path) -> miette::Result<()> {
     let source = std::fs::read_to_string(input)
         .into_diagnostic()

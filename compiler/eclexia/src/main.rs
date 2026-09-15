@@ -296,6 +296,21 @@ enum Commands {
         #[arg(value_name = "FILE")]
         input: PathBuf,
     },
+
+    /// Statically verify resource budgets (ADR-001 Gate 0)
+    Verify {
+        /// Input file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+
+        /// Policy for inconclusive verdicts: fail | warn
+        #[arg(long, default_value = "fail")]
+        unknown: String,
+
+        /// Output format: human | json
+        #[arg(long, default_value = "human")]
+        format: String,
+    },
 }
 
 fn main() -> miette::Result<()> {
@@ -410,6 +425,13 @@ fn main() -> miette::Result<()> {
         }
         Commands::DumpJson { input } => {
             commands::parse_ast(&input, "json")?;
+        }
+        Commands::Verify {
+            input,
+            unknown,
+            format,
+        } => {
+            commands::verify(&input, &unknown, &format)?;
         }
     }
 
