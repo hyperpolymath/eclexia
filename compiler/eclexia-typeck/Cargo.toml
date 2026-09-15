@@ -16,3 +16,6 @@ smol_str = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
 rustc-hash = { workspace = true }
+
+[dev-dependencies]
+eclexia-parser = { path = "../eclexia-parser" }

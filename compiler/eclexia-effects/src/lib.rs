@@ -22,6 +22,7 @@
 //! - **Row polymorphism**: Track which effects a function may perform
 
 #![forbid(unsafe_code)]
+pub mod effects;
 pub mod evidence;
 pub mod row;
 

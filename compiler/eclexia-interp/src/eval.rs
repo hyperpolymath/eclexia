@@ -1386,9 +1386,15 @@ impl Interpreter {
                                     }
                                     // Enforce @requires energy budget.
                                     // A function with @requires(energy: N) declares a
-                                    // ceiling of N joules.  Calling it adds N to the
-                                    // caller's tracked consumption.  If the body's
-                                    // sub-calls exceed N, we reject.
+                                    // ceiling of N joules that its own body promises
+                                    // not to exceed — it is a budget, not a cost.
+                                    // Per ADR-001 2.2.1, `@requires` is never a point
+                                    // charge; only `@provides` (the adaptive-solution
+                                    // path below) declares a cost. What the caller is
+                                    // actually charged is whatever the callee's body
+                                    // measurably consumes while running under its own
+                                    // rescoped budget (see below), which is guaranteed
+                                    // to lie in [0, limit].
                                     if let Some(limit) = fn_energy_limit {
                                         // Zero budget means impossible to execute
                                         if limit == 0.0 {
@@ -1398,18 +1404,6 @@ impl Interpreter {
                                                     f.name
                                                 ),
                                                 hint: Some("increase the energy budget or remove the @requires constraint".to_string()),
-                                            });
-                                        }
-                                        // Add declared cost to caller's accounting
-                                        self.energy_used += limit;
-                                        // Check caller's budget immediately
-                                        if self.energy_used > self.energy_budget {
-                                            return Err(RuntimeError::ResourceViolation {
-                                                message: format!(
-                                                    "calling '{}' would use {:.1}J total, exceeding budget of {:.1}J",
-                                                    f.name, self.energy_used, self.energy_budget
-                                                ),
-                                                hint: Some("reduce resource consumption or increase the @requires budget".to_string()),
                                             });
                                         }
                                     }
@@ -1425,10 +1419,36 @@ impl Interpreter {
                                         Err(RuntimeError::Return(v)) => Ok(v),
                                         Err(e) => Err(e),
                                     };
-                                    // Restore caller's budget scope
+                                    // Check the callee's own measured usage against its
+                                    // own declared budget WHILE STILL RESCOPED — i.e.
+                                    // before self.energy_budget is restored to the
+                                    // caller's (usually much larger, or absent) own
+                                    // ceiling. This is what makes the check mean
+                                    // anything: comparing against the caller's ambient
+                                    // budget instead would let any callee's overrun of
+                                    // its own @requires slip through unnoticed.
+                                    let violation = result.is_ok()
+                                        && fn_energy_limit.is_some()
+                                        && self.energy_used > self.energy_budget;
+                                    let (violation_used, violation_limit) =
+                                        (self.energy_used, self.energy_budget);
+                                    // Restore caller's budget scope, propagating the
+                                    // callee's ACTUAL measured consumption (not its
+                                    // declared @requires ceiling) into the caller's
+                                    // running total.
                                     if fn_energy_limit.is_some() {
-                                        self.energy_used = saved_energy;
+                                        let body_consumed = self.energy_used;
+                                        self.energy_used = saved_energy + body_consumed;
                                         self.energy_budget = saved_budget;
+                                    }
+                                    if violation {
+                                        return Err(RuntimeError::ResourceViolation {
+                                            message: format!(
+                                                "calling '{}' used {:.1}J total, exceeding its own @requires budget of {:.1}J",
+                                                f.name, violation_used, violation_limit
+                                            ),
+                                            hint: Some("reduce resource consumption or increase the @requires budget".to_string()),
+                                        });
                                     }
                                     return result;
                                 }
