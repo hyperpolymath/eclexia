@@ -189,6 +189,37 @@ impl<'hir> LoweringContext<'hir> {
                     }
                     self.current_block = Some(entry);
 
+                    // Emit ResourceTrack evidence for each `@provides` amount
+                    // declared on this solution (ADR-001 Gate 0b). Without
+                    // this, `ResourceTrack` is never constructed anywhere in
+                    // the pipeline and the resource verifier has nothing to
+                    // read, so it can only ever answer `Unknown` — vacuous by
+                    // omission rather than by design. Emitted in the entry
+                    // block (on every path through the solution) as a
+                    // degenerate point value; G1's interval cost lattice
+                    // replaces the constant amount, not this instruction.
+                    for provision in &solution.provides {
+                        let const_id = self.mir.constants.alloc(Constant {
+                            ty: Ty::Resource {
+                                base: PrimitiveTy::Float,
+                                dimension: provision.dimension,
+                            },
+                            kind: ConstantKind::Resource {
+                                value: provision.amount,
+                                dimension: provision.dimension,
+                                unit: provision.unit.clone(),
+                            },
+                        });
+                        self.emit(
+                            provision.span,
+                            InstructionKind::ResourceTrack {
+                                resource: provision.resource.clone(),
+                                dimension: provision.dimension,
+                                amount: Value::Constant(const_id),
+                            },
+                        );
+                    }
+
                     // Lower body
                     self.lower_body(&solution.body);
 
