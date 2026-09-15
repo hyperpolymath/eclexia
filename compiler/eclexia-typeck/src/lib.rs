@@ -2318,23 +2318,59 @@ impl<'a> TypeChecker<'a> {
             | BinaryOp::Le
             | BinaryOp::Gt
             | BinaryOp::Ge => {
-                // Resource<D> comparisons: dimensions must match
-                if let (Ty::Resource { dimension: d1, .. }, Ty::Resource { dimension: d2, .. }) =
-                    (lhs, rhs)
-                {
-                    if d1 != d2 {
-                        self.errors.push(TypeError::Custom {
-                            span,
-                            message: format!(
-                                "cannot compare resources with different dimensions: {:?} vs {:?}",
-                                d1, d2
-                            ),
-                            hint: Some(
-                                "comparison requires matching resource dimensions".to_string(),
-                            ),
-                        });
+                // Resolve type variables before dimensional analysis: a
+                // Resource type can still be hiding behind an unresolved
+                // Ty::Var here (unlike the arithmetic arm above, this arm
+                // has no unify() fallback to apply substitution for us).
+                let lhs = self.apply(lhs);
+                let rhs = self.apply(rhs);
+
+                // ADR-001 section 2.2.2 ruling: relational operators must
+                // enforce dimensional agreement on the same footing as
+                // Add/Sub. A comparison between two differently-dimensioned
+                // resources, or between a dimensioned resource and a
+                // dimensionless operand, is a type error — not silently
+                // accepted as it was before this check existed.
+                match (&lhs, &rhs) {
+                    // Resource<D1> vs Resource<D2>: dimensions must match.
+                    (
+                        Ty::Resource { dimension: d1, .. },
+                        Ty::Resource { dimension: d2, .. },
+                    ) => {
+                        if d1 != d2 {
+                            self.errors.push(TypeError::DimensionMismatch {
+                                span,
+                                dim1: d1.to_string(),
+                                dim2: d2.to_string(),
+                                hint: Some(
+                                    "comparison requires matching resource dimensions"
+                                        .to_string(),
+                                ),
+                            });
+                            return Ty::Error;
+                        }
+                    }
+                    // Resource<D> vs a dimensionless numeric literal/value
+                    // (and the symmetric case): rejected unless D is
+                    // itself dimensionless (e.g. the result of Resource /
+                    // Resource with matching dimensions).
+                    (Ty::Resource { dimension, .. }, Ty::Primitive(p))
+                        if p.is_numeric() && !dimension.is_dimensionless() =>
+                    {
+                        self.errors.push(Self::dimensionless_comparison_error(
+                            span, dimension,
+                        ));
                         return Ty::Error;
                     }
+                    (Ty::Primitive(p), Ty::Resource { dimension, .. })
+                        if p.is_numeric() && !dimension.is_dimensionless() =>
+                    {
+                        self.errors.push(Self::dimensionless_comparison_error(
+                            span, dimension,
+                        ));
+                        return Ty::Error;
+                    }
+                    _ => {}
                 }
                 Ty::Primitive(PrimitiveTy::Bool)
             }
@@ -2427,81 +2463,60 @@ impl<'a> TypeChecker<'a> {
         matches!(ty, Ty::Primitive(p) if p.is_integer())
     }
 
-    /// Collect the resource names a function declares via its
-    /// `@requires` constraints, its paren-form `@requires`/`@provides`/
-    /// `@optimize` attributes, its `@optimize` objectives, and (for
-    /// adaptive-function solutions) its `@provides` provisions.
-    ///
-    /// Each entry pairs the resource name with the span of the
-    /// declaring clause and a label identifying it, for use in
-    /// namespace-collision diagnostics. This is the read side of
-    /// ADR-001 Gate 1's namespace split: resource names live here,
-    /// separately from the term-variable environment (`TypeEnv`), and
-    /// are never inserted into it.
-    fn declared_resource_names(
-        constraints: &[Constraint],
-        attributes: &[Attribute],
-        objectives: &[Objective],
-        provisions: &[ResourceProvision],
-    ) -> Vec<(SmolStr, eclexia_ast::span::Span, &'static str)> {
-        let mut names = Vec::new();
-
-        for constraint in constraints {
-            if let ConstraintKind::Resource { resource, .. } = &constraint.kind {
-                names.push((resource.clone(), constraint.span, "@requires"));
-            }
+    /// Canonical short unit symbol for a dimension, used to suggest a fix
+    /// in the dimensionless-comparison diagnostic below. Covers the same
+    /// resource dimensions as `resource_name_to_dimension`.
+    fn base_unit_symbol(dim: &Dimension) -> Option<&'static str> {
+        if *dim == Dimension::energy() {
+            Some("J")
+        } else if *dim == Dimension::time() {
+            Some("s")
+        } else if *dim == Dimension::power() {
+            Some("W")
+        } else if *dim == Dimension::carbon() {
+            Some("gCO2e")
+        } else if *dim == Dimension::memory() {
+            Some("B")
+        } else {
+            None
         }
-
-        for attr in attributes {
-            let clause: &'static str = match attr.name.as_str() {
-                "requires" => "@requires",
-                "provides" => "@provides",
-                "optimize" => "@optimize",
-                _ => continue,
-            };
-            // Args come in `resource[, amount]` pairs (paren-form
-            // annotation syntax): [resource_name, amount, resource_name2, amount2, ...]
-            let mut i = 0;
-            while i < attr.args.len() {
-                names.push((attr.args[i].clone(), attr.span, clause));
-                i += 2;
-            }
-        }
-
-        for objective in objectives {
-            names.push((objective.target.clone(), objective.span, "@optimize"));
-        }
-
-        for provision in provisions {
-            names.push((provision.resource.clone(), provision.span, "@provides"));
-        }
-
-        names
     }
 
-    /// Reject any parameter whose name collides with a declared
-    /// resource name (ADR-001 G1): "a collision must produce a
-    /// diagnostic rather than a silent rebinding."
-    fn check_resource_namespace_collisions(
-        &mut self,
-        params: &[Param],
-        declared: &[(SmolStr, eclexia_ast::span::Span, &'static str)],
-    ) {
-        for param in params {
-            if let Some((name, _decl_span, clause)) = declared
-                .iter()
-                .find(|(name, _, _)| name.as_str() == param.name.as_str())
-            {
-                self.errors.push(TypeError::ResourceNamespaceCollision {
-                    span: param.span,
-                    name: name.to_string(),
-                    clause: clause.to_string(),
-                    hint: Some(format!(
-                        "'{name}' is declared as a resource name in {clause}; rename the parameter — \
-                         resource names and parameters occupy separate namespaces and may not collide"
-                    )),
-                });
-            }
+    /// Build the diagnostic for comparing a dimensioned Resource against a
+    /// dimensionless operand (ADR-001 section 2.2.2: comparison must
+    /// enforce dimensional agreement on the same footing as arithmetic).
+    /// Names the intended unit in the hint per the ADR's ruling.
+    fn dimensionless_comparison_error(
+        span: eclexia_ast::span::Span,
+        dimension: &Dimension,
+    ) -> TypeError {
+        let hint = match Self::base_unit_symbol(dimension) {
+            Some(unit) => format!(
+                "the dimensionless operand needs a unit of dimension {} — write it with a unit suffix such as {}",
+                dimension, unit
+            ),
+            None => format!(
+                "the dimensionless operand needs a unit of dimension {}",
+                dimension
+            ),
+        };
+        TypeError::DimensionMismatch {
+            span,
+            dim1: dimension.to_string(),
+            dim2: Dimension::dimensionless().to_string(),
+            hint: Some(hint),
+        }
+    }
+
+    /// Map a resource name to its dimension.
+    fn resource_name_to_dimension(name: &str) -> Option<Dimension> {
+        match name {
+            "energy" => Some(Dimension::energy()),
+            "time" | "latency" => Some(Dimension::time()),
+            "memory" => Some(Dimension::memory()),
+            "carbon" => Some(Dimension::carbon()),
+            "power" => Some(Dimension::power()),
+            _ => None,
         }
     }
 
