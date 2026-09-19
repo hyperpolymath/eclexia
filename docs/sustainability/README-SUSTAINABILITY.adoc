@@ -697,6 +697,6 @@ computing - Everyone building a more sustainable future
 
 *link:GETTING_STARTED.md[Get Started]* • *link:docs/[Documentation]* •
 *link:../roadmap/SELF-HOSTING-ROADMAP.md[Roadmap]* •
-*link:CONTRIBUTING.md[Contributing]*
+*link:../../.github/CONTRIBUTING.md[Contributing]*
 
 *Made with 🌍 for a sustainable future*
