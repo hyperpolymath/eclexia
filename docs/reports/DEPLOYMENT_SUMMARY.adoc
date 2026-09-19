@@ -157,14 +157,14 @@ pinning - Source from Git tag - SHA256 checksum verification
 
 [source,bash]
 ----
-guix build -f guix.scm
+guix build -f build/guix.scm
 ----
 
 *Install Command:*
 
 [source,bash]
 ----
-guix install -f guix.scm
+guix install -f build/guix.scm
 ----
 
 *Why Guix?* - Guarantees reproducibility (same inputs → same output) -
