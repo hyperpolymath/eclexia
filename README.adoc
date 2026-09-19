@@ -18,7 +18,7 @@ optimize for performance and sustainability together.
 * link:WHITEPAPER.md[Whitepaper]
 * link:PROOFS.md[Formal Proofs]
 * link:IMPLEMENTATION_ROADMAP.md[Implementation Roadmap]
-* link:CONTRIBUTING.md[Contributing]
+* link:.github/CONTRIBUTING.md[Contributing]
 * link:SECURITY.md[Security Policy]
 
 == What Is Eclexia?
@@ -160,7 +160,7 @@ Proposed wiki structure and migration map: docs/wiki/README.md
 
 == Contributing
 
-* link:CONTRIBUTING.md[Contributing Guide]
+* link:.github/CONTRIBUTING.md[Contributing Guide]
 * link:CODE_OF_CONDUCT.md[Code of Conduct]
 * link:SECURITY.md[Security Policy]
 

@@ -227,4 +227,4 @@ upcoming features
 === Getting Help
 
 * https://github.com/hyperpolymath/eclexia/issues[GitHub Issues]
-* link:CONTRIBUTING.md[Contributing Guide]
+* link:.github/CONTRIBUTING.md[Contributing Guide]

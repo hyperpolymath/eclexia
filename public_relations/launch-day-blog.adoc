@@ -435,7 +435,7 @@ link:../docs/roadmap/SELF-HOSTING-ROADMAP.md[Self-Hosting Plan]
 *Contribute:* We welcome compiler engineers, sustainability experts,
 mobile devs, cloud engineers, educators, and technical writers.
 
-link:../CONTRIBUTING.md[See CONTRIBUTING.md]
+link:../.github/CONTRIBUTING.md[See CONTRIBUTING.md]
 
 '''''
 
