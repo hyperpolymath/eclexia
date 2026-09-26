@@ -56,10 +56,6 @@ pub type CompilerDatabase = salsa::DatabaseImpl;
 /// all downstream queries that depend on this file's text.
 #[salsa::input]
 pub struct SourceFile {
-    // `#[returns(clone)]` keeps the 0.26-era owned `String` getter. salsa 0.28
-    // returns field references by default (`&String`), which would ripple a
-    // borrow into every consumer of `source.text(db)`.
-    #[returns(clone)]
     pub text: String,
 }
 

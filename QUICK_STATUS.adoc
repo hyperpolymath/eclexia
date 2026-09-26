@@ -7,13 +7,13 @@ Local quality gate passing (docs, fmt, lint, unit, conformance,
 integration, p2p, e2e, benchmarks)
 
 ____
-*CI on origin/main (2026-09-26 maintenance pass).* Estate reusable
-wrappers re-pinned to `+standards@da2c748+` (fixes Governance, Workflow
-Security Linter and Hypatia); `+cargo audit+` clean after the dependency
-pass (salsa 0.28.5, rustls >= 0.23.45, hashbrown 0.14 eliminated);
-Scorecards wrapper aligned to the rsr-template-repo. ClusterFuzzLite
-remains red on a *reproducible out-of-memory crash in `+fuzz_main+`* —
-a genuine compiler defect, still unfixed. Machine-readable state in
+*CI on origin/main is not fully green.* Four workflows pass (CodeQL,
+Hypatia, Governance, Secret Scanner); three are red. Cargo Audit and
+Scorecards have fixes staged on the unpushed branch
+`+fix/ci-punchlist-2026-07-27+`. ClusterFuzzLite is red on a
+*reproducible out-of-memory crash in `+fuzz_main+`* — a genuine compiler
+defect, still unfixed. Current detail lives in
+`+dev-notes/eclexia-sitrep-2026-07-27.md+`; machine-readable state in
 `+.machine_readable/6a2/STATE.a2ml+`.
 
 Sections below dated 2026-02 describe the compiler accurately but
@@ -131,14 +131,11 @@ but not wired to real OS metrics (except RSS memory on Linux)
 * *Macro expansion in MIR:* MacroCall emits `+__eclexia_macro_expand+`
 intrinsic call (runtime hook) — interpreter has full expansion, compiled
 path delegates to runtime
-* *Measured benchmarks:* criterion parser benchmark landed
-(`+compiler/eclexia-parser/benches/parse_bench.rs+`, weekly via
-`+bench.yml+`); published performance claims still predate it
+* *Measured benchmarks:* None — all performance claims are projections
 * *Package registry deployment:* Server stub exists (filesystem backend,
 3 routes), not deployed
-* *Formal proofs:* ShadowPrices.v uses 5 cited Axioms for LP foundations
-(not Admitted); keep-decisions with named dependencies in
-`+docs/proof-debt.adoc+`
+* *Formal proofs:* ShadowPrices.v uses 4 Axioms for LP foundations (not
+Admitted — these are honest axioms with citations)
 
 '''''
 

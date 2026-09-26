@@ -1,29 +1,22 @@
 # This workflow is managed by gh actions-lock.
 # SPDX-License-Identifier: MPL-2.0
+# This workflow is managed by gh actions-lock.
+# This workflow is managed by gh actions-lock.
 name: Scorecards supply-chain security
 
 on:
+  branch_protection_rule:
   schedule:
-    - cron: '0 4 * * 1'
-  workflow_dispatch:
+    - cron: '23 4 * * 1'
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  actions: read      # required by the reusable workflow (staleness check reads workflow runs)
-  contents: read
+permissions: read-all
 
 jobs:
   analysis:
-    # Reusable called-workflow permissions are CAPPED by the caller's grants;
-    # without `contents: read` here the run dies as startup_failure (the
-    # caller job "dropped contents:read" defect recorded in STATE.a2ml), and
-    # without `id-token: write` the OIDC publish to the Scorecard API fails.
-    # security-events: write enables the SARIF upload.
     permissions:
+      actions: read
       contents: read
       security-events: write
       id-token: write
-    uses: hyperpolymath/standards/.github/workflows/scorecard-reusable.yml@da2c748aad55c1a1dcba00b60fe4a35017bc6540
+    uses: hyperpolymath/standards/.github/workflows/scorecard-reusable.yml@84355587cb2a1f86e6882de83514a32db2646e7a
+    secrets: inherit

@@ -17,34 +17,13 @@ https://semver.org/spec/v2.0.0.html[Semantic Versioning].
 
 ==== Added
 
-* ci(bench): criterion parser benchmark (compiler/eclexia-parser) +
-  weekly `bench.yml` — first measured-benchmark harness (`just bench`)
-* chore(citation): root CITATION.cff and CONTRIBUTING.adoc (estate docs gate)
 * feat: implement S-expression and JSON AST dump for parse command
 * feat: add DAP support for eclexia
 * feat: add AST visitor framework (eclexia-ast::visitor)
 * feat: add parse command for AST visualization (eclexia parse)
 
-==== Changed
-
-* chore(deps): eclexia-lsp migrated tower-lsp 0.20 -> tower-lsp-server
-  0.21 (lsp-types 0.97 `Url` -> `Uri`); eclexia-db migrated salsa 0.26 ->
-  0.28 (`returns(clone)` keeps owned getter/return semantics)
-* docs(proof-debt): record per-axiom keep-decisions with named
-  dependencies; decide the weak_duality objective-consistency hypothesis
-  (issue #43)
-
 ==== Fixed
 
-* fix(deps): salsa 0.28.5 (RUSTSEC-2026-0308), rustls >= 0.23.45
-  (RUSTSEC-2026-0285), hashbrown 0.14 removed via cranelift 0.117 +
-  tower-lsp-server 0.21/dashmap 6 (RUSTSEC-2024-0402) — issue #80
-* fix(ci): re-pin governance/hypatia/scorecard/secret-scanner/mirror
-  wrappers to standards@da2c748; workflow-linter SPDX check reads the
-  header block; CodeQL held at estate-approved v4.38.0 with Dependabot
-  ignore; scorecard/secret-scanner job permissions tightened
-* fix(readme): repair broken documentation links (.md -> .adoc),
-  canonical repository URL, licence wording
 * fix(ci): sync hypatia-scan.yml to canonical (413:
 env.HOME+Phase-2+SARIF) (#15)
 * fix(ci): adopt canonical hypatia-scan.yml (env.HOME/scanner-layout +

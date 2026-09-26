@@ -1,16 +1,9 @@
 # This workflow is managed by gh actions-lock.
 # SPDX-License-Identifier: MPL-2.0
+# This workflow is managed by gh actions-lock.
+# This workflow is managed by gh actions-lock.
 # Thin wrapper around hyperpolymath/standards hypatia-scan-reusable.yml.
 # See standards#191 for the reusable's purpose and design.
-#
-# Pin: da2c748aad55c1a1dcba00b60fe4a35017bc6540 — same revision as the
-# rsr-template-repo ships. At the previous pin (8435558) the reusable cloned
-# Hypatia's moving main tip; a Hypatia regression then turned every caller's
-# "Build Hypatia scanner" step red with no change on the caller side. That
-# revision pins the scanner to a reviewed commit instead.
-#
-# No `secrets:` block (Hypatia WH008): the reusable treats an absent
-# HYPATIA_SCAN_PAT as an honest advisory skip, so nothing is shared implicitly.
 
 name: Hypatia Security Scan
 
@@ -29,13 +22,15 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  actions: read      # required by the reusable workflow (staleness check reads workflow runs)
   contents: read
   security-events: write
-  # A caller permissions block that omits `actions: read` pins actions to
-  # `none`, so the reusable's request exceeds the grant and the run dies as
-  # `startup_failure` (no jobs). Kept explicit so the contract is visible.
+  pull-requests: write
+  # The standards reusable declares actions:read; a caller permissions
+  # block that omits it pins actions to `none`, so the reusable's request
+  # exceeds the grant and the run dies as `startup_failure` (no jobs).
+  actions: read
 
 jobs:
   hypatia:
-    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@da2c748aad55c1a1dcba00b60fe4a35017bc6540
+    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@84355587cb2a1f86e6882de83514a32db2646e7a  # standards #380 (2026-06-11); repins a stale ref that resolved to 0 jobs
+    secrets: inherit

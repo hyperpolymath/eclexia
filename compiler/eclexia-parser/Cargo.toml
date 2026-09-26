@@ -17,8 +17,3 @@ smol_str = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-criterion = { workspace = true }
-
-[[bench]]
-name = "parse_bench"
-harness = false

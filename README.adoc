@@ -9,17 +9,17 @@ optimize for performance and sustainability together.
 
 == Quick Links
 
-* link:GETTING_STARTED.adoc[Getting Started]
-* link:QUICK_STATUS.adoc[Current Implementation Status]
-* link:ARCHITECTURE.adoc[Architecture]
-* link:docs/README.adoc[Documentation Index]
+* link:GETTING_STARTED.md[Getting Started]
+* link:QUICK_STATUS.md[Current Implementation Status]
+* link:ARCHITECTURE.md[Architecture]
+* link:docs/README.md[Documentation Index]
 * link:docs/wiki/Home.md[Wiki Home]
-* link:SPECIFICATION.adoc[Language Specification]
-* link:WHITEPAPER.adoc[Whitepaper]
-* link:PROOFS.adoc[Formal Proofs]
-* link:IMPLEMENTATION_ROADMAP.adoc[Implementation Roadmap]
-* link:CONTRIBUTING.adoc[Contributing]
-* link:SECURITY.adoc[Security Policy]
+* link:SPECIFICATION.md[Language Specification]
+* link:WHITEPAPER.md[Whitepaper]
+* link:PROOFS.md[Formal Proofs]
+* link:IMPLEMENTATION_ROADMAP.md[Implementation Roadmap]
+* link:.github/CONTRIBUTING.md[Contributing]
+* link:SECURITY.md[Security Policy]
 
 == What Is Eclexia?
 
@@ -83,40 +83,40 @@ For a fuller walkthrough, use GETTING_STARTED.
 [width="100%",cols="34%,33%,33%",options="header",]
 |===
 |Document |Purpose |Audience
-|link:GETTING_STARTED.adoc[Getting Started] |Installation, first run, and
+|link:GETTING_STARTED.md[Getting Started] |Installation, first run, and
 CLI usage |New users
 
-|link:QUICK_STATUS.adoc[Quick Status] |Snapshot of what works and what
+|link:QUICK_STATUS.md[Quick Status] |Snapshot of what works and what
 does not |Users and contributors
 
-|link:SPECIFICATION.adoc[Specification] |Language syntax and semantics
+|link:SPECIFICATION.md[Specification] |Language syntax and semantics
 |Language implementers
 
-|link:WHITEPAPER.adoc[Whitepaper] |High-level design and motivation
+|link:WHITEPAPER.md[Whitepaper] |High-level design and motivation
 |General and research audience
 
-|link:PROOFS.adoc[Proofs] |Formal statements and theorem development
+|link:PROOFS.md[Proofs] |Formal statements and theorem development
 |Researchers
 
-|link:FORMAL_VERIFICATION.adoc[Formal Verification] |Coq/Agda proof status
+|link:FORMAL_VERIFICATION.md[Formal Verification] |Coq/Agda proof status
 and verification notes |Researchers and maintainers
 
-|link:IMPLEMENTATION_ROADMAP.adoc[Implementation Roadmap]
+|link:IMPLEMENTATION_ROADMAP.md[Implementation Roadmap]
 |Medium/long-term engineering roadmap |Contributors and maintainers
 
-|link:TOOLCHAIN_STATUS.adoc[Toolchain Status] |Status of
+|link:TOOLCHAIN_STATUS.md[Toolchain Status] |Status of
 compiler/runtime/tooling components |Contributors
 
-|link:ALGORITHMS.adoc[Algorithms] |Algorithmic details and implementation
+|link:ALGORITHMS.md[Algorithms] |Algorithmic details and implementation
 notes |Contributors and researchers
 
-|link:BIBLIOGRAPHY.adoc[Bibliography] |Research references used by the
+|link:BIBLIOGRAPHY.md[Bibliography] |Research references used by the
 project |Researchers
 |===
 
 == Current Status
 
-As of QUICK_STATUS (snapshot 2026-02-12; machine-current state lives in `.machine_readable/6a2/STATE.a2ml`):
+As of QUICK_STATUS (updated 2026-02-12):
 
 * Alpha stage
 * Core compiler pipeline functional
@@ -160,23 +160,23 @@ Proposed wiki structure and migration map: docs/wiki/README.md
 
 == Contributing
 
-* link:CONTRIBUTING.adoc[Contributing Guide]
-* link:CODE_OF_CONDUCT.adoc[Code of Conduct]
-* link:SECURITY.adoc[Security Policy]
+* link:.github/CONTRIBUTING.md[Contributing Guide]
+* link:CODE_OF_CONDUCT.md[Code of Conduct]
+* link:SECURITY.md[Security Policy]
 
 == License
 
-Eclexia is licensed under MPL-2.0. See link:LICENSE[LICENSE] and link:LICENSES/[LICENSES/].
+Eclexia is licensed under MPL-2.0. See LICENSE and LICENSE.
 
 == Contact
 
-* General: mailto:info@eclexia.org[info@eclexia.org]
+* General: link:info@eclexia.org[[info@eclexia.org](info@eclexia.org)]
 * Research:
-mailto:research@eclexia.org[research@eclexia.org]
+link:research@eclexia.org[[research@eclexia.org](research@eclexia.org)]
 * Security:
-mailto:security@eclexia.org[security@eclexia.org]
+link:security@eclexia.org[[security@eclexia.org](security@eclexia.org)]
 
-Repository: https://github.com/hyperpolymath/eclexia (mirrored to GitLab, Bitbucket, Codeberg, SourceHut)
+Repository: https://gitlab.com/eclexia-lang/eclexia
 
 == Mission
 

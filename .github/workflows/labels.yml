@@ -33,7 +33,6 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 10   # Hypatia workflow_audit/missing_timeout_minutes (alert #68 family)
     steps:
       - name: Apply canonical labels
         env:

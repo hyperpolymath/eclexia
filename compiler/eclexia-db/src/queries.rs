@@ -19,7 +19,7 @@ use crate::{
 ///
 /// Wraps `eclexia_parser::parse()` as a salsa tracked function.
 /// Result is memoized — calling twice with same text returns cached result.
-#[salsa::tracked(returns(clone))]
+#[salsa::tracked]
 pub fn parse(db: &dyn salsa::Database, source: SourceFile) -> (AstWrapper, Vec<ParseError>) {
     let text = source.text(db);
     let (ast, errors) = eclexia_parser::parse(&text);
@@ -47,7 +47,7 @@ pub fn parse(db: &dyn salsa::Database, source: SourceFile) -> (AstWrapper, Vec<P
 /// Type-check a parsed file.
 ///
 /// Depends on `parse()` — salsa tracks this dependency automatically.
-#[salsa::tracked(returns(clone))]
+#[salsa::tracked]
 pub fn type_check(db: &dyn salsa::Database, source: SourceFile) -> Vec<TypeCheckError> {
     let (ast_wrapper, parse_errors) = parse(db, source);
 
@@ -71,7 +71,7 @@ pub fn type_check(db: &dyn salsa::Database, source: SourceFile) -> Vec<TypeCheck
 }
 
 /// Lower AST to HIR (High-level Intermediate Representation).
-#[salsa::tracked(returns(clone))]
+#[salsa::tracked]
 pub fn lower_hir(db: &dyn salsa::Database, source: SourceFile) -> HirWrapper {
     let (ast_wrapper, _errors) = parse(db, source);
     let hir = eclexia_hir::lower_source_file(&ast_wrapper.ast);
@@ -83,7 +83,7 @@ pub fn lower_hir(db: &dyn salsa::Database, source: SourceFile) -> HirWrapper {
 }
 
 /// Lower HIR to MIR (Mid-level Intermediate Representation).
-#[salsa::tracked(returns(clone))]
+#[salsa::tracked]
 pub fn lower_mir(db: &dyn salsa::Database, source: SourceFile) -> MirWrapper {
     let hir_wrapper = lower_hir(db, source);
     let mir = eclexia_mir::lower_hir_file(&hir_wrapper.hir);
@@ -95,7 +95,7 @@ pub fn lower_mir(db: &dyn salsa::Database, source: SourceFile) -> MirWrapper {
 }
 
 /// Generate bytecode from MIR.
-#[salsa::tracked(returns(clone))]
+#[salsa::tracked]
 pub fn generate_bytecode(db: &dyn salsa::Database, source: SourceFile) -> BytecodeWrapper {
     use eclexia_codegen::Backend;
 
@@ -123,7 +123,7 @@ pub fn generate_bytecode(db: &dyn salsa::Database, source: SourceFile) -> Byteco
 }
 
 /// Run the linter on a parsed file.
-#[salsa::tracked(returns(clone))]
+#[salsa::tracked]
 pub fn lint(db: &dyn salsa::Database, source: SourceFile) -> Vec<LintDiagnostic> {
     let (ast_wrapper, parse_errors) = parse(db, source);
     let text = source.text(db);
@@ -154,7 +154,7 @@ pub fn lint(db: &dyn salsa::Database, source: SourceFile) -> Vec<LintDiagnostic>
 ///
 /// This is the main query used by the LSP and CLI to get a unified
 /// view of all errors, warnings, and hints for a file.
-#[salsa::tracked(returns(clone))]
+#[salsa::tracked]
 pub fn all_diagnostics(db: &dyn salsa::Database, source: SourceFile) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 

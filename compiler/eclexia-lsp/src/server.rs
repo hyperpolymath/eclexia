@@ -7,9 +7,9 @@ use dashmap::DashMap;
 use eclexia_ast::span::Span;
 use eclexia_ast::{Item, SourceFile, TypeId, TypeKind};
 use std::collections::HashMap;
-use tower_lsp_server::jsonrpc::Result;
-use tower_lsp_server::lsp_types::*;
-use tower_lsp_server::{Client, LanguageServer};
+use tower_lsp::jsonrpc::Result;
+use tower_lsp::lsp_types::*;
+use tower_lsp::{Client, LanguageServer};
 
 use crate::symbols::SymbolTable;
 
@@ -160,7 +160,7 @@ pub struct EclexiaLanguageServer {
     /// LSP client handle for sending messages to the editor
     client: Client,
     /// In-memory document storage
-    documents: DashMap<Uri, Document>,
+    documents: DashMap<Url, Document>,
 }
 
 impl EclexiaLanguageServer {
@@ -176,7 +176,7 @@ impl EclexiaLanguageServer {
     /// Returns the symbol table if parsing succeeded.
     async fn analyze_document(
         &self,
-        uri: &Uri,
+        uri: &Url,
         text: &str,
     ) -> (Option<SymbolTable>, Option<SourceFile>) {
         let mut diagnostics = Vec::new();
@@ -280,7 +280,7 @@ impl EclexiaLanguageServer {
                         },
                     },
                     severity: Some(severity),
-                    code: Some(tower_lsp_server::lsp_types::NumberOrString::String(
+                    code: Some(tower_lsp::lsp_types::NumberOrString::String(
                         lint_diag.rule.clone(),
                     )),
                     code_description: None,
@@ -309,6 +309,7 @@ impl EclexiaLanguageServer {
     }
 }
 
+#[tower_lsp::async_trait]
 impl LanguageServer for EclexiaLanguageServer {
     async fn initialize(&self, _params: InitializeParams) -> Result<InitializeResult> {
         Ok(InitializeResult {

@@ -20,7 +20,7 @@ Acknowledgments: https://github.com/hyperpolymath/eclexia#security-acknowledgmen
 Acknowledgments: https://eclexia.org/security/acknowledgments
 
 # === Hiring (Security Team) ===
-Hiring: https://github.com/hyperpolymath/eclexia/blob/main/CONTRIBUTING.adoc
+Hiring: https://github.com/hyperpolymath/eclexia/blob/main/CONTRIBUTING.md
 
 # === Preferred Languages ===
 Preferred-Languages: en
