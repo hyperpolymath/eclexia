@@ -64,7 +64,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
 license = "MPL-2.0"
-repository = "https://gitlab.com/eclexia-lang/eclexia"
+repository = "https://github.com/hyperpolymath/eclexia"
 homepage = "https://eclexia.org"
 rust-version = "1.85"
 
@@ -124,6 +124,7 @@ wasm-encoder = "0.225"
 # Testing
 quickcheck = "1.0"
 proptest = "1.4"
+criterion = "0.5"
 
 [profile.release]
 lto = true

@@ -13,13 +13,17 @@ name = "eclexia-lsp"
 path = "src/main.rs"
 
 [dependencies]
-tower-lsp = "0.20"
+# tower-lsp-server 0.21 (the maintained rename of tower-lsp) pulls dashmap 6,
+# whose hashbrown requirement is >= 0.15 — this removes the last hashbrown
+# 0.14.x from the graph (RUSTSEC-2024-0402, Borsh non-canonical HashMap
+# serialisation). lsp-types moved from url::Url to lsp_types::Uri in 0.97.
+tower-lsp-server = "0.21"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = "0.3"
-dashmap = "5"
+dashmap = "6"
 
 # Eclexia internal crates
 eclexia-parser = { path = "../eclexia-parser" }

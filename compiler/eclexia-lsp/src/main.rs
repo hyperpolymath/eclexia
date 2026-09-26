@@ -3,7 +3,7 @@
 
 //! Eclexia Language Server
 
-use tower_lsp::{LspService, Server};
+use tower_lsp_server::{LspService, Server};
 
 #[tokio::main]
 async fn main() {
