@@ -112,6 +112,10 @@ bench-smoke:
     cargo run --bin eclexia -- bench
     cargo run --bin eclexia -- bench --energy
 
+# Criterion micro-benchmarks (parser corpus). CI: bench.yml runs weekly.
+bench:
+    cargo bench -p eclexia-parser
+
 # Panic-attack security scan
 panic-attack:
     ./scripts/qa/run-panic-attack.sh
