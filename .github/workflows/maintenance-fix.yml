@@ -1,0 +1,123 @@
+# This workflow is managed by gh actions-lock.
+# SPDX-License-Identifier: MPL-2.0
+#
+# TEMPORARY SCAFFOLDING for the dependency-security maintenance pass
+# (issue #80 + the recorded ClusterFuzzLite OOM). Runs on workflow_dispatch
+# only, from the maintenance branch; it is deleted before the PR merges.
+#
+# It exists because the authoring sandbox has no crates.io network access:
+# this workflow (a) regenerates Cargo.lock with cargo itself so checksums and
+# the dependency graph are authoritative, (b) verifies the salsa 0.28 /
+# cranelift 0.117 / tower-lsp-server 0.21 migrations by building, testing and
+# clippy-ing the workspace, (c) runs the real `cargo audit` gate, and
+# (d) replays the stored ClusterFuzzLite crash inputs against the fuzz target
+# to characterise the recorded OOM in fuzz_main.
+
+name: Maintenance Fix (scaffolding)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: maintenance-fix-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup default stable
+          rustc --version && cargo --version
+          sudo apt-get update
+          sudo apt-get install -y llvm clang
+          if ! command -v llc >/dev/null 2>&1; then
+            LLC_BIN="$(ls /usr/bin/llc-* /usr/lib/llvm-*/bin/llc 2>/dev/null | sort -V | tail -1)"
+            [ -n "$LLC_BIN" ] && sudo ln -sf "$LLC_BIN" /usr/local/bin/llc
+          fi
+          llc --version | head -1
+
+      - name: Bump rustls in the lockfile (RUSTSEC-2026-0285)
+        run: cargo update -p rustls
+
+      - name: Build workspace (regenerates the lock for Cargo.toml changes)
+        run: cargo build --workspace
+
+      - name: Test workspace
+        run: cargo test --workspace
+
+      - name: Clippy (zero warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked --quiet
+
+      - name: cargo audit (issue #80 gate)
+        run: |
+          cargo audit --deny warnings
+          cargo audit --deny unmaintained
+
+      - name: Commit regenerated lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          git diff --cached --stat
+          git commit -m "fix(deps): regenerate Cargo.lock for RUSTSEC-2026-0285/0308 + RUSTSEC-2024-0402 bumps" || echo "nothing to commit"
+          git push
+
+      - name: Download stored ClusterFuzzLite crashes
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/crashes
+          # crash inputs from the most recent failing batch run that still
+          # carries a crashes-fuzz_main artifact (OOM oom-abc6a184 era).
+          for run in 34728727538 34002069182 33283975797; do
+            if gh run download "$run" -n crashes-fuzz_main -D /tmp/crashes 2>/dev/null; then
+              echo "downloaded crash artifact from run $run"
+              break
+            fi
+          done
+          ls -la /tmp/crashes || true
+
+      - name: Build and replay fuzz target against stored crashes
+        continue-on-error: true
+        run: |
+          cd fuzz
+          cargo build --bin fuzz_main
+          BIN=./target/debug/fuzz_main
+          mkdir -p /tmp/fuzz-repro
+          if compgen -G "/tmp/crashes/*" > /dev/null; then
+            for f in /tmp/crashes/*; do
+              echo "=== replay $f ($(wc -c < "$f") bytes)"
+              ( ulimit -v 4000000; RUST_BACKTRACE=full timeout 60 "$BIN" -rss_limit_mb=4096 -malloc_limit_mb=4096 -runs=1 "$f" ) \
+                > /tmp/fuzz-repro/$(basename "$f").log 2>&1 \
+                || echo "EXIT=$? for $f"
+              tail -40 /tmp/fuzz-repro/$(basename "$f").log || true
+            done
+          else
+            echo "no stored crash inputs available; recording target size only"
+            "$BIN" -runs=0 2>&1 | tail -5 || true
+          fi
+
+      - name: Attach fuzz replay logs
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: fuzz-repro-logs
+          path: /tmp/fuzz-repro
+          retention-days: 30
+          if-no-files-found: ignore

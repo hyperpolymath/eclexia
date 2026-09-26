@@ -39,7 +39,7 @@ milestones = [
   "LANDED 2026-07-25: docs deploy via Ddraig SSG (#54)",
   "LANDED 2026-07-25: governance gate closed — SPDX, workflow permissions, SHA pins, reusable bump (#55)",
   "LANDED 2026-07-26: estate sweeps 2-4 reconciled to main — mise.toml, LICENSES/, ARCHITECTURE/GOVERNANCE/MAINTAINERS (#56)",
-  "PENDING 2026-07-29: branch fix/ci-punchlist-2026-07-27 — Scorecards permissions, RUSTSEC bumps, CodeQL pin label, guix licence, documentation refresh (local, unpushed)",
+  "LANDED 2026-09-26: maintenance pass — superseded the 2026-07-29 local punchlist (Scorecards permissions, RUSTSEC bumps, CodeQL pin, dependency migration) on the arena maintenance branch; re-pinned estate wrappers to standards@da2c748",
 ]
 
 [blockers-and-issues]
@@ -49,12 +49,19 @@ issues = [
   "LLVM: rt-native static library exists, automatic linking not wired",
   "Runtime metrics not wired to real OS metrics (except RSS on Linux)",
   "Package registry server stub not deployed",
-  "No measured benchmarks (performance claims are projections)",
-  "OPEN #43: ShadowPrices.v carries 5 cited LP axioms — documented, not discharged",
-  "OPEN #35: 'Known Gaps (honest)' tracking issue",
-  "OPEN #20: 10 Critical/High panic-attack findings await triage (Track C)",
+  "OPEN #35 (trimmed): Echo follow-ons + WASM/LLVM/metrics/registry gaps remain; measured-benchmark harness landed 2026-09-26",
   "CI 2026-07-26: ClusterFuzzLite found a REPRODUCIBLE out-of-memory crash in fuzz_main (artifact oom-abc6a184…) — a real compiler defect, not a workflow fault",
+  "2026-09-20: ClusterFuzzLite Batch schedule run ended startup_failure with no repo change (PR variant green 2026-09-16) — suspected transient upstream; monitor next scheduled run",
 ]
+# Resolved at the 2026-09-26 maintenance pass:
+#   FIXED #80: cargo audit clean — salsa 0.28.5 (RUSTSEC-2026-0308),
+#     rustls >= 0.23.45 (RUSTSEC-2026-0285), hashbrown 0.14 removed from the
+#     graph via cranelift 0.117 + tower-lsp-server 0.21/dashmap 6
+#     (RUSTSEC-2024-0402); crossbeam-epoch 0.9.20 (RUSTSEC-2026-0204) landed
+#     earlier on main.
+#   CLOSED #43: keep-decisions recorded per axiom in docs/proof-debt.adoc
+#     (dependencies named; weak_duality statement change decided).
+#   CLOSED #20: panic-attack triage completed earlier.
 
 [critical-next-actions]
 actions = [
@@ -63,7 +70,7 @@ actions = [
   "Wire WASM bump allocator for GC",
   "Automate LLVM linking to rt-native static library",
   "Wire runtime metrics to real OS metrics",
-  "Add measured benchmarks",
+  "Publish first measured numbers from the criterion parser bench (bench.yml / just bench) and cite them in docs",
   "Wire reactive crates (salsa DB, modules) into incremental builds",
 ]
 

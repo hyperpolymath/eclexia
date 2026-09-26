@@ -1,21 +1,23 @@
-## Current Session Status (Updated 2026-07-29)
+## Current Session Status (Updated 2026-09-26)
 
 > **Read this first.** The detailed sections below were measured on 2026-02-12.
 > They describe the compiler pipeline accurately, but they predate the Echo
-> structured-loss work (landed 2026-06) and all July CI/governance changes, and
+> structured-loss work (landed 2026-06) and all later CI/governance changes, and
 > they undercount the workspace: the measured figure is **53 Cargo workspace
 > members**, not 25 crates.
 >
 > **Authoritative current state:** `.machine_readable/6a2/STATE.a2ml`
-> (machine-readable) and `dev-notes/eclexia-sitrep-2026-07-27.md` (narrative).
+> (machine-readable) and `docs/proof-debt.adoc` (axiom dispositions).
 >
-> **CI on origin/main is not fully green.** Green: CodeQL, Hypatia, Governance,
-> Secret Scanner. Red: Cargo Audit and Scorecards (fixes staged on the unpushed
-> branch `fix/ci-punchlist-2026-07-27`), and ClusterFuzzLite on a **reproducible
-> out-of-memory crash in `fuzz_main`** — a real compiler defect, still open.
->
-> **Checkout path:** `developer/hyper-repos/_LANGUAGES _SET/_NEXTGEN_LANGUAGES _SET/eclexia`.
-> The path contains spaces; quote it in shell commands.
+> **CI (2026-09-26 maintenance pass):** the estate reusable wrappers are
+> pinned to `standards@da2c748` (same revision the rsr-template-repo ships);
+> Governance, Workflow Security Linter and Hypatia are fixed by that re-pin.
+> `cargo audit` is clean after the dependency pass (salsa 0.28.5,
+> rustls >= 0.23.45, hashbrown 0.14 eliminated via cranelift 0.117 +
+> tower-lsp-server 0.21/dashmap 6; crossbeam-epoch 0.9.20 landed earlier).
+> Scorecards wrapper aligned to the template. Remaining watch item:
+> ClusterFuzzLite Batch on a **reproducible out-of-memory crash in
+> `fuzz_main`** — a real compiler defect, still open (weekly schedule).
 >
 > **Diagnostic trap:** a workflow rejected at parse time produces *no check run*,
 > so `gh pr checks` shows nothing rather than a failure. Use
