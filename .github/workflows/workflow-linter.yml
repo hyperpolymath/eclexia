@@ -1,57 +1,99 @@
 # This workflow is managed by gh actions-lock.
 # SPDX-License-Identifier: MPL-2.0
-# This workflow is managed by gh actions-lock.
-# This workflow is managed by gh actions-lock.
-# Prevention workflow - validates all workflows have proper security config
+# workflow-linter.yml - Validates GitHub workflows against RSR security standards
+# Fast path-filtered feedback; the authoritative estate linter runs inside the
+# Governance bundle (governance-reusable.yml). This copy mirrors its SPDX rule:
+# the licence must appear in the leading comment block, NOT specifically on
+# line 1 — `gh actions-lock` inserts its own banner at line 1 whenever it mints
+# a lockfile, so a line-1 test fights the estate's own tool.
 name: Workflow Security Linter
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/**'
   push:
     paths:
       - '.github/workflows/**'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+  workflow_dispatch:
 
-permissions: read-all
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
   lint-workflows:
     runs-on: ubuntu-latest
+    timeout-minutes: 10 # Hypatia workflow_audit/missing_timeout_minutes (alert #68 family)
+    permissions:
+      contents: read
+
     steps:
-      - uses: actions/checkout@v7.0.1
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
 
-      - name: Check SPDX headers
+      - name: Check SPDX Headers
         run: |
-          errors=0
-          for f in .github/workflows/*.yml .github/workflows/*.yaml; do
-            [ -f "$f" ] || continue
-            if ! head -1 "$f" | grep -q "SPDX-License-Identifier"; then
-              echo "ERROR: $f missing SPDX header"
-              errors=$((errors + 1))
+          echo "=== Checking SPDX License Headers ==="
+          failed=0
+          for file in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [ -f "$file" ] || continue
+            # actions-lock may prepend its own comment. Require the licence
+            # in the leading comment block, before the workflow body.
+            if ! awk '/^# SPDX-License-Identifier:/ { found=1 } /^[^#[:space:]]/ { exit } END { exit !found }' "$file"; then
+              echo "ERROR: $file missing SPDX header"
+              failed=1
             fi
           done
-          exit $errors
+          if [ $failed -eq 1 ]; then
+            echo "Add '# SPDX-License-Identifier: MPL-2.0' to the leading comment block"
+            exit 1
+          fi
+          echo "All workflows have SPDX headers"
 
-      - name: Check permissions declaration
+      - name: Check Permissions Declaration
         run: |
-          errors=0
-          for f in .github/workflows/*.yml .github/workflows/*.yaml; do
-            [ -f "$f" ] || continue
-            if ! grep -q "^permissions:" "$f"; then
-              echo "ERROR: $f missing permissions declaration"
-              errors=$((errors + 1))
+          echo "=== Checking Permissions ==="
+          failed=0
+          for file in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [ -f "$file" ] || continue
+            if ! grep -q "^permissions:" "$file"; then
+              echo "ERROR: $file missing top-level 'permissions:' declaration"
+              failed=1
             fi
           done
-          exit $errors
+          if [ $failed -eq 1 ]; then
+            echo "Add a top-level 'permissions:' block (e.g. contents: read)"
+            exit 1
+          fi
+          echo "All workflows have permissions declared"
 
-      - name: Check pinned actions
+      # Advisory only. The enforcing gate is the estate Governance bundle's
+      # `actions-lock-verify` job: with a valid .github/workflows/actions.lock
+      # present, every direct `uses:` ref here is resolved through the lock.
+      - name: Check pinned actions (advisory)
         run: |
-          errors=0
-          for f in .github/workflows/*.yml .github/workflows/*.yaml; do
-            [ -f "$f" ] || continue
-            # Look for uses: without SHA
-            if grep -E "uses:.*@v[0-9]" "$f" | grep -v "#"; then
-              echo "WARNING: $f has unpinned actions (missing SHA comment)"
-            fi
-          done
+          echo "=== Checking Action Pinning (advisory) ==="
+          unpinned=$(grep -rE --include='*.yml' --include='*.yaml' \
+            "^[[:space:]]+uses:" .github/workflows/ | \
+            grep -v "@[0-9a-f]\{40\}" | \
+            grep -v "uses: \./\|uses: docker://\|uses: hyperpolymath/standards/" || true)
+          if [ -n "$unpinned" ]; then
+            echo "NOTE: refs resolved via .github/workflows/actions.lock rather than inline SHA pins:"
+            echo "$unpinned"
+          else
+            echo "All action refs are SHA-pinned or lock-resolved"
+          fi
+
+      - name: Check for Duplicate Workflows
+        run: |
+          echo "=== Checking for Duplicates ==="
+          # Known duplicate patterns
+          if [ -f .github/workflows/codeql.yml ] && [ -f .github/workflows/codeql-analysis.yml ]; then
+            echo "ERROR: Duplicate CodeQL workflows found"
+            echo "Delete codeql-analysis.yml (keep codeql.yml)"
+            exit 1
+          fi
+          echo "No duplicate workflows found"

@@ -1,7 +1,5 @@
 # This workflow is managed by gh actions-lock.
 # SPDX-License-Identifier: MPL-2.0
-# This workflow is managed by gh actions-lock.
-# This workflow is managed by gh actions-lock.
 #
 # dependabot-automerge.yml — enable GitHub's native auto-merge on
 # Dependabot pull requests that match a declared severity / ecosystem
@@ -38,29 +36,33 @@
 # bumps for dependabot/fetch-metadata flow through the same path.
 
 name: Dependabot Auto-Merge
-
 on:
   pull_request:
     types: [opened, reopened, synchronize]
-
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 permissions:
-  contents: write        # needed to enable auto-merge
-  pull-requests: write   # needed to approve
+  contents: read
+  pull-requests: write # needed to approve
   # NB: keep narrow — do NOT add secrets: read or id-token: write here.
-
+  # The write scope auto-merge needs is elevated PER JOB below, not here: a
+  # job-level permissions: block REPLACES this one, so the job restates both.
 jobs:
   automerge:
     # Only run for PRs actually authored by Dependabot.
     if: github.actor == 'dependabot[bot]' && github.event.pull_request.user.login == 'dependabot[bot]'
+    permissions:
+      contents: write # needed to enable auto-merge (gh pr merge --auto)
+      pull-requests: write # needed to approve
     runs-on: ubuntu-latest
-
+    timeout-minutes: 15
     steps:
       - name: Fetch Dependabot metadata
         id: meta
         uses: dependabot/fetch-metadata@v3.1.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
       # --- Policy gate -------------------------------------------------------
       # Outputs from fetch-metadata we care about:
       #   update-type      → version-update:semver-{patch,minor,major}
@@ -86,30 +88,21 @@ jobs:
           set -euo pipefail
 
           is_security=false
-          is_patch_or_minor=false
-          is_high_or_critical=false
-
           [ -n "$GHSA_ID" ] && is_security=true
-          case "$UPDATE_TYPE" in
-            version-update:semver-patch|version-update:semver-minor)
-              is_patch_or_minor=true ;;
-          esac
 
-          # Dependabot adds severity labels like "severity: high",
-          # "severity: critical". Look for those in the PR labels JSON.
-          if echo "$PR_LABELS" | grep -qiE '"(severity: (high|critical))"'; then
-            is_high_or_critical=true
-          fi
-
-          if $is_security && $is_patch_or_minor && ! $is_high_or_critical; then
-            echo "action=automerge" >> "$GITHUB_OUTPUT"
-          else
-            echo "action=skip" >> "$GITHUB_OUTPUT"
-          fi
+          # Owner policy (deliberate: velocity over caution). Auto-merge EVERY
+          # Dependabot update — patch, minor AND major, security or routine.
+          # Safe because GitHub's auto-merge only COMPLETES once the required
+          # checks (secret-scanner, codeql, hypatia-scan, openssf-compliance,
+          # build/test) are green: a bump that breaks fails CI and the PR stays
+          # OPEN with an email ("oi, it broke") instead of landing on a red
+          # main; a bump that passes lands within minutes with no chasing.
+          # This is preferred over making Dependabot a ruleset BYPASS actor,
+          # which would let bumps skip those very checks (no gate, no signal).
+          echo "action=automerge" >> "$GITHUB_OUTPUT"
           echo "security=$is_security" >> "$GITHUB_OUTPUT"
           echo "update_type=$UPDATE_TYPE" >> "$GITHUB_OUTPUT"
           echo "ghsa=$GHSA_ID" >> "$GITHUB_OUTPUT"
-
       - name: Approve PR (if policy allows)
         if: steps.policy.outputs.action == 'automerge'
         env:
@@ -118,7 +111,6 @@ jobs:
         run: |
           gh pr review --approve "$PR_URL" \
             --body "Auto-approving Dependabot security update (${{ steps.policy.outputs.ghsa }}, ${{ steps.policy.outputs.update_type }}). Policy: low/moderate security patches/minors only."
-
       - name: Enable auto-merge (if policy allows)
         if: steps.policy.outputs.action == 'automerge'
         env:
@@ -126,7 +118,6 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           gh pr merge --auto --squash "$PR_URL"
-
       - name: Write decision to step summary
         env:
           ACTION: ${{ steps.policy.outputs.action }}
