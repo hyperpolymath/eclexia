@@ -17,6 +17,16 @@ name: Maintenance Fix (scaffolding)
 
 on:
   workflow_dispatch:
+  # workflow_dispatch is unusable from a non-default branch, so this also
+  # fires on pushes to the maintenance branch that touch the manifests or
+  # this file. Two loop guards: the paths filter (the runner only ever
+  # commits Cargo.lock) and the actor guard on the job below.
+  push:
+    branches: [arena/01a0df15-eclexia]
+    paths:
+      - '.github/workflows/maintenance-fix.yml'
+      - 'Cargo.toml'
+      - '**/Cargo.toml'
 
 permissions:
   contents: write
@@ -28,6 +38,7 @@ concurrency:
 
 jobs:
   fix:
+    if: github.actor != 'github-actions[bot]' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
