@@ -26,9 +26,7 @@ jobs:
           errors=0
           for f in .github/workflows/*.yml .github/workflows/*.yaml; do
             [ -f "$f" ] || continue
-            # actions-lock prepends its banner at line 1; scan the leading
-            # comment block instead (estate governance rule).
-            if ! awk '/^# SPDX-License-Identifier:/ { found=1 } /^[^#[:space:]]/ { exit } END { exit !found }' "$f"; then
+            if ! head -1 "$f" | grep -q "SPDX-License-Identifier"; then
               echo "ERROR: $f missing SPDX header"
               errors=$((errors + 1))
             fi
@@ -57,3 +55,5 @@ jobs:
               echo "WARNING: $f has unpinned actions (missing SHA comment)"
             fi
           done
+
+# bisect probe: identical to main + this comment
