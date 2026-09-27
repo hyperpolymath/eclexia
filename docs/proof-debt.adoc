@@ -42,6 +42,10 @@ pair. The standard constructive proof invokes strong duality, whose
 standard constructive proof in turn certifies the pivot via
 complementary slackness; the cycle is broken by axiomatising both (see
 `+strong_duality+`). Load-bearing for the shadow-price theorems.
+** *Dependency (named)*: Farkas’ lemma plus a constructive simplex
+certificate — same infrastructure as `+strong_duality+`.
+** *Decision (2026-09-26)*: KEEP as cited axiom, paired with
+`+strong_duality+`.
 ** *Citation*: Bertsimas & Tsitsiklis, _Introduction to Linear
 Optimization_ (1997), §4.
 * `+formal/coq/src/ShadowPrices.v:215+` — `+Axiom lp_sensitivity+`
@@ -62,10 +66,20 @@ Optimization_ (1997), Theorem 4.4.
 
 * `+formal/coq/src/ShadowPrices.v:161+` — `+Axiom weak_duality+`
 ** *Owner*: @hyperpolymath
-** *Plan*: dischargeable without external infrastructure — it reduces to
-list-level dot-product associativity and the transpose identity
-`+(Aᵀλ)ᵀx = λᵀ(Ax)+` over `+lp_constraints+`. Prove those two list
-lemmas and promote this to category (a).
+** *Decision on the statement (2026-09-26)*: ADD the objective-consistency
+hypothesis
+`+sol_objective_value sol = dot_product (lp_objective lp) (sol_x sol)+`
+before any discharge attempt. As stated, `+sol_objective_value+` is a
+free field of the `+Solution+` record, so the conclusion is not tied to
+`+cᵀx+` and the axiom is not dischargeable as-is; the hypothesis must be
+added to `+weak_duality+` and threaded through its consumer
+(`+dual_variables_are_shadow_prices+`). This is a statement change plus a
+consumer update, to land as one proof-touching PR *with* the discharge.
+** *Dependency (named)*: none external — reduces to list-level
+dot-product associativity and the transpose identity `+(Aᵀλ)ᵀx = λᵀ(Ax)+`
+over `+lp_constraints+` (both hand-provable under the current toolchain).
+** *Plan*: prove the two list lemmas, add the consistency hypothesis, then
+promote this to category (a).
 ** *Deadline*: INDEFINITE — low priority; `+ShadowPrices.v+` is not on
 any CI-verified path.
 * `+formal/coq/src/ShadowPrices.v:519+` —
@@ -75,4 +89,10 @@ any CI-verified path.
 and Bland’s-rule cycle prevention — none defined in this file. The axiom
 is *not used* by any current theorem; it documents intended future work
 and could alternatively be deleted until that work begins.
+** *Dependency (named)*: a formalised simplex kernel (pivot step + finite
+basis enumeration + Bland’s-rule non-cycling). No external library
+provides this in the current toolchain.
+** *Decision (2026-09-26)*: KEEP as documentation of intended future
+work. It is pure proof debt with zero consumers; delete it at the next
+statement-breaking pass if the simplex kernel has not landed.
 ** *Deadline*: INDEFINITE — dependent on a formalised simplex kernel.

@@ -1,0 +1,132 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= Contributing to Eclexia
+:toc: left
+
+Thank you for looking at Eclexia — a constraint-based resource language
+with dimensional types and shadow pricing. This document explains how to
+set up a development environment and how to land a change.
+
+== Local development setup
+
+[source,bash]
+----
+# Clone the repository
+git clone https://github.com/hyperpolymath/eclexia.git
+cd eclexia
+
+# Using Guix (recommended for reproducibility)
+guix shell -m formal/coq/manifest.scm   # adds Coq for the formal/ tree
+
+# Or bring your own toolchain:
+#   Rust (see rust-version in Cargo.toml), just, LLVM (llc) for backend tests
+
+# Verify setup
+just check       # or: cargo check
+just test        # run the test suite
+just quality-gate  # fmt + lint + tests, as CI enforces them
+----
+
+== Repository structure
+
+[source,text]
+----
+eclexia/
+├── compiler/          # compiler crates and CLI front-end
+├── runtime/           # runtime crates (scheduler, profiling, carbon, shadow)
+├── libraries/         # ecosystem libraries
+├── stdlib/            # standard library sources (.ecl)
+├── examples/          # sample .ecl programs
+├── tests/             # conformance and integration tests
+├── formal/            # Coq/Agda artifacts
+├── docs/              # reference docs, tutorials, generated docs
+└── .github/           # workflows, label config, copilot config
+----
+
+== How to contribute
+
+=== Reporting bugs
+
+*Before reporting:*
+
+. Search existing issues.
+. Check if it is already fixed in `main`.
+
+*When reporting*, open an issue via the issue chooser
+(https://github.com/hyperpolymath/eclexia/issues/new/choose) and include:
+
+* Clear, descriptive title
+* Environment details (OS, versions, toolchain)
+* Steps to reproduce
+* Expected vs actual behaviour
+* Logs, screenshots, or minimal reproduction
+
+=== Suggesting features
+
+*Before suggesting:*
+
+. Check the link:IMPLEMENTATION_ROADMAP.adoc[implementation roadmap].
+. Search existing issues and discussions.
+
+*When suggesting*, include:
+
+* Problem statement (what pain point does this solve?)
+* Proposed solution
+* Alternatives considered
+
+=== Your first contribution
+
+Look for issues labelled `good first issue`, `help wanted`, or
+`documentation` in the
+https://github.com/hyperpolymath/eclexia/labels[issue tracker].
+
+== Development workflow
+
+=== Branch naming
+
+[source,text]
+----
+docs/short-description       # Documentation
+test/what-added              # Test additions
+feat/short-description       # New features
+fix/issue-number-description # Bug fixes
+refactor/what-changed        # Code improvements
+security/what-fixed          # Security fixes
+----
+
+=== Commit messages
+
+We follow https://www.conventionalcommits.org/[Conventional Commits]; the
+link:CHANGELOG.adoc[changelog] is generated from them:
+
+[source,text]
+----
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer]
+----
+
+=== Pull requests
+
+* Keep PRs focused; CI runs build, tests, clippy (zero warnings), CodeQL
+  and the estate governance bundle on every PR.
+* Changes under `formal/coq/**` additionally run the Coq proof gate.
+* New `uses:` references in workflows must be reflected in
+  `.github/workflows/actions.lock` (the governance bundle verifies the
+  lock; prefer SHA-pinned refs for new actions and consult the standards
+  repo's actions allowlist).
+
+== Cross-references
+
+This root document exists because the estate docs gate
+(`hyperpolymath/standards` `scripts/check-docs-presence.sh`) requires a
+`CONTRIBUTING` document at the repository root. The legacy copy at
+`.github/CONTRIBUTING.md` described directories this repository has never
+contained; this document supersedes it and has been removed.
+
+== Licensing
+
+By contributing you agree that your contributions are licensed under the
+repository licence, MPL-2.0 (see link:LICENSE[LICENSE]).
