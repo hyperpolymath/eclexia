@@ -39,7 +39,7 @@ milestones = [
   "LANDED 2026-07-25: docs deploy via Ddraig SSG (#54)",
   "LANDED 2026-07-25: governance gate closed — SPDX, workflow permissions, SHA pins, reusable bump (#55)",
   "LANDED 2026-07-26: estate sweeps 2-4 reconciled to main — mise.toml, LICENSES/, ARCHITECTURE/GOVERNANCE/MAINTAINERS (#56)",
-  "PENDING 2026-07-29: branch fix/ci-punchlist-2026-07-27 — Scorecards permissions, RUSTSEC bumps, CodeQL pin label, guix licence, documentation refresh (local, unpushed)",
+  "LANDED 2026-09-26: maintenance pass — superseded the 2026-07-29 local punchlist (Scorecards permissions, RUSTSEC bumps, CodeQL pin, dependency migration) on the arena maintenance branch; re-pinned estate wrappers to standards@da2c748",
 ]
 
 [blockers-and-issues]
@@ -49,12 +49,19 @@ issues = [
   "LLVM: rt-native static library exists, automatic linking not wired",
   "Runtime metrics not wired to real OS metrics (except RSS on Linux)",
   "Package registry server stub not deployed",
-  "No measured benchmarks (performance claims are projections)",
-  "OPEN #43: ShadowPrices.v carries 5 cited LP axioms — documented, not discharged",
-  "OPEN #35: 'Known Gaps (honest)' tracking issue",
-  "OPEN #20: 10 Critical/High panic-attack findings await triage (Track C)",
+  "OPEN #35 (trimmed): Echo follow-ons + WASM/LLVM/metrics/registry gaps remain; measured-benchmark harness landed 2026-09-26",
   "CI 2026-07-26: ClusterFuzzLite found a REPRODUCIBLE out-of-memory crash in fuzz_main (artifact oom-abc6a184…) — a real compiler defect, not a workflow fault",
+  "2026-09-20: ClusterFuzzLite Batch schedule run ended startup_failure with no repo change (PR variant green 2026-09-16) — suspected transient upstream; monitor next scheduled run",
 ]
+# Resolved at the 2026-09-26 maintenance pass:
+#   FIXED #80: cargo audit clean — salsa 0.28.5 (RUSTSEC-2026-0308),
+#     rustls >= 0.23.45 (RUSTSEC-2026-0285), hashbrown 0.14 removed from the
+#     graph via cranelift 0.117 + tower-lsp-server 0.21/dashmap 6
+#     (RUSTSEC-2024-0402); crossbeam-epoch 0.9.20 (RUSTSEC-2026-0204) landed
+#     earlier on main.
+#   CLOSED #43: keep-decisions recorded per axiom in docs/proof-debt.adoc
+#     (dependencies named; weak_duality statement change decided).
+#   CLOSED #20: panic-attack triage completed earlier.
 
 [critical-next-actions]
 actions = [
@@ -63,7 +70,7 @@ actions = [
   "Wire WASM bump allocator for GC",
   "Automate LLVM linking to rt-native static library",
   "Wire runtime metrics to real OS metrics",
-  "Add measured benchmarks",
+  "Publish first measured numbers from the criterion parser bench (bench.yml / just bench) and cite them in docs",
   "Wire reactive crates (salsa DB, modules) into incremental builds",
 ]
 
@@ -82,16 +89,17 @@ checkout-path = "developer/hyper-repos/_LANGUAGES _SET/_NEXTGEN_LANGUAGES _SET/e
 packaging = "Guix only — Guix retired 2026-05-18"
 
 [ci-status]
-# Measured on origin/main 2026-07-29 via gh run list.
-green = ["CodeQL", "Hypatia Security Scan", "Governance", "Secret Scanner"]
+# Measured 2026-09-26/27 via gh api runs on origin/main and the agent branch.
+green = ["CodeQL (default setup)", "Secret Scanner", "Mirror to Git Forges", "Scheduled maintenance (2026-09-26)"]
 red = [
-  "Cargo Audit — RUSTSEC-2026-0204 crossbeam-epoch (fix staged on branch)",
-  "Scorecards — startup_failure, caller job dropped contents:read (fix staged on branch)",
-  "ClusterFuzzLite — reproducible OOM in fuzz_main (REAL defect, unfixed)",
+  "Governance + Workflow Security Linter on main — failing 2026-09-26 after a Dependabot github_actions group bump desynchronised .github/workflows/actions.lock from the workflow refs; the gates are correctly reporting the desync. Fix: this branch rebuilds the lock in the rsr-template-repo format (repo-root/reusable-prefix entries, per-workflow keying) and re-pins every wrapper to standards@da2c748.",
+  "Hypatia Security Scan on main — failing 2026-09-26/27, same window as the Dependabot bump; re-check after merge.",
+  "ALL agent-branch runs — startup_failure at run creation, 0 jobs, no logs. ROOT-CAUSED 2026-09-26: every workflow run triggered by the arena-ai-coding-agent[bot] GitHub App startup_fails estate-wide (rsr-template-repo, hypatia, statistikles, aerie, standards, eclexia) on every branch and workflow, regardless of content; user-triggered runs are unaffected. Proven by bisect: a tree byte-identical to main (plus one comment) still startup_fails when pushed by the bot. NOT a workflow-file or actions.lock defect. Fix requires the app installation's Actions permission / org app-access policy — admin action, not a repo change.",
+  "ClusterFuzzLite Batch — reproducible OOM in fuzz_main (REAL compiler defect, unfixed).",
 ]
-note = "startup_failure produces NO check run; gh pr checks hides it. Use gh run list --json conclusion."
+note = "startup_failure produces NO check run; gh pr checks hides it. Use gh run list --json conclusion. Agent-triggered startup_failure is environment-level, not content-level."
 
 [maintenance-status]
-last-run-utc = "2026-07-29T00:00:00Z"
-last-result = "warn"  # unknown | pass | warn | fail
-last-result-reason = "main has 3 red workflows; 2 have fixes staged on an unpushed branch, 1 (fuzz OOM) is an open compiler defect"
+last-run-utc = "2026-09-26T15:31:56Z"
+last-result = "pass"  # unknown | pass | warn | fail
+last-result-reason = "Scheduled maintenance run passed 2026-09-26 on main; Cargo.lock regen for the staged dep fixes lands via maintenance once the branch merges"

@@ -26,6 +26,12 @@ on:
   schedule:
     - cron: "23 4 1 * *"   # monthly drift repair
 
+# Scope + cancel superseded runs (estate guardrail); the job is idempotent,
+# so last-write-wins is safe.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   issues: write
   contents: read
@@ -33,6 +39,7 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 10   # Hypatia workflow_audit/missing_timeout_minutes (alert #68 family)
     steps:
       - name: Apply canonical labels
         env:
