@@ -41,7 +41,7 @@ workflows:
         - 'actions/deploy-pages@v5.0.1'
         - 'actions/upload-pages-artifact@v5.0.0'
     '.github/workflows/push-email-notify.yml':
-        - 'hyperpolymath/smtp-notify-action@v0.3.0'
+        - 'hyperpolymath/smtp-notify-action@v0.5.1'
     '.github/workflows/scorecard.yml':
         - 'hyperpolymath/standards@da2c748aad55c1a1dcba00b60fe4a35017bc6540'
     '.github/workflows/secret-scanner.yml':
@@ -118,9 +118,9 @@ dependencies:
         commit: 'sha1-884713a6c30a92e5e8544c39945cd7cb630abcd1'
         owner_id: 1342004
         repo_id: 400046858
-    'hyperpolymath/smtp-notify-action@v0.3.0':
-        ref: 'v0.3.0'
-        commit: 'sha1-22e7bdb322c430c1d0dac6b3bb307f4bb139d0be'
+    'hyperpolymath/smtp-notify-action@v0.5.1':
+        ref: 'v0.5.1'
+        commit: 'sha1-e384daf6167a7a7567642d6a62060106244d2413'
         owner_id: 6759885
         repo_id: 1352485172
     'hyperpolymath/standards@da2c748aad55c1a1dcba00b60fe4a35017bc6540':
