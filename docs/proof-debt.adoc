@@ -14,7 +14,16 @@ Soundness, Dimensional Safety) and `+Echo.v+` (echo-type soundness) are
 context`". They carry *no* entries here. The only escape hatches are the
 five linear-programming duality axioms in `+ShadowPrices.v+`,
 dispositioned below.
-* *Agda* (`+formal/agda/ResourceTracking.agda+`) — no `+postulate+`s.
+* *Agda* (`+formal/agda/ResourceTracking.agda+`) — no `+postulate+`s, but status
+*`open`*: the module does not type-check, and no CI job, script or recipe runs
+Agda on it. With Agda 2.8.0.2 and agda-stdlib v2.3,
+`agda --safe --without-K --cubical-compatible` exits 42 with
+`ResourceTracking.agda:196.101-105: error: [SplitError.UnificationStuck]`
+(cannot eliminate `usage₁ + amount = usage₁ + amount` because K is disabled).
+Plain `agda --safe` also exits 42, with
+`ResourceTracking.agda:199.33-52: error: [UnequalTerms] _x + zero != m`.
+The header claim "All proofs are complete" is therefore unverified. No
+`+OPTIONS+` pragma was added, because it would assert a check that fails.
 * *Rust* (`+compiler/+`, `+runtime/+`) — `+unsafe+` blocks exist only at
 FFI boundaries; none use `+unsafePerformIO+`/`+unsafeCoerce+`, so none
 are soundness-relevant under the policy’s marker set.
