@@ -1,14 +1,19 @@
 -- SPDX-License-Identifier: MPL-2.0
 -- SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+
+{-# OPTIONS --safe --without-K --cubical-compatible #-}
+
 -- Resource Tracking Soundness Proofs
 --
 -- This module formalizes the soundness of Eclexia's resource tracking system.
--- All proofs are complete — no holes, no postulates, no unsafe escape hatches.
+-- Checked under --safe --without-K --cubical-compatible: no holes, no
+-- postulates. Tracking soundness is proved for the refined ConsumesResource'
+-- only; see the NOTE below and docs/proof-debt.adoc.
 
 module ResourceTracking where
 
 open import Data.Nat using (ℕ; zero; suc; _+_; _≤_; _<_; _∸_; z≤n; s≤s)
-open import Data.Nat.Properties using (≤-refl; ≤-trans; +-comm; +-assoc; +-mono-≤)
+open import Data.Nat.Properties using (≤-refl; ≤-trans; ≤-reflexive; +-comm; +-assoc; +-mono-≤; +-monoʳ-≤; m≤m+n; m+[n∸m]≡n)
 open import Data.List using (List; []; _∷_; _++_; length; map; foldr; sum)
 open import Data.Bool using (Bool; true; false; _∧_; _∨_; not; if_then_else_)
 open import Data.Product using (_×_; ∃; _,_; proj₁; proj₂)
@@ -193,10 +198,7 @@ usage-monotonic : ∀ (state : ResourceState) (amount : Amount) →
   ∃ λ state' → consume-resource state amount ≡ success state' →
   usage state ≤ usage state'
 usage-monotonic state amount with (usage state + amount) ≤? budget state
-... | yes proof = (record state { usage = usage state + amount ; budget-sufficient = proof }) , (λ {refl → ≤-trans ≤-refl (m≤m+n (usage state) amount)})
-  where
-    m≤m+n : ∀ m n → m ≤ m + n
-    m≤m+n m n = ≤-trans ≤-refl (+-mono-≤ ≤-refl z≤n)
+... | yes proof = (record state { usage = usage state + amount ; budget-sufficient = proof }) , (λ _ → m≤m+n (usage state) amount)
 ... | no _ = state , (λ ())
 
 -- Budget never increases
@@ -204,7 +206,7 @@ budget-constant : ∀ (state : ResourceState) (amount : Amount) →
   ∃ λ state' → consume-resource state amount ≡ success state' →
   budget state' ≡ budget state
 budget-constant state amount with (usage state + amount) ≤? budget state
-... | yes proof = (record state { usage = usage state + amount ; budget-sufficient = proof }) , (λ {refl → refl})
+... | yes proof = (record state { usage = usage state + amount ; budget-sufficient = proof }) , (λ _ → refl)
 ... | no _ = state , (λ ())
 
 {- ** Budget Exhaustion -}
@@ -230,24 +232,8 @@ remaining-budget-correct : ∀ (state : ResourceState) (amount : Amount) →
   ∃ λ state' → consume-resource state amount ≡ success state'
 remaining-budget-correct state amount amount≤remaining with (usage state + amount) ≤? budget state
 ... | yes proof = (record state { usage = usage state + amount ; budget-sufficient = proof}) , refl
-... | no ¬proof = ⊥-elim (¬proof (subst (_≤ budget state) (sym (+-comm amount (usage state)))
-                              (subst (λ x → amount + usage state ≤ budget state) (sym (m+n∸m≡n (usage state) (budget state) (budget-sufficient state)))
-                              (+-mono-≤ amount≤remaining (∸-≤ (usage state) (budget state))))))
-  where
-    m+n∸m≡n : ∀ m n → m ≤ n → (n ∸ m) + m ≡ n
-    m+n∸m≡n zero n z≤n = trans (+-comm n zero) refl
-    m+n∸m≡n (suc m) (suc n) (s≤s m≤n) =
-      trans (+-comm (n ∸ m) (suc m))
-            (cong suc (trans (+-comm m (n ∸ m)) (m+n∸m≡n m n m≤n)))
-
-    ∸-≤ : ∀ m n → m ≤ n → m ∸ (n ∸ m) ≤ n
-    ∸-≤ zero n z≤n = z≤n
-    ∸-≤ (suc m) (suc n) (s≤s m≤n) = ≤-trans (≤-trans (m∸n≤m (suc m) (n ∸ m)) ≤-refl) (s≤s (≤-trans ≤-refl (≤-trans m≤n ≤-refl)))
-      where
-        m∸n≤m : ∀ m n → m ∸ n ≤ m
-        m∸n≤m m zero = ≤-refl
-        m∸n≤m zero (suc n) = z≤n
-        m∸n≤m (suc m) (suc n) = ≤-trans (m∸n≤m m n) (≤-trans ≤-refl (≤-trans ≤-refl ≤-refl))
+... | no ¬proof = ⊥-elim (¬proof (≤-trans (+-monoʳ-≤ (usage state) amount≤remaining)
+                                       (≤-reflexive (m+[n∸m]≡n (budget-sufficient state)))))
 
 {- ** Compositionality -}
 
