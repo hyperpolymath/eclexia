@@ -15,7 +15,7 @@ context`". They carry *no* entries here. The only escape hatches are the
 five linear-programming duality axioms in `+ShadowPrices.v+`,
 dispositioned below.
 * *Agda* (`+formal/agda/ResourceTracking.agda+`) — *type-checks under the
-PROOF-POLICY §2.1 strict profile*, with no `+postulate+`s and no holes. The
+PROOF-POLICY §2.1 strict profile*, with no ``+postulate+``s and no holes. The
 file carries `+{-# OPTIONS --safe --without-K --cubical-compatible #-}+`.
 Receipt, 2026-11-17: Agda 2.8.0.2 with agda-stdlib v2.3 (tag `+v2.3+`, commit
 `+8326c74+`), registered through a project-local libraries file and run from
