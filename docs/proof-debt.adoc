@@ -14,7 +14,35 @@ Soundness, Dimensional Safety) and `+Echo.v+` (echo-type soundness) are
 context`". They carry *no* entries here. The only escape hatches are the
 five linear-programming duality axioms in `+ShadowPrices.v+`,
 dispositioned below.
-* *Agda* (`+formal/agda/ResourceTracking.agda+`) — no `+postulate+`s.
+* *Agda* (`+formal/agda/ResourceTracking.agda+`) — *type-checks under the
+PROOF-POLICY §2.1 strict profile*, with no ``+postulate+``s and no holes. The
+file carries `+{-# OPTIONS --safe --without-K --cubical-compatible #-}+`.
+Receipt, 2026-11-17: Agda 2.8.0.2 with agda-stdlib v2.3 (tag `+v2.3+`, commit
+`+8326c74+`), registered through a project-local libraries file and run from
+`+formal/agda/+`:
++
+----
+agda --library-file=LIBS -l standard-library -i . ResourceTracking.agda
+----
++
+This exits 0 from a cold start (no `+.agdai+`) on file sha256
+`+73cbb342…d05c59f+`. It prints 32 `+UnsupportedIndexedMatch+` warnings, which
+are Cubical-transport notes, not errors.
++
+The repair changed proof terms only; no theorem statement changed.
+`+usage-monotonic+` and `+budget-constant+` no longer match `+refl+` on a
+reflexive equation, which K-free Agda refuses. `+remaining-budget-correct+`
+now uses the standard library's `pass:[m+&#91;n∸m&#93;≡n]` and `pass:[+-monoʳ-≤]` in place of
+hand-rolled lemmas that did not check. Before the repair, the strict check
+exited 42 at `+196.101-105+` (`+UnificationStuck+`), and plain `+--safe+` exited 42
+at `+199.33-52+` (`+UnequalTerms+`).
++
+Scope: tracking soundness is proved for the refined `+ConsumesResource'+` only.
+The file's own NOTE explains why the original `+ConsumesResource+` statement is
+unprovable.
++
+*Not gated*: no CI job, script or recipe runs Agda here, and the repo pins no
+stdlib, so this receipt is manual.
 * *Rust* (`+compiler/+`, `+runtime/+`) — `+unsafe+` blocks exist only at
 FFI boundaries; none use `+unsafePerformIO+`/`+unsafeCoerce+`, so none
 are soundness-relevant under the policy’s marker set.
