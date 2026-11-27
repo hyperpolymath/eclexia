@@ -60,6 +60,16 @@ updates:
       dependency-updates:
         patterns: ["*"]
 
+  # Bun (bun.lock): same directory and schedule as npm, so Dependabot keeps bun.lock in step
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    groups:
+      dependency-updates:
+        patterns: ["*"]
+
   # Python/pip
   - package-ecosystem: "pip"
     directory: "/"
